@@ -30,6 +30,9 @@ pub struct WorkloadInfo {
 pub struct BatchInfo {
     #[allow(missing_docs)]
     pub systems: (Option<SystemInfo>, Vec<SystemInfo>),
+    /// Regroups running in this batch, alongside its systems.
+    #[cfg_attr(feature = "serde1", serde(default))]
+    pub regroups: Vec<RegroupInfo>,
 }
 
 impl BatchInfo {
@@ -71,6 +74,28 @@ impl core::fmt::Debug for SystemInfo {
             .field("before_all", &self.before_all)
             .finish()
     }
+}
+
+/// Contains information related to a regroup a workload runs between its systems.
+///
+/// The workload adds these itself, they aren't systems and can't be named.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
+pub struct RegroupInfo {
+    /// Every storage of the regrouped connected set, all borrowed exclusively.
+    pub borrow: Vec<TypeInfo>,
+    /// What makes the regroup run.
+    pub trigger: RegroupTrigger,
+}
+
+/// What makes a workload's regroup run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
+pub enum RegroupTrigger {
+    /// Runs each time the workload starts, for the changes made outside of it.
+    Entry,
+    /// Runs only when a system that ran before it borrowed a member exclusively.
+    Pending,
 }
 
 /// Pinpoints the type and system that made a system unable to get into a batch.

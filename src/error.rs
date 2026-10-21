@@ -471,6 +471,8 @@ pub enum RunWorkload {
     Run((Box<dyn Label>, Run)),
     /// Workload is not present in the world.
     MissingWorkload,
+    /// A regroup added by the workload couldn't borrow a storage of its connected set.
+    Regroup(GetStorage),
 }
 
 impl RunWorkload {
@@ -504,6 +506,9 @@ impl Debug for RunWorkload {
             RunWorkload::MissingWorkload => f.write_str("No workload with this name exists. You first need to add the workload using `World::add_workload`."),
             RunWorkload::Run((system_name, run)) => {
                 f.write_fmt(format_args!("{:?} failed: {:?}", system_name, run))
+            }
+            RunWorkload::Regroup(get_storage) => {
+                f.write_fmt(format_args!("Workload regroup failed: {:?}", get_storage))
             }
         }
     }

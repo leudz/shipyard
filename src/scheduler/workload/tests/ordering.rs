@@ -16,10 +16,17 @@ fn before_after() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[3, 2, 0, 1]);
+    assert_eq!(
+        batches.sequential,
+        &[System(3), System(2), System(0), System(1)]
+    );
     assert_eq!(
         batches.parallel,
-        &[(None, vec![3]), (None, vec![2]), (None, vec![0, 1])]
+        &[
+            (None, vec![System(3)]),
+            (None, vec![System(2)]),
+            (None, vec![System(0), System(1)])
+        ]
     );
 
     let (workload, _) = Workload::new("")
@@ -30,10 +37,14 @@ fn before_after() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[0, 1, 2]);
+    assert_eq!(batches.sequential, &[System(0), System(1), System(2)]);
     assert_eq!(
         batches.parallel,
-        &[(None, vec![0]), (None, vec![1]), (None, vec![2])]
+        &[
+            (None, vec![System(0)]),
+            (None, vec![System(1)]),
+            (None, vec![System(2)])
+        ]
     );
 
     let (workload, _) = Workload::new("")
@@ -44,10 +55,14 @@ fn before_after() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[1, 0, 2]);
+    assert_eq!(batches.sequential, &[System(1), System(0), System(2)]);
     assert_eq!(
         batches.parallel,
-        &[(None, vec![1]), (None, vec![0]), (None, vec![2])]
+        &[
+            (None, vec![System(1)]),
+            (None, vec![System(0)]),
+            (None, vec![System(2)])
+        ]
     );
 }
 
@@ -63,8 +78,11 @@ fn before_after_no_anchor() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[0, 1]);
-    assert_eq!(batches.parallel, &[(None, vec![0]), (None, vec![1])]);
+    assert_eq!(batches.sequential, &[System(0), System(1)]);
+    assert_eq!(
+        batches.parallel,
+        &[(None, vec![System(0)]), (None, vec![System(1)])]
+    );
 
     let (workload, _) = Workload::new("")
         .with_system(b.after_all(a))
@@ -73,8 +91,11 @@ fn before_after_no_anchor() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[1, 0]);
-    assert_eq!(batches.parallel, &[(None, vec![1]), (None, vec![0])]);
+    assert_eq!(batches.sequential, &[System(1), System(0)]);
+    assert_eq!(
+        batches.parallel,
+        &[(None, vec![System(1)]), (None, vec![System(0)])]
+    );
 }
 
 #[test]
@@ -88,8 +109,8 @@ fn before_after_missing_system() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[0]);
-    assert_eq!(batches.parallel, &[(None, vec![0])]);
+    assert_eq!(batches.sequential, &[System(0)]);
+    assert_eq!(batches.parallel, &[(None, vec![System(0)])]);
 }
 
 #[test]
@@ -106,8 +127,11 @@ fn before_after_absent_system() {
 
     // HashMap makes this error random between a and c
     let batches = &workload.batches;
-    assert!(batches.sequential == [0, 1] || batches.sequential == [1, 0]);
-    assert_eq!(batches.parallel, &[(None, vec![0, 1])]);
+    assert!(
+        batches.sequential == [System(0), System(1)]
+            || batches.sequential == [System(1), System(0)]
+    );
+    assert_eq!(batches.parallel, &[(None, vec![System(0), System(1)])]);
 }
 
 #[test]
@@ -129,10 +153,14 @@ fn before_after_system_label() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[2, 1, 0]);
+    assert_eq!(batches.sequential, &[System(2), System(1), System(0)]);
     assert_eq!(
         batches.parallel,
-        &[(None, vec![2]), (None, vec![1]), (None, vec![0])]
+        &[
+            (None, vec![System(2)]),
+            (None, vec![System(1)]),
+            (None, vec![System(0)])
+        ]
     );
 
     let (workload, _) = Workload::new("")
@@ -143,10 +171,14 @@ fn before_after_system_label() {
         .unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[2, 1, 0]);
+    assert_eq!(batches.sequential, &[System(2), System(1), System(0)]);
     assert_eq!(
         batches.parallel,
-        &[(None, vec![2]), (None, vec![1]), (None, vec![0])]
+        &[
+            (None, vec![System(2)]),
+            (None, vec![System(1)]),
+            (None, vec![System(0)])
+        ]
     );
 }
 
@@ -164,12 +196,17 @@ fn after_all_single_system() {
     assert_eq!(
         batches,
         &Batches {
-            parallel: vec![(None, vec![0]), (Some(1), vec![]), (None, vec![2])],
+            parallel: vec![
+                (None, vec![System(0)]),
+                (Some(System(1)), vec![]),
+                (None, vec![System(2)])
+            ],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1, 2],
+            sequential: vec![System(0), System(1), System(2)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
-            systems_run_if: Vec::new()
+            systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         }
     );
 }
@@ -186,10 +223,14 @@ fn sequential_workload() {
     let (workload, _) = workload1().rename("").build().unwrap();
 
     let batches = &workload.batches;
-    assert_eq!(batches.sequential, &[0, 1, 2]);
+    assert_eq!(batches.sequential, &[System(0), System(1), System(2)]);
     assert_eq!(
         batches.parallel,
-        &[(None, vec![0]), (None, vec![1]), (None, vec![2])]
+        &[
+            (None, vec![System(0)]),
+            (None, vec![System(1)]),
+            (None, vec![System(2)])
+        ]
     );
 }
 
@@ -207,9 +248,13 @@ fn before_after_borrow_conflict() {
     let batches = &workload.batches;
     assert_eq!(
         batches.parallel,
-        &[(None, vec![0]), (Some(1), Vec::new()), (None, vec![0])]
+        &[
+            (None, vec![System(0)]),
+            (Some(System(1)), Vec::new()),
+            (None, vec![System(0)])
+        ]
     );
-    assert_eq!(batches.sequential, &[0, 1, 0]);
+    assert_eq!(batches.sequential, &[System(0), System(1), System(0)]);
 }
 
 #[test]
@@ -350,11 +395,14 @@ fn complex_ordering() {
     assert_eq!(
         batches.parallel,
         &[
-            (None, vec![0]),
-            (None, vec![2]),
-            (None, vec![1]),
-            (None, vec![3])
+            (None, vec![System(0)]),
+            (None, vec![System(2)]),
+            (None, vec![System(1)]),
+            (None, vec![System(3)])
         ]
     );
-    assert_eq!(batches.sequential, &[0, 2, 1, 3]);
+    assert_eq!(
+        batches.sequential,
+        &[System(0), System(2), System(1), System(3)]
+    );
 }

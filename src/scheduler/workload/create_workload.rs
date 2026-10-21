@@ -5,7 +5,9 @@ use crate::error;
 use crate::scheduler::info::{
     BatchInfo, BeforeAfterConstraint, Conflict, DedupedLabels, SystemInfo,
 };
-use crate::scheduler::{Batches, Label, TypeId, TypeInfo, Workload, WorkloadInfo, WorkloadSystem};
+use crate::scheduler::{
+    Batches, Label, Step, TypeId, TypeInfo, Workload, WorkloadInfo, WorkloadSystem,
+};
 use crate::world::World;
 use alloc::boxed::Box;
 use alloc::format;
@@ -578,6 +580,7 @@ fn order_systems(
 
     let mut batches_info = vec![BatchInfo {
         systems: (None, Vec::new()),
+        regroups: Vec::new(),
     }];
     batches.parallel.push((None, Vec::new()));
     batches.parallel_run_if.push((usize::MAX, Vec::new()));
@@ -587,7 +590,7 @@ fn order_systems(
     let mut to_delete_tags = Vec::new();
     loop {
         while let Some(mut system) = constraint_free_systems.pop_front() {
-            batches.sequential.push(system.index);
+            batches.sequential.push(Step::System(system.index));
 
             let conflict = check_can_go_in_parallel_batch(latest_batch_info, &system);
             if conflict.is_some() {
@@ -595,6 +598,7 @@ fn order_systems(
                 batches.parallel_run_if.push((usize::MAX, Vec::new()));
                 batches_info.push(BatchInfo {
                     systems: (None, Vec::new()),
+                    regroups: Vec::new(),
                 });
                 system.confict = conflict;
 
@@ -608,7 +612,7 @@ fn order_systems(
             });
 
             if is_single_system {
-                latest_batch.0 = Some(system.index);
+                latest_batch.0 = Some(Step::System(system.index));
                 latest_batch_info.systems.0 = Some(SystemInfo {
                     name: format!("{:?}", system.display_name),
                     borrow: system.borrow_constraints,
@@ -619,7 +623,7 @@ fn order_systems(
                     unique_id: system.index,
                 });
             } else {
-                latest_batch.1.push(system.index);
+                latest_batch.1.push(Step::System(system.index));
                 latest_batch_info.systems.1.push(SystemInfo {
                     name: format!("{:?}", system.display_name),
                     borrow: system.borrow_constraints,
@@ -674,6 +678,7 @@ fn order_systems(
             batches.parallel_run_if.push((usize::MAX, Vec::new()));
             batches_info.push(BatchInfo {
                 systems: (None, Vec::new()),
+                regroups: Vec::new(),
             });
             to_delete_tags.clear();
 

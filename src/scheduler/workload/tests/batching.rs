@@ -18,12 +18,13 @@ fn single_immutable() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0])],
+            parallel: vec![(None, vec![System(0)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0],
+            sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -47,12 +48,13 @@ fn single_mutable() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0])],
+            parallel: vec![(None, vec![System(0)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0],
+            sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -78,12 +80,13 @@ fn multiple_immutable() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0, 1])],
+            parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -109,12 +112,13 @@ fn multiple_mutable() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0]), (None, vec![1])],
+            parallel: vec![(None, vec![System(0)]), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -140,12 +144,13 @@ fn multiple_mixed() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0]), (None, vec![1])],
+            parallel: vec![(None, vec![System(0)]), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -165,12 +170,13 @@ fn multiple_mixed() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0]), (None, vec![1])],
+            parallel: vec![(None, vec![System(0)]), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -203,12 +209,13 @@ fn append_optimizes_batches() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0]), (None, vec![1, 2])],
+            parallel: vec![(None, vec![System(0)]), (None, vec![System(1), System(2)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1, 2],
+            sequential: vec![System(0), System(1), System(2)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -233,12 +240,13 @@ fn all_storages() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(Some(0), Vec::new())],
+            parallel: vec![(Some(System(0)), Vec::new())],
             parallel_run_if: Vec::new(),
-            sequential: vec![0],
+            sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -257,12 +265,13 @@ fn all_storages() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(Some(0), Vec::new()), (Some(0), Vec::new())],
+            parallel: vec![(Some(System(0)), Vec::new()), (Some(System(0)), Vec::new())],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 0],
+            sequential: vec![System(0), System(0)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -282,12 +291,13 @@ fn all_storages() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
+            parallel: vec![(None, vec![System(0)]), (Some(System(1)), Vec::new())],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -306,12 +316,13 @@ fn all_storages() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
+            parallel: vec![(Some(System(0)), Vec::new()), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -349,12 +360,13 @@ fn non_send() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0, 0])],
+            parallel: vec![(None, vec![System(0), System(0)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 0],
+            sequential: vec![System(0), System(0)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -378,12 +390,13 @@ fn non_send() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
+            parallel: vec![(None, vec![System(0)]), (Some(System(1)), Vec::new())],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -402,12 +415,13 @@ fn non_send() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
+            parallel: vec![(Some(System(0)), Vec::new()), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -426,12 +440,13 @@ fn non_send() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0, 1])],
+            parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -455,12 +470,13 @@ fn non_send() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0, 1])],
+            parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -486,12 +502,13 @@ fn unique_and_non_unique() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0, 1])],
+            parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -516,6 +533,7 @@ fn empty_workload() {
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -550,12 +568,16 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(None, vec![0]), (None, vec![1, 2, 3])],
+            parallel: vec![
+                (None, vec![System(0)]),
+                (None, vec![System(1), System(2), System(3)])
+            ],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1, 2, 3],
+            sequential: vec![System(0), System(1), System(2), System(3)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -589,12 +611,13 @@ fn non_send_distinct_storage() {
     assert_eq!(
         scheduler.workloads.get(&label),
         Some(&Batches {
-            parallel: vec![(Some(1), vec![0])],
+            parallel: vec![(Some(System(1)), vec![System(0)])],
             parallel_run_if: Vec::new(),
-            sequential: vec![0, 1],
+            sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
+            regroups: Vec::new(),
         })
     );
 }

@@ -2,11 +2,13 @@ mod batching;
 mod conditions;
 mod info_tests;
 mod ordering;
+mod regroup;
 mod requirements;
 
 use super::*;
 use crate::component::{Component, Unique};
 use crate::scheduler::IntoWorkload;
+use crate::scheduler::Step::System;
 use crate::scheduler::{Batches, SystemModificator, WorkloadModificator};
 use crate::views::{AllStoragesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 use crate::world::World;

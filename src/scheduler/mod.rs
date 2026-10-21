@@ -19,7 +19,7 @@ pub use system_modificator::SystemModificator;
 pub use workload::{ScheduledWorkload, Workload};
 pub use workload_modificator::WorkloadModificator;
 
-pub(crate) use batches::Batches;
+pub(crate) use batches::{Batches, RegroupStep, Step};
 pub(crate) use info::TypeInfo;
 
 use crate::scheduler::info::WorkloadInfo;
