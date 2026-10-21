@@ -11,12 +11,10 @@
 //! Sparse arrays and `Groups` are left as regroup found them, frozen rows are read against them.
 //! The only change is attaching the unions that don't exist yet, as empty ranges holding no row.
 
-use super::{original_row, storage_ptr};
-use crate::ShipHashMap;
-use crate::all_storages::member_groups;
+use super::{Selected, original_row};
 use crate::entity_id::EntityId;
 use crate::sparse_set::{Groups, SparseArray};
-use crate::storage::{SBox, Storage, StorageId};
+use crate::storage::StorageId;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -97,7 +95,7 @@ impl<'a> Memberships<'a> {
     }
 }
 
-/// Shared references to every grouped storage, as regroup found them.
+/// Shared references to every selected grouped storage, as regroup found them.
 pub(super) struct Frozen<'a> {
     pub(super) memberships: Memberships<'a>,
     /// The ids of each storage of `memberships`, at the same position.
@@ -105,21 +103,13 @@ pub(super) struct Frozen<'a> {
 }
 
 impl<'a> Frozen<'a> {
-    /// Borrows every storage of the sorted `storage_ids` that has at least one range.
-    pub(super) fn new(
-        storages: &'a mut ShipHashMap<StorageId, SBox>,
-        storage_ids: &[StorageId],
-    ) -> Frozen<'a> {
+    /// Borrows every selected storage that has at least one range.
+    pub(super) fn new(selected: &'a Selected<'_>) -> Frozen<'a> {
         let mut memberships = Vec::new();
         let mut dense = Vec::new();
 
-        for &storage_id in storage_ids {
-            let storage = storage_ptr(storages, storage_id);
-            // SAFE: `storage` was just created. We only make shared references from it, and they
-            // live as long as our borrow of `storages`, so nothing can get a new pointer to this
-            // storage, which would invalidate them, or borrow it mutably meanwhile.
-            // Getting the pointers of the other storages doesn't touch this one.
-            let storage: &'a dyn Storage = unsafe { &*storage };
+        for &storage_id in selected.ids() {
+            let storage = selected.get(storage_id);
             let Some(groups) = storage.groups().filter(|groups| groups.has_ranges()) else {
                 continue;
             };
@@ -520,10 +510,16 @@ impl Plan {
     }
 
     /// Attaches the new unions to each of their members, as empty ranges after their last range.
-    fn attach_new(&mut self, storages: &mut ShipHashMap<StorageId, SBox>) {
+    ///
+    /// A union only joins groups that share members, so its members are selected too.
+    fn attach_new(&mut self, selected: &mut Selected<'_>) {
         for plan in &self.groups[self.attached..] {
             for &member_id in plan.group.iter() {
-                member_groups(storages, member_id).attach(plan.group.clone(), member_id);
+                selected
+                    .get_mut(member_id)
+                    .groups_mut()
+                    .expect("group members are SparseSet")
+                    .attach(plan.group.clone(), member_id);
             }
         }
 
@@ -531,14 +527,11 @@ impl Plan {
     }
 }
 
-/// Decides what regroup has to change, `None` when nothing has to.
+/// Decides what regroup has to change in the `selected` storages, `None` when nothing has to.
 ///
 /// Attaches the unions entities need that don't exist yet, as empty ranges. Nothing else changes.
-pub(super) fn analyze(
-    storages: &mut ShipHashMap<StorageId, SBox>,
-    storage_ids: &[StorageId],
-) -> Option<Plan> {
-    if is_clean(storages, storage_ids) {
+pub(super) fn analyze(selected: &mut Selected<'_>) -> Option<Plan> {
+    if is_clean(selected) {
         return None;
     }
 
@@ -547,32 +540,29 @@ pub(super) fn analyze(
     // Unevaluated components are the only ones that can make an entity leave a kept prefix or
     // an ungrouped region: it has to gain a component to join a larger group.
     // Losing one lowers that member's trust, so the entity is past the kept prefix.
-    let frozen = Frozen::new(storages, storage_ids);
+    let frozen = Frozen::new(selected);
     let mut plan = Plan::new(&frozen.memberships);
     plan.scan_unevaluated(&frozen, &mut discovery);
     drop(frozen);
-    plan.attach_new(storages);
+    plan.attach_new(selected);
 
     // Suffixes don't overlap the unevaluated regions, kept prefixes or ungrouped regions,
     // nothing is counted twice.
-    let frozen = Frozen::new(storages, storage_ids);
+    let frozen = Frozen::new(selected);
     plan.scan_evaluated(&frozen, &mut discovery);
     drop(frozen);
-    plan.attach_new(storages);
+    plan.attach_new(selected);
 
     Some(plan)
 }
 
-/// Returns `true` when every grouped storage is fully evaluated and every group's members hold
-/// fully trusted ranges of the same length, regroup then has nothing to do.
+/// Returns `true` when every selected grouped storage is fully evaluated and every group's members
+/// hold fully trusted ranges of the same length, regroup then has nothing to do.
 ///
 /// It only reads metadata, it doesn't allocate.
-fn is_clean(storages: &mut ShipHashMap<StorageId, SBox>, storage_ids: &[StorageId]) -> bool {
-    for &storage_id in storage_ids {
-        let storage = storage_ptr(storages, storage_id);
-        // SAFE: `storage` was just created and is only used for reads in this iteration.
-        // The pointers we get for other storages don't touch this one.
-        let storage = unsafe { &*storage };
+fn is_clean(selected: &Selected<'_>) -> bool {
+    for &storage_id in selected.ids() {
+        let storage = selected.get(storage_id);
         let Some(groups) = storage.groups().filter(|groups| groups.has_ranges()) else {
             continue;
         };
@@ -593,10 +583,8 @@ fn is_clean(storages: &mut ShipHashMap<StorageId, SBox>, storage_ids: &[StorageI
                 continue;
             }
 
-            let first = storage_ptr(storages, first_id);
-            // SAFE: `first` was just created and is only used for this read,
-            // it's a different storage than `storage`.
-            let first_len = unsafe { &*first }
+            let first_len = selected
+                .get(first_id)
                 .groups()
                 .and_then(|groups| groups.range(&range.group))
                 .expect("every member holds a range for its group")

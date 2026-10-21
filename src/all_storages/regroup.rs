@@ -31,16 +31,16 @@ use alloc::vec::Vec;
 /// The `'static` is spelled out, inside a reference it would default to the reference's lifetime.
 type StoragePtr = *mut (dyn Storage + 'static);
 
-// Regroup works on every grouped storage at once, so it gets to them through raw pointers.
+// Layout works on every grouped storage at once, so it gets to them through raw pointers.
 // This is sound because:
 // - `&mut AllStorages` guarantees nobody else borrows any storage,
 // - group members are distinct storages, `WorldBuilder::with_group` rejects groups listing a storage twice,
 // - storages can't be removed while we hold the map mutably, so the pointers stay valid,
 // - getting a fresh pointer to a storage invalidates the previous pointers and references to that
 //   storage only, the other storages live in their own allocations,
-// - analysis only makes shared references, and layout makes exactly one exclusive reference per
-//   storage, each lending its ids apart from its sparse array and groups. Both hold the map
-//   mutably while their references live, so no new pointer can be made meanwhile.
+// - layout makes exactly one exclusive reference per storage, each lending its ids apart from its
+//   sparse array and groups. It holds the map mutably while its references live,
+//   so no new pointer can be made meanwhile.
 
 impl AllStorages {
     /// Moves components to the groups they belong to, to speed up iteration.
@@ -50,12 +50,14 @@ impl AllStorages {
     /// Iteration stays correct between regroups, but adding or removing components slows it down.
     pub fn regroup(&mut self) {
         let storages = self.storages.get_mut();
-        let storage_ids = sorted_storage_ids(storages);
 
         // Analysis decides what changes without moving anything, a clean world stops here.
-        let Some(plan) = analysis::analyze(storages, &storage_ids) else {
+        let mut selected = Selected::all(storages);
+        let Some(plan) = analysis::analyze(&mut selected) else {
             return;
         };
+        let storage_ids = selected.ids().to_vec();
+        drop(selected);
 
         // We only move ids first, components and timestamps follow when each storage is finished.
         // SAFE: `plan` was just made from these storages, and `finish` completes every one of
@@ -67,16 +69,79 @@ impl AllStorages {
     }
 }
 
-/// Returns the id of every storage, sorted.
+/// The storages a regroup works on, the only ones it can reach.
 ///
-/// The map's iteration order can change between runs.\
-/// Sorting keeps the layout, and therefore grouped iteration order, reproducible within a build.\
-/// Storage IDs do not promise the same order across compiler builds.
-fn sorted_storage_ids(storages: &ShipHashMap<StorageId, SBox>) -> Vec<StorageId> {
-    let mut storage_ids: Vec<StorageId> = storages.keys().copied().collect();
-    storage_ids.sort_unstable();
+/// It holds an exclusive reference to each of them, sorted by id.
+pub(super) struct Selected<'a> {
+    /// Sorted and distinct.
+    ids: Vec<StorageId>,
+    /// The storage of each id, at the same position.
+    storages: Vec<&'a mut (dyn Storage + 'static)>,
+}
 
-    storage_ids
+impl<'a> Selected<'a> {
+    /// Selects every storage of `storages`.
+    fn all(storages: &'a mut ShipHashMap<StorageId, SBox>) -> Selected<'a> {
+        let mut selected: Vec<(StorageId, &'a mut (dyn Storage + 'static))> = storages
+            .iter_mut()
+            .map(|(&storage_id, sbox)| (storage_id, storage_of(sbox)))
+            .collect();
+
+        // The map's iteration order can change between runs. Sorting keeps the layout,
+        // and therefore grouped iteration order, reproducible within a build.
+        // Storage ids don't promise the same order across compiler builds.
+        selected.sort_unstable_by_key(|&(storage_id, _)| storage_id);
+        let (ids, storages) = selected.into_iter().unzip();
+
+        Selected { ids, storages }
+    }
+
+    /// Returns the ids of the selected storages, sorted.
+    pub(super) fn ids(&self) -> &[StorageId] {
+        &self.ids
+    }
+
+    /// Returns the selected storage with id `storage_id`.
+    ///
+    /// ### Panics
+    ///
+    /// - The storage isn't selected.
+    #[track_caller]
+    pub(super) fn get(&self, storage_id: StorageId) -> &(dyn Storage + 'static) {
+        &*self.storages[self.position(storage_id)]
+    }
+
+    /// Returns the selected storage with id `storage_id`.
+    ///
+    /// ### Panics
+    ///
+    /// - The storage isn't selected.
+    #[track_caller]
+    pub(super) fn get_mut(&mut self, storage_id: StorageId) -> &mut (dyn Storage + 'static) {
+        let position = self.position(storage_id);
+
+        &mut *self.storages[position]
+    }
+
+    /// Returns the position of `storage_id` in `ids`.
+    ///
+    /// ### Panics
+    ///
+    /// - The storage isn't selected.
+    #[track_caller]
+    fn position(&self, storage_id: StorageId) -> usize {
+        self.ids
+            .binary_search(&storage_id)
+            .expect("regroup can only reach the storages it selected")
+    }
+}
+
+/// Returns the storage `sbox` holds.
+fn storage_of(sbox: &mut SBox) -> &mut (dyn Storage + 'static) {
+    // SAFE: `sbox.0` comes from a `Box` that `sbox` owns, it lives as long as `sbox`.
+    // We borrow `sbox` mutably for as long as the reference lives, no other reference
+    // to this storage can exist.
+    unsafe { &mut *sbox.0 }.get_mut()
 }
 
 /// Returns a pointer to the storage with id `storage_id`.
@@ -87,9 +152,7 @@ fn storage_ptr(storages: &mut ShipHashMap<StorageId, SBox>, storage_id: StorageI
         .get_mut(&storage_id)
         .expect("group members cannot be deleted");
 
-    // SAFE: `sbox.0` comes from a `Box` that lives as long as its entry in the map,
-    // and we borrow the map mutably so no other reference to this storage can exist.
-    unsafe { &mut *sbox.0 }.get_mut()
+    storage_of(sbox)
 }
 
 /// Returns the storage with id `storage_id`.

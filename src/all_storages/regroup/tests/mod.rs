@@ -6,9 +6,10 @@ mod layout;
 mod original_row;
 mod promotion;
 mod removals;
+mod selected;
 
 use super::analysis::{Discovery, Frozen, Plan, analyze};
-use super::{sorted_storage_ids, storage_ptr};
+use super::{Selected, storage_ptr};
 use crate::all_storages::{LockPresent, ThreadIdPresent};
 use crate::component::Component;
 use crate::entity_id::EntityId;
@@ -208,10 +209,8 @@ fn expected_union(
 /// Analyzes `world` and returns the plan.
 fn analyze_world(world: &World) -> Option<Plan> {
     let mut all_storages = world.all_storages_mut().unwrap();
-    let storages = all_storages.storages.get_mut();
-    let storage_ids = sorted_storage_ids(storages);
 
-    analyze(storages, &storage_ids)
+    analyze(&mut Selected::all(all_storages.storages.get_mut()))
 }
 
 /// Analyzes `world` and returns the plan, panicking unless:
@@ -226,10 +225,9 @@ fn analyze_world(world: &World) -> Option<Plan> {
 /// see [`expected_union`].
 fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
     let mut all_storages = world.all_storages_mut().unwrap();
-    let storages = all_storages.storages.get_mut();
-    let storage_ids = sorted_storage_ids(storages);
+    let mut selected = Selected::all(all_storages.storages.get_mut());
 
-    let frozen = Frozen::new(storages, &storage_ids);
+    let frozen = Frozen::new(&selected);
     let existing: Vec<Arc<[StorageId]>> = frozen
         .memberships
         .storages
@@ -239,9 +237,9 @@ fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
         .collect();
     drop(frozen);
 
-    let plan = analyze(storages, &storage_ids).expect("the world has something to regroup");
+    let plan = analyze(&mut selected).expect("the world has something to regroup");
 
-    let frozen = Frozen::new(storages, &storage_ids);
+    let frozen = Frozen::new(&selected);
     let memberships = &frozen.memberships;
     // Both counted in each group's first member.
     let mut expected_lens: BTreeMap<Vec<StorageId>, usize> = BTreeMap::new();

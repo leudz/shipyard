@@ -30,19 +30,22 @@ fn sorted_values(mut values: Vec<(EntityId, u32)>) -> Vec<(EntityId, u32)> {
 fn two_phases(world: &World) -> BTreeMap<StorageId, usize> {
     let mut all_storages = world.all_storages_mut().unwrap();
     let storages = all_storages.storages.get_mut();
-    let storage_ids = sorted_storage_ids(storages);
 
-    let frozen = Frozen::new(storages, &storage_ids);
+    let mut selected = Selected::all(storages);
+    let frozen = Frozen::new(&selected);
     let entry: Vec<Vec<EntityId>> = frozen.dense.iter().map(|dense| dense.to_vec()).collect();
     drop(frozen);
 
-    let Some(plan) = analyze(storages, &storage_ids) else {
+    let Some(plan) = analyze(&mut selected) else {
         return BTreeMap::new();
     };
+    let storage_ids = selected.ids().to_vec();
+    drop(selected);
     // SAFE: we only read the storages until `finish` completes them.
     let layouts = unsafe { build(storages, &storage_ids, &plan) };
 
-    let frozen = Frozen::new(storages, &storage_ids);
+    let selected = Selected::all(storages);
+    let frozen = Frozen::new(&selected);
     let mut changed = BTreeMap::new();
     // The logical sequence of each group, from the first member we see.
     let mut sequences: Vec<(Arc<[StorageId]>, Vec<EntityId>)> = Vec::new();
@@ -92,12 +95,13 @@ fn two_phases(world: &World) -> BTreeMap<StorageId, usize> {
         }
     }
     drop(frozen);
+    drop(selected);
 
     // SAFE: `layouts` come from `build` just above, nothing touched the storages since.
     unsafe { finish(storages, &layouts) };
 
     // A regroup right after this one has nothing to do, it doesn't move anything.
-    assert!(analyze(storages, &storage_ids).is_none());
+    assert!(analyze(&mut Selected::all(storages)).is_none());
 
     changed
 }
