@@ -10,7 +10,7 @@
 //! - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 //! - **std** *(default)* &mdash; lets Shipyard use the standard library
 //! - **thread_local** &mdash; adds methods and types required to work with `!Send` and `!Sync` components
-//! - **tracing** &mdash; reports workload and system execution
+//! - **tracing** &mdash; reports workload, system and regroup execution, and the steps a workload skips
 
 #![warn(elided_lifetimes_in_paths)]
 #![warn(trivial_casts)]

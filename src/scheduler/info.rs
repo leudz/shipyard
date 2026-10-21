@@ -24,7 +24,7 @@ pub struct WorkloadInfo {
 
 /// Contains information related to a batch.
 ///
-/// A batch is a collection of system that can safely run in parallel.
+/// A batch is a collection of systems, and regroups in registered workloads, that can safely run in parallel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct BatchInfo {
@@ -78,7 +78,9 @@ impl core::fmt::Debug for SystemInfo {
 
 /// Contains information related to a regroup a workload runs between its systems.
 ///
-/// The workload adds these itself, they aren't systems and can't be named.
+/// The workload adds these itself, they aren't systems and can't be named.\
+/// A regroup runs on the world's thread when one of its storages isn't `thread_safe`,
+/// like a system in [`BatchInfo::systems`]'s first slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct RegroupInfo {
@@ -120,6 +122,9 @@ pub enum Conflict {
         #[allow(missing_docs)]
         type_info: TypeInfo,
     },
+    /// A regroup of the previous batch borrows the storage described by this `TypeInfo` exclusively,
+    /// the system waits for it.
+    Regroup(TypeInfo),
 }
 
 /// Identify a type.

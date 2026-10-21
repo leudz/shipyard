@@ -64,6 +64,7 @@ impl AllStorages {
         };
 
         self.regroup_connected_set(set)
+            .map(|_| ())
             .map_err(error::RegroupSet::Storage)
     }
 
@@ -71,10 +72,12 @@ impl AllStorages {
     ///
     /// Every member is borrowed exclusively, in order, before anything moves. When a borrow fails,
     /// the ones already taken are released and nothing changes.
+    ///
+    /// Returns `false` when the set was already clean, nothing had to move.
     pub(crate) fn regroup_connected_set(
         &self,
         set: &ConnectedSet,
-    ) -> Result<(), error::GetStorage> {
+    ) -> Result<bool, error::GetStorage> {
         // Dropping `guards` on an early return releases the borrows already taken.
         let mut guards = Vec::with_capacity(set.members.len());
         for &storage_id in &set.members {
@@ -97,17 +100,19 @@ impl AllStorages {
             }
         }
 
-        regroup_selected(&mut Selected::guarded(set, &mut guards));
+        let regrouped = regroup_selected(&mut Selected::guarded(set, &mut guards));
 
-        Ok(())
+        Ok(regrouped)
     }
 }
 
 /// Moves the components of the `selected` storages to the groups they belong to.
-fn regroup_selected(selected: &mut Selected<'_>) {
+///
+/// Returns `false` when they were already clean, nothing had to move.
+fn regroup_selected(selected: &mut Selected<'_>) -> bool {
     // Analysis decides what changes without moving anything, a clean set stops here.
     let Some(plan) = analysis::analyze(selected) else {
-        return;
+        return false;
     };
 
     // We only move ids first, components and timestamps follow when each storage is finished.
@@ -117,6 +122,8 @@ fn regroup_selected(selected: &mut Selected<'_>) {
         let layouts = layout::build(selected, &plan);
         layout::finish(selected, &layouts);
     }
+
+    true
 }
 
 /// The storages a regroup works on, the only ones it can reach.

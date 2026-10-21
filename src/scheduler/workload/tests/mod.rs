@@ -9,6 +9,8 @@ mod prepare;
 mod registration;
 mod regroup;
 mod requirements;
+#[cfg(all(feature = "tracing", feature = "std"))]
+mod traced;
 
 use super::*;
 use crate::component::{Component, Unique};

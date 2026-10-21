@@ -1,6 +1,6 @@
 use shipyard::{
     borrow::Mutability,
-    scheduler::info::{BatchInfo, Conflict, TypeInfo, WorkloadInfo},
+    scheduler::info::{BatchInfo, Conflict, RegroupInfo, TypeInfo, WorkloadInfo},
 };
 use wasm_bindgen::JsCast;
 use web_sys::{window, HtmlDivElement, HtmlInputElement};
@@ -53,13 +53,14 @@ impl Component for WorkloadEditor {
             .iter()
             .enumerate()
             .map(|(i, batch)| {
-                let width = text_width(
-                    &batch
-                        .systems()
-                        .max_by(|sys1, sys2| sys1.name.len().cmp(&sys2.name.len()))
-                        .unwrap()
-                        .name,
-                ) + 16;
+                // A batch can hold only regroups.
+                let longest_line = batch
+                    .systems()
+                    .map(|system| system.name.clone())
+                    .chain(batch.regroups.iter().map(regroup_label))
+                    .max_by_key(String::len)
+                    .unwrap_or_default();
+                let width = text_width(&longest_line) + 16;
 
                 let mut pos = (win_width / 4 + offset, win_height / 2);
 
@@ -354,6 +355,19 @@ impl WorkloadEditor {
                         }
                     })
                     .collect();
+                // Regroups go after the systems, so conflict paths can find the lines.
+                let regroups: Html = batch
+                    .info
+                    .regroups
+                    .iter()
+                    .map(|regroup| {
+                        html! {
+                            <>
+                                <i>{regroup_label(regroup)}</i><br/>
+                            </>
+                        }
+                    })
+                    .collect();
 
                 let link = ctx.link().clone();
                 let on_mouse_down = move |_event: MouseEvent| {
@@ -382,6 +396,7 @@ impl WorkloadEditor {
 
                         <div>
                             {systems}
+                            {regroups}
                         </div>
                     </div>
                 }
@@ -626,6 +641,83 @@ impl WorkloadEditor {
                                         />
                                     })
                                 }
+                                Conflict::Regroup(type_info) => {
+                                    let prev_batch =
+                                        self.batches.get(batch.index.checked_sub(1)?).unwrap();
+                                    let (prev_x, prev_y) = prev_batch.pos;
+
+                                    // Regroup lines come after the system lines.
+                                    // Storage ids aren't serialized, we find the regroup by name.
+                                    let regroup = prev_batch
+                                        .info
+                                        .regroups
+                                        .iter()
+                                        .position(|regroup| {
+                                            regroup.borrow.iter().any(|member| member.name == type_info.name)
+                                        })?;
+                                    let j = (prev_batch.info.systems().count() + regroup) as i32;
+
+                                    let src_x = prev_x + prev_batch.width;
+                                    let src_y = prev_y
+                                        + 24    // title
+                                        + 1     // border
+                                        + 2     // padding
+                                        + 12    // half of the line
+                                        + 24    // line
+                                        * j;
+                                    let dst_x = batch_x;
+                                    let dst_y = batch_y
+                                        + 24    // title
+                                        + 1     // border
+                                        + 2     // padding
+                                        + 12    // half of the line
+                                        + 24    // line
+                                        * i as i32;
+
+                                    let control_scale = ((dst_x - src_x) / 2).max(30);
+                                    let src_control_x = src_x + control_scale;
+                                    let src_control_y = src_y;
+                                    let dst_control_x = dst_x - control_scale;
+                                    let dst_control_y = dst_y;
+
+                                    let path = format!(
+                                        "
+                                        M {src_x} {src_y}
+                                        C {src_control_x} {src_control_y},
+                                        {dst_control_x} {dst_control_y},
+                                        {dst_x} {dst_y}"
+                                    );
+
+                                    let type_info_str = trim_type_name(type_info);
+
+                                    let conflict_str = format!("Regroup ❌ {type_info_str}");
+
+                                    Some(html! {
+                                        <path
+                                            d={path}
+                                            stroke="red"
+                                            stroke-width="4"
+                                            fill="transparent"
+                                            onmouseover={
+                                                let link = ctx.link().clone();
+
+                                                move |e: MouseEvent| {
+                                                    let x = e.client_x();
+                                                    let y = e.client_y();
+
+                                                    link.send_message(Msg::ShowTooltip(x, y, html!{ conflict_str.clone() }));
+                                                }
+                                            }
+                                            onmouseout={
+                                                let link = ctx.link().clone();
+
+                                                move |_| {
+                                                    link.send_message(Msg::HideTooltip);
+                                                }
+                                            }
+                                        />
+                                    })
+                                }
                             }
                         })
                     })
@@ -818,6 +910,13 @@ impl WorkloadEditor {
             })
             .collect::<Html>()
     }
+}
+
+/// Returns the line showing `regroup` in its batch.
+fn regroup_label(regroup: &RegroupInfo) -> String {
+    let storages: Vec<String> = regroup.borrow.iter().map(trim_type_name).collect();
+
+    format!("{:?} regroup ({})", regroup.trigger, storages.join(", "))
 }
 
 fn trim_type_name(ty: &TypeInfo) -> String {

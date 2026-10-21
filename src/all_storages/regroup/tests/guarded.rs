@@ -14,7 +14,9 @@ fn set_of<T: Component + Send + Sync>(world: &World) -> ConnectedSet {
 }
 
 /// Regroups the connected set holding `T`'s storage, borrowing only that set.
-fn regroup_set_of<T: Component + Send + Sync>(world: &World) -> Result<(), error::GetStorage> {
+///
+/// Returns `false` when the set was already clean.
+fn regroup_set_of<T: Component + Send + Sync>(world: &World) -> Result<bool, error::GetStorage> {
     let set = set_of::<T>(world);
 
     world.all_storages().unwrap().regroup_connected_set(&set)
@@ -104,16 +106,17 @@ fn union() {
     assert_memberships(&world, &[&ab(), &[id::<A>(), id::<C>()]]);
 }
 
-/// Asserts that regrouping a clean set changes nothing.
+/// Asserts that regrouping a clean set changes nothing, and says it was clean.
 #[test]
 fn clean() {
     let world = two_sets();
-    regroup_set_of::<A>(&world).unwrap();
+    assert!(regroup_set_of::<A>(&world).unwrap());
     let a = snapshot::<A>(&world);
     let b = snapshot::<B>(&world);
 
-    regroup_set_of::<A>(&world).unwrap();
+    let regrouped = regroup_set_of::<A>(&world).unwrap();
 
+    assert!(!regrouped);
     assert_eq!(snapshot::<A>(&world), a);
     assert_eq!(snapshot::<B>(&world), b);
 }

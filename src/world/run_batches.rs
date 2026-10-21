@@ -49,6 +49,18 @@ impl World {
                         .collect::<Result<Vec<_>, error::RunWorkload>>()?,
                 );
 
+                #[cfg(feature = "tracing")]
+                {
+                    if let Some(step) = batch.0.filter(|_| !run_if.0) {
+                        trace_skipped(&parent_span, system_names, batches, step);
+                    }
+                    for (&step, &runs) in batch.1.iter().zip(&run_if.1) {
+                        if !runs {
+                            trace_skipped(&parent_span, system_names, batches, step);
+                        }
+                    }
+                }
+
                 let mut start = 0;
                 let single_step = batch.0.filter(|_| run_if.0).or_else(|| {
                     let step = batch.1.first().copied().filter(|_| run_if.1[0]);
@@ -159,6 +171,9 @@ impl World {
             if !self.should_run(batches, system_names, step, run_if_index)?
                 || !pending.needs(batches, step)
             {
+                #[cfg(feature = "tracing")]
+                trace_skipped(&parent_span, system_names, batches, step);
+
                 continue;
             }
 
@@ -215,7 +230,16 @@ impl World {
                     self.run_single_system(systems, system_names, index)
                 }
             }
-            Step::Regroup(index) => self.run_regroup(&regroups[index]),
+            Step::Regroup(index) => {
+                #[cfg(feature = "tracing")]
+                {
+                    self.run_regroup(&regroups[index], parent_span)
+                }
+                #[cfg(not(feature = "tracing"))]
+                {
+                    self.run_regroup(&regroups[index])
+                }
+            }
         }
     }
 
@@ -238,7 +262,23 @@ impl World {
     }
 
     /// Regroups `regroup`'s connected set, borrowing all its storages exclusively.
-    fn run_regroup(&self, regroup: &RegroupStep) -> Result<(), error::RunWorkload> {
+    fn run_regroup(
+        &self,
+        regroup: &RegroupStep,
+        #[cfg(feature = "tracing")] parent_span: &tracing::Span,
+    ) -> Result<(), error::RunWorkload> {
+        // We only know if the set was clean once we borrowed it, `clean` is recorded at the end.
+        #[cfg(feature = "tracing")]
+        let regroup_span = tracing::info_span!(
+            parent: parent_span.clone(),
+            "regroup",
+            set = ?set_names(regroup),
+            trigger = ?regroup.trigger,
+            clean = tracing::field::Empty,
+        );
+        #[cfg(feature = "tracing")]
+        let _regroup_span = regroup_span.enter();
+
         #[cfg(test)]
         if let Some(hook) = &regroup.hook {
             (hook.0)();
@@ -248,10 +288,52 @@ impl World {
             error::RunWorkload::Regroup(error::GetStorage::AllStoragesBorrow(borrow))
         })?;
 
-        all_storages
+        #[cfg_attr(not(feature = "tracing"), allow(unused))]
+        let regrouped = all_storages
             .regroup_connected_set(&regroup.set)
-            .map_err(error::RunWorkload::Regroup)
+            .map_err(error::RunWorkload::Regroup)?;
+
+        #[cfg(feature = "tracing")]
+        regroup_span.record("clean", !regrouped);
+
+        Ok(())
     }
+}
+
+/// Reports a step that doesn't run this time: a system whose condition is `false`,
+/// or a regroup with nothing pending.
+#[cfg(feature = "tracing")]
+fn trace_skipped(
+    parent_span: &tracing::Span,
+    system_names: &[Box<dyn Label>],
+    batches: &Batches,
+    step: Step,
+) {
+    match step {
+        Step::System(index) => {
+            tracing::info!(parent: parent_span, system = ?system_names[index], "skipped system");
+        }
+        Step::Regroup(index) => {
+            let regroup = &batches.regroups[index];
+
+            tracing::info!(
+                parent: parent_span,
+                set = ?set_names(regroup),
+                trigger = ?regroup.trigger,
+                "skipped regroup"
+            );
+        }
+    }
+}
+
+/// Returns the names of the storages `regroup` borrows, its whole connected set.
+#[cfg(feature = "tracing")]
+fn set_names(regroup: &RegroupStep) -> Vec<&str> {
+    regroup
+        .borrow
+        .iter()
+        .map(|type_info| &*type_info.name)
+        .collect()
 }
 
 /// The grouped storages a workload run left pending, sorted.

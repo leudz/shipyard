@@ -2,7 +2,9 @@
 
 use crate::all_storages::{AllStorages, Grouping};
 use crate::borrow::Mutability;
-use crate::scheduler::info::{BatchInfo, RegroupInfo, RegroupTrigger, SystemInfo, TypeInfo};
+use crate::scheduler::info::{
+    BatchInfo, Conflict, RegroupInfo, RegroupTrigger, SystemInfo, TypeInfo,
+};
 use crate::scheduler::{Batches, RegroupStep, Step};
 use crate::storage::StorageId;
 use alloc::boxed::Box;
@@ -23,7 +25,8 @@ use core::mem;
 /// A batch can be split for this, its systems waiting for the regroup run in the next batch.\
 /// The user systems' sequential order doesn't change.
 ///
-/// `batches_info` describes `batches` and gets the same changes.
+/// `batches_info` describes `batches` and gets the same changes,
+/// systems waiting for a regroup get a conflict naming it.
 pub(super) fn prepare_regroups(
     batches: &mut Batches,
     batches_info: &mut Vec<BatchInfo>,
@@ -44,6 +47,7 @@ pub(super) fn prepare_regroups(
 
     put_batches(batches, batches_info, &planner.planned);
     batches.regroups = planner.regroups;
+    point_conflicts_to_regroups(batches_info);
 }
 
 /// A step of the workload, with what the planner needs to know about it.
@@ -518,6 +522,49 @@ fn put_batches(batches: &mut Batches, batches_info: &mut Vec<BatchInfo>, planned
     for (step, run_if) in sequential_order(planned) {
         batches.sequential.push(step);
         batches.sequential_run_if.push(run_if);
+    }
+}
+
+/// Gives the systems waiting for a regroup of the previous batch a conflict naming it.
+///
+/// Conflicts explain why a system couldn't join the previous batch. With regroup batches in
+/// between, the system named by a conflict can now be further back.
+/// We keep the conflicts that still name a system of the previous batch.
+fn point_conflicts_to_regroups(batches_info: &mut [BatchInfo]) {
+    for index in 1..batches_info.len() {
+        let (before, after) = batches_info.split_at_mut(index);
+        let previous = &before[index - 1];
+        let batch = &mut after[0];
+
+        for system in batch.systems.0.iter_mut().chain(&mut batch.systems.1) {
+            let names_previous = match &system.conflict {
+                Some(
+                    Conflict::Borrow { other_system, .. }
+                    | Conflict::OtherNotSendSync {
+                        system: other_system,
+                        ..
+                    },
+                ) => previous
+                    .systems()
+                    .any(|other| other.unique_id == *other_system),
+                _ => false,
+            };
+            if names_previous {
+                continue;
+            }
+
+            let waited_for = system.borrow.iter().find(|type_info| {
+                previous.regroups.iter().any(|regroup| {
+                    regroup
+                        .borrow
+                        .iter()
+                        .any(|member| member.storage_id == type_info.storage_id)
+                })
+            });
+            if let Some(type_info) = waited_for {
+                system.conflict = Some(Conflict::Regroup(type_info.clone()));
+            }
+        }
     }
 }
 
