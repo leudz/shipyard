@@ -245,3 +245,118 @@ fn non_send() {
     assert_eq!(b.groups.unevaluated_start, b.len());
     assert_eq!(b.groups.ranges[0].len, 1);
 }
+
+/// Returns a world grouping AB and AC, regrouped so an ABC union exists, with every storage's
+/// clone registered.
+#[cfg(feature = "std")]
+fn overlapping() -> World {
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
+    world.add_entity((A(0), B(0), C));
+    world.add_entity((A(1), B(1)));
+    world.add_entity((A(2), C));
+    world.regroup();
+    world.register_clone::<SparseSet<A>>();
+    world.register_clone::<SparseSet<B>>();
+    world.register_clone::<SparseSet<C>>();
+
+    world
+}
+
+/// Asserts that a world's clone has the same declared groups and connected sets.
+#[cfg(feature = "std")]
+#[test]
+fn world_declarations() {
+    let world = overlapping();
+
+    let clone = world.clone();
+
+    let grouping = &world.all_storages().unwrap().grouping;
+    let clone_grouping = &clone.all_storages().unwrap().grouping;
+    assert_eq!(clone_grouping.groups, grouping.groups);
+    assert_eq!(clone_grouping.sets, grouping.sets);
+}
+
+/// Asserts that a clone's members only get the declared groups, not the source's unions, with
+/// every copied component unevaluated.
+#[cfg(feature = "std")]
+#[test]
+fn world_no_regroup() {
+    let world = overlapping();
+    assert_eq!(groups_of::<B>(&world).len(), 2);
+
+    let clone = world.clone();
+
+    assert_eq!(groups_of::<B>(&clone).len(), 1);
+    assert_eq!(groups_of::<A>(&clone).len(), 2);
+    assert_eq!(unevaluated_of::<A>(&clone).len(), 3);
+    assert_eq!(unevaluated_of::<B>(&clone).len(), 2);
+}
+
+/// Asserts that a grouped storage without a registered clone function still exists in the
+/// clone, empty, with its ranges, and the clone regroups.
+#[cfg(feature = "std")]
+#[test]
+fn world_unregistered() {
+    let (mut world, _) = pairs(3);
+    world.register_clone::<SparseSet<B>>();
+
+    let clone = world.clone();
+
+    assert!(clone.borrow::<View<'_, A>>().unwrap().is_empty());
+    assert!(same_groups(
+        &groups_of::<A>(&clone),
+        &groups_of::<B>(&clone)
+    ));
+    clone.regroup_set::<A>().unwrap();
+    assert_regrouped(&clone);
+}
+
+/// Asserts that iterating a group of the clone right away gives the source's contents.
+#[cfg(feature = "std")]
+#[test]
+fn world_iteration() {
+    let (mut world, _) = pairs(3);
+    world.register_clone::<SparseSet<A>>();
+    world.register_clone::<SparseSet<B>>();
+
+    let clone = world.clone();
+
+    assert_eq!(ab_contents(&clone), ab_contents(&world));
+}
+
+/// Asserts that regrouping a clone puts every entity in the union its components say, the
+/// unions being created again, and leaves the source as it was.
+#[cfg(feature = "std")]
+#[test]
+fn world_unions() {
+    let world = overlapping();
+    let a = snapshot::<A>(&world);
+
+    let mut clone = world.clone();
+    clone.regroup();
+
+    assert_eq!(groups_of::<B>(&clone).len(), 2);
+    assert_regrouped(&clone);
+    assert_memberships(&clone, &[&ab(), &[id::<A>(), id::<C>()]]);
+    assert_eq!(snapshot::<A>(&world), a);
+}
+
+/// Asserts that changing the source after cloning doesn't reach the clone.
+#[cfg(feature = "std")]
+#[test]
+fn world_independent() {
+    let (mut world, _) = pairs(3);
+    world.register_clone::<SparseSet<A>>();
+    world.register_clone::<SparseSet<B>>();
+    let clone = world.clone();
+    let contents = ab_contents(&clone);
+
+    world.add_entity((A(3), B(3)));
+    world.regroup();
+
+    assert_eq!(ab_contents(&clone), contents);
+    assert_eq!(unevaluated_of::<A>(&clone).len(), 3);
+}

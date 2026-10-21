@@ -65,16 +65,21 @@ impl Default for World {
 
 #[cfg(feature = "std")]
 impl Clone for World {
+    /// Clones the storages with a registered clone function, see [`World::register_clone`].
+    ///
+    /// The clone has the same groups, including the storages whose components aren't cloned.\
+    /// Copied components only move to their group at the next regroup.
     #[track_caller]
     fn clone(&self) -> Self {
         let mut other = World::new();
 
+        let all_storages = self.all_storages.borrow().unwrap();
         let other_all_storages = other.all_storages.get_mut();
 
-        self.all_storages
-            .borrow()
-            .unwrap()
-            .clone_storages_to(other_all_storages);
+        // We declare the groups first, so every member exists with its ranges before any data
+        // comes in. Cloned members then keep these ranges, see `clone_storages_to`.
+        all_storages.grouping.clone().install(other_all_storages);
+        all_storages.clone_storages_to(other_all_storages);
 
         other
     }
