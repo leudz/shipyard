@@ -8,23 +8,6 @@ use crate::sparse_set::SparseSet;
 use alloc::borrow::Cow;
 use core::any::type_name;
 
-struct A;
-impl Component for A {
-    type Tracking = crate::track::Untracked;
-}
-struct B;
-impl Component for B {
-    type Tracking = crate::track::Untracked;
-}
-struct C;
-impl Component for C {
-    type Tracking = crate::track::Untracked;
-}
-struct D;
-impl Component for D {
-    type Tracking = crate::track::Untracked;
-}
-
 /// Returns a world with the disjoint AB and CD, three unevaluated entities in each.
 fn two_sets() -> World {
     let mut world = World::builder_for_test()

@@ -1,4 +1,5 @@
 mod create_workload;
+mod prepare;
 #[cfg(test)]
 mod tests;
 
