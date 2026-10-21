@@ -34,7 +34,7 @@ type StoragePtr = *mut (dyn Storage + 'static);
 // Regroup works on every grouped storage at once, so it gets to them through raw pointers.
 // This is sound because:
 // - `&mut AllStorages` guarantees nobody else borrows any storage,
-// - group members are distinct storages, `AllStorages::group` rejects groups listing a storage twice,
+// - group members are distinct storages, `WorldBuilder::with_group` rejects groups listing a storage twice,
 // - storages can't be removed while we hold the map mutably, so the pointers stay valid,
 // - getting a fresh pointer to a storage invalidates the previous pointers and references to that
 //   storage only, the other storages live in their own allocations,
@@ -45,7 +45,8 @@ type StoragePtr = *mut (dyn Storage + 'static);
 impl AllStorages {
     /// Moves components to the groups they belong to, to speed up iteration.
     ///
-    /// Components only move to their group during a regroup, explicit or from declaring a new group.\
+    /// Groups are declared with [`WorldBuilder::with_group`](crate::world::WorldBuilder::with_group).\
+    /// Components only move to their group during a regroup.\
     /// Iteration stays correct between regroups, but adding or removing components slows it down.
     pub fn regroup(&mut self) {
         let storages = self.storages.get_mut();

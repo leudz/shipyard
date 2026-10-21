@@ -516,19 +516,13 @@ fn lifecycle(c: &mut Criterion) {
         .warm_up_time(REBUILT_WARM_UP)
         .measurement_time(REBUILT_MEASUREMENT);
 
-    // Declaring the group on `aligned`'s entities, all of them get evaluated.
+    // The first regroup of `aligned`'s entities, all of them get evaluated.
     let mut initial = fixtures::ungrouped();
-    initial.world.group::<(A, B)>();
+    initial.world.regroup();
     Family::Pairs.check("regroup_initial", &initial);
 
     operation(&mut group, "regroup_initial", initial.yielded(), |iters| {
-        time_rebuilt(
-            iters,
-            || fixtures::ungrouped().world,
-            |world| {
-                world.group::<(A, B)>();
-            },
-        )
+        time_rebuilt(iters, || fixtures::ungrouped().world, World::regroup)
     });
 
     for case in rebuilt_cases() {

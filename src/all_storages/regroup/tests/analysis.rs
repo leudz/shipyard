@@ -1,5 +1,4 @@
 use super::*;
-use crate::all_storages::invalidate_overlaps;
 
 /// Storage that isn't a `SparseSet`.
 struct Custom;
@@ -185,8 +184,10 @@ fn ungrouped_promotion() {
 /// The ABC union is created for it.
 #[test]
 fn gain_leaves_prefix() {
-    let (mut world, _) = pairs(6);
-    world.group::<(A, C)>();
+    let builder = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>();
+    let (mut world, _) = pairs_in(builder, 6);
     let (group, order) = ab_order(&world);
     world.add_component(order[3], C);
 
@@ -201,8 +202,11 @@ fn gain_leaves_prefix() {
 /// though two unevaluated components lead to it.
 #[test]
 fn gained_twice() {
-    let (mut world, _) = pairs(6);
-    world.group::<(A, C)>().group::<(A, D)>();
+    let builder = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .with_group::<(A, D)>();
+    let (mut world, _) = pairs_in(builder, 6);
     let (group, order) = ab_order(&world);
     world.add_component(order[2], (C, D));
 
@@ -217,8 +221,10 @@ fn gained_twice() {
 /// Asserts that with AB and AC, an ungrouped A gaining both B and C is promoted once.
 #[test]
 fn promoted_twice() {
-    let (mut world, _) = pairs(4);
-    world.group::<(A, C)>();
+    let builder = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>();
+    let (mut world, _) = pairs_in(builder, 4);
     let lone = world.add_entity((A(4),));
     world.regroup();
     world.add_component(lone, (B(4), C));
@@ -234,15 +240,16 @@ fn promoted_twice() {
 /// both kept prefixes, joining them in a single ABCDE union.
 #[test]
 fn joining() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .with_group::<(B, E)>()
+        .with_group::<(C, E)>()
+        .build();
     let e: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C, D)))
         .collect();
-    world
-        .group::<(A, B)>()
-        .group::<(C, D)>()
-        .group::<(B, E)>()
-        .group::<(C, E)>();
+    world.regroup();
     world.add_component(e[2], E);
 
     let declared: [&[StorageId]; 4] = [
@@ -263,9 +270,12 @@ fn joining() {
 /// a union of them.
 #[test]
 fn disjoint() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     world.add_entity((A(0), B(0), C, D));
-    world.group::<(A, B)>().group::<(C, D)>();
+    world.regroup();
     world.add_entity((A(1), B(1), C, D));
 
     let plan = assert_plan(&world, &[&ab(), &[id::<C>(), id::<D>()]]);
@@ -277,11 +287,15 @@ fn disjoint() {
 /// created while counting the damaged range, and every other entity stays in ABCD.
 #[test]
 fn demotion_union() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(B, C)>()
+        .with_group::<(C, D)>()
+        .build();
     let e: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C, D)))
         .collect();
-    world.group::<(A, B)>().group::<(B, C)>().group::<(C, D)>();
+    world.regroup();
     world.remove::<(D,)>(e[1]);
 
     let declared: [&[StorageId]; 3] = [&ab(), &[id::<B>(), id::<C>()], &[id::<C>(), id::<D>()]];
@@ -294,36 +308,14 @@ fn demotion_union() {
     assert_eq!(kept - leaving + incoming, 3);
 }
 
-/// Asserts that declaring AC next to AB, invalidated like a declaration does before regrouping,
-/// counts AB entirely again and sends each entity to AB, AC or their union.
-#[test]
-fn declaration() {
-    let (mut world, _) = pairs(4);
-    world.add_entity((A(4), B(4), C));
-    world.add_entity((A(5), C));
-    world.regroup();
-    let (group, _) = ab_order(&world);
-    let ac = sorted_ids(vec![id::<A>(), id::<C>()]);
-    {
-        let mut all_storages = world.all_storages_mut().unwrap();
-        invalidate_overlaps(all_storages.storages.get_mut(), &ac);
-    }
-    attach_ids(&world, &ac);
-
-    let plan = assert_plan(&world, &[&ab(), &ac]);
-
-    assert_eq!(counts(&plan, &group), (0, 0, 4));
-    assert_eq!(counts_of(&plan, ac), (0, 0, 1));
-    let abc = vec![id::<A>(), id::<B>(), id::<C>()];
-    assert_eq!(counts_of(&plan, abc), (0, 0, 1));
-    assert_eq!(plan.storage(id::<A>()).promoted, 0);
-}
-
 /// Asserts that with AB, AC and their ABC union rotated in A, pairs gaining C, ABC entities
 /// losing C or B, and an AC pair gaining B are all accounted for.
 #[test]
 fn rotated() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let e: Vec<EntityId> = (0..24)
         .map(|i| match i % 3 {
             0 => world.add_entity((A(i), B(i))),
@@ -331,7 +323,7 @@ fn rotated() {
             _ => world.add_entity((A(i), B(i), C)),
         })
         .collect();
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
     // Promotions shrink AB and AC in A, which rotates the ABC range behind them.
     world.add_component(e[0], C);
     world.add_component(e[4], B(4));

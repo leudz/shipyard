@@ -43,12 +43,12 @@ impl Component for E {
 ///
 /// Returns the pairs.
 fn offset_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     for i in 0..3 {
         world.add_entity(A(i));
     }
     let b_only: Vec<EntityId> = (0..9).map(|i| world.add_entity(B(200 + i))).collect();
-    world.group::<(A, B)>();
+    world.regroup();
 
     let pairs = b_only[..4].to_vec();
     for (i, &id) in (0..).zip(&pairs) {

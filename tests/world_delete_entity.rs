@@ -87,11 +87,11 @@ fn grouped() {
         type Tracking = track::Untracked;
     }
 
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(USIZE, U32)>().build();
     let entities: Vec<EntityId> = (0..6)
         .map(|i| world.add_entity((USIZE(i), U32(i as u32))))
         .collect();
-    world.group::<(USIZE, U32)>();
+    world.regroup();
 
     assert!(world.delete_entity(entities[2]));
     assert!(world.delete_entity(entities[5]));

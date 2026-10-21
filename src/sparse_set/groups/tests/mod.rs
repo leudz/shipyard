@@ -181,22 +181,6 @@ fn lookup_by_pointer() {
     assert!(groups.range(&other_ab).is_none());
 }
 
-/// Asserts that `range_mut` finds a group by pointer and modifies it in place.
-#[test]
-fn lookup_mut() {
-    let ab = group(&[0, 1]);
-    let mut groups = Groups {
-        storage_id: None,
-        ranges: vec![range(&ab, 0, 2)],
-        unevaluated_start: 2,
-    };
-
-    groups.range_mut(&ab).unwrap().trust = 1;
-
-    assert_eq!(groups.ranges[0].trust, 1);
-    assert!(groups.range_mut(&group(&[0, 1])).is_none());
-}
-
 /// Asserts that `reset` empties and unrotates every range and empties the ungrouped region,
 /// but keeps ranges attached.
 #[test]
@@ -246,29 +230,6 @@ fn attach() {
     assert_eq!(groups.unevaluated_start, 0);
     assert_eq!(groups.unevaluated_range(3), 0..3);
     assert_eq!(groups.storage_id, Some(StorageId::Custom(0)));
-}
-
-/// Asserts that `find_by_value` matches an equal group that was allocated separately.
-#[test]
-fn find_by_value() {
-    let ab = group(&[0, 1]);
-    let mut groups = Groups::default();
-    groups.attach(ab.clone(), StorageId::Custom(0));
-
-    let other_ab = [StorageId::Custom(0), StorageId::Custom(1)];
-
-    assert!(Arc::ptr_eq(groups.find_by_value(&other_ab).unwrap(), &ab));
-}
-
-/// Asserts that `find_by_value` doesn't match a different group.
-#[test]
-fn find_by_value_other() {
-    let mut groups = Groups::default();
-    groups.attach(group(&[0, 1]), StorageId::Custom(0));
-
-    let ac = [StorageId::Custom(0), StorageId::Custom(2)];
-
-    assert!(groups.find_by_value(&ac).is_none());
 }
 
 fn ring(start: usize, len: usize, shift: isize) -> Ring {

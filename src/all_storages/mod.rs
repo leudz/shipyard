@@ -46,7 +46,6 @@ use crate::views::EntitiesViewMut;
 use crate::{ShipHashMap, error};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 use core::any::type_name;
 use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
@@ -1470,74 +1469,6 @@ let i = all_storages.run(sys1);
         T::track_all(self);
     }
 
-    /// Declares a group made of the given storages.
-    ///
-    /// Iterating a group's storages together walks their components without check.\
-    /// Other storages in the query are looked up as usual.
-    ///
-    /// Declaring a new group creates the storages that don't exist and runs a [`regroup`](AllStorages::regroup).\
-    /// If the group already exists, nothing happens.\
-    /// Groups can't be removed.
-    ///
-    /// ### Overlapping groups
-    ///
-    /// A storage can belong to multiple groups. When groups overlap, a union is created.\
-    /// With `A+B` and `A+C` groups, an entity owning A, B and C moves to an `A+B+C` union.\
-    /// An `(&a, &b)` query then walks both `A+B` and `A+B+C`.
-    ///
-    /// The more groups overlap, the more pieces a group is split into and the slower iteration gets.
-    ///
-    /// ### Current limitations
-    ///
-    /// - All of a group's storages have to be in the same tuple when creating an iterator.\
-    ///   `((&a, &b), &c)` uses an `A+B` group, `(&a, (&b, &c))` doesn't.
-    /// - Queries using `Not`, `Optional`, `Or` or a tracking filter like `inserted` don't use groups.
-    /// - Only bulk consumers like `for_each` or `fold` benefit from groups.\
-    ///   A `for` loop, or any other use of `next`, can be slower than without groups.
-    ///
-    /// ### Panics
-    ///
-    /// - The same storage is listed twice.
-    #[track_caller]
-    pub fn group<G: TupleGroup>(&mut self) -> &mut AllStorages {
-        let members = G::members();
-        for member in &members {
-            (member.create)(self);
-        }
-
-        self.group_by_id(members.iter().map(|member| member.storage_id).collect());
-        self
-    }
-
-    /// Declares the group made of `ids`, invalidates affected placements and regroups.
-    ///
-    /// Every member storage must already exist. An equal definition, including a union,
-    /// returns without regrouping. A new definition attaches one shared empty range to each member.
-    #[track_caller]
-    fn group_by_id(&mut self, ids: Vec<StorageId>) {
-        let ids = group::sorted_ids(ids);
-
-        let storages = self.storages.get_mut();
-
-        // Every member holds a range for each of its groups, unions included,
-        // so checking one member is enough.
-        if member_groups(storages, ids[0])
-            .find_by_value(&ids)
-            .is_some()
-        {
-            return;
-        }
-
-        invalidate_overlaps(storages, &ids);
-
-        let group: Arc<[StorageId]> = Arc::from(ids);
-        for &storage_id in group.iter() {
-            member_groups(storages, storage_id).attach(group.clone(), storage_id);
-        }
-
-        self.regroup();
-    }
-
     #[doc = "Retrieve components of `entity`.
 
 Multiple components can be queried at the same time using a tuple.
@@ -2106,50 +2037,6 @@ fn member_groups(
         .get_mut()
         .groups_mut()
         .expect("grouping only supports SparseSet storages")
-}
-
-/// Marks for re-evaluation every component a new group made of `ids` can move.
-///
-/// An entity moves only if it satisfies the new group, so it owns a component in each of its
-/// members. Each of these components is either:
-/// - in the range of a group sharing that member: we drop the trust of these groups,
-///   so regroup's analysis classifies their whole ranges again, in every member
-/// - ungrouped: we make the new members' ungrouped regions unevaluated
-/// - unevaluated already
-///
-/// Its other components move only to join a union with the new group. The groups linking them
-/// to the new group's members already linked them before, so they're in a range that contains
-/// one of these members, and gets classified again as well. Other ranges and regions are
-/// left alone.
-fn invalidate_overlaps(storages: &mut ShipHashMap<StorageId, SBox>, ids: &[StorageId]) {
-    // We collect the groups first, each one is invalidated once in all its members.
-    let mut overlapping: Vec<Arc<[StorageId]>> = Vec::new();
-    for &storage_id in ids {
-        for range in &member_groups(storages, storage_id).ranges {
-            if !overlapping
-                .iter()
-                .any(|group| Arc::ptr_eq(group, &range.group))
-            {
-                overlapping.push(range.group.clone());
-            }
-        }
-    }
-
-    for group in &overlapping {
-        for &member_id in group.iter() {
-            member_groups(storages, member_id)
-                .range_mut(group)
-                .expect("every member holds a range for its group")
-                .trust = 0;
-        }
-    }
-
-    // Moving the boundary is enough, ungrouped and unevaluated components are both unordered.
-    for &storage_id in ids {
-        let groups = member_groups(storages, storage_id);
-
-        groups.unevaluated_start = groups.grouped_end();
-    }
 }
 
 impl core::fmt::Debug for AllStorages {

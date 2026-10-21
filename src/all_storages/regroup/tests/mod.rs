@@ -9,6 +9,7 @@ mod removals;
 
 use super::analysis::{Discovery, Frozen, Plan, analyze};
 use super::{sorted_storage_ids, storage_ptr};
+use crate::all_storages::{LockPresent, ThreadIdPresent};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
@@ -17,7 +18,7 @@ use crate::sparse_set::{GroupRegion, SparseSet};
 use crate::storage::{Storage, StorageId};
 use crate::track;
 use crate::views::{View, ViewMut};
-use crate::world::World;
+use crate::world::{World, WorldBuilder};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec;
@@ -152,9 +153,17 @@ fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
 
 /// Returns a world with `count` entities owning `A(i)` and `B(i)`, grouped as `(A, B)`.
 fn pairs(count: u32) -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    pairs_in(World::builder_for_test().with_group::<(A, B)>(), count)
+}
+
+/// Returns the world `builder` makes, with `count` entities owning `A(i)` and `B(i)`, regrouped.
+fn pairs_in(
+    builder: WorldBuilder<LockPresent, ThreadIdPresent>,
+    count: u32,
+) -> (World, Vec<EntityId>) {
+    let mut world = builder.build();
     let entities = (0..count).map(|i| world.add_entity((A(i), B(i)))).collect();
-    world.group::<(A, B)>();
+    world.regroup();
 
     (world, entities)
 }
@@ -319,10 +328,9 @@ fn sorted(mut entities: Vec<EntityId>) -> Vec<EntityId> {
     entities
 }
 
-/// Attaches the group of `T` and `U` to both storages without regrouping,
-/// like a declaration would before it regroups.
+/// Attaches the group of `T` and `U` to both storages without regrouping.
 ///
-/// Public declarations still reject a storage in two groups, tests build them this way.
+/// Lets tests attach a group to storages already holding components, the public API can't.
 fn attach<T: Component + Send + Sync, U: Component + Send + Sync>(
     world: &World,
 ) -> Arc<[StorageId]> {

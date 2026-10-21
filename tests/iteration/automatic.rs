@@ -88,11 +88,11 @@ fn pair_items(world: &World) -> Vec<(EntityId, (u32, u32))> {
 ///
 /// Returns the pairs.
 fn follow_ups_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
     world.add_entity(A(100));
     world.add_entity(A(101));
-    world.group::<(A, B)>();
+    world.regroup();
     pairs.extend(add_ab(&mut world, 10, 1));
     world.add_entity(B(100));
     world.add_entity(B(101));
@@ -103,11 +103,11 @@ fn follow_ups_world() -> (World, Vec<EntityId>) {
 /// Asserts that a regrouped pair yields every pair in every way, as a single exact walk.
 #[test]
 fn aligned() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 6);
     world.add_entity(A(100));
     world.add_entity(B(100));
-    world.group::<(A, B)>();
+    world.regroup();
 
     assert_eq!(pair_items(&world), pair_values(&world, &pairs));
 
@@ -120,10 +120,10 @@ fn aligned() {
 /// and that outputs held all at once each write their own entity's components.
 #[test]
 fn aligned_mut() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 6);
     let lone = world.add_entity(A(100));
-    world.group::<(A, B)>();
+    world.regroup();
     let expected = pair_values(&world, &pairs);
 
     let (mut a, mut b) = world.borrow::<(ViewMut<A>, ViewMut<B>)>().unwrap();
@@ -150,14 +150,14 @@ fn aligned_mut() {
 /// Asserts that an ABC query with an AB group and a larger C yields the pairs owning a C.
 #[test]
 fn sailor() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 4);
     world.add_component(pairs[1], C(1));
     world.add_component(pairs[3], C(3));
     for i in 0..5 {
         world.add_entity(C(10 + i));
     }
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
     let items = every_way!((&a, &b, &c).iter(), |(a, b, c): (&A, &B, &C)| (
@@ -173,10 +173,10 @@ fn sailor() {
 /// Asserts that an ABC query with an AB group and a single C yields that C's pair.
 #[test]
 fn small_captain() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 4);
     world.add_component(pairs[2], C(2));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
     let items = every_way!((&a, &b, &c).iter(), |(a, b, c): (&A, &B, &C)| (
@@ -205,12 +205,15 @@ fn abcd_items(world: &World) -> Vec<(EntityId, u32)> {
 
 /// Adds 4 entities owning `A(i)`, `B(i)`, `C(i)` and `D(i)` and groups AB and CD.
 fn abcd_world() -> (World, Vec<(EntityId, u32)>) {
-    let mut world = World::new();
+    let mut world = World::builder()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     let all = (0..4)
         .map(|i| (world.add_entity((A(i), B(i), C(i), D(i))), 4 * i))
         .collect();
-    world.group::<(A, B)>();
-    world.group::<(C, D)>();
+    world.regroup();
+    world.regroup();
 
     (world, all)
 }
@@ -232,11 +235,11 @@ fn two_groups() {
 /// Asserts that a group of other storages doesn't change what an AB query yields.
 #[test]
 fn unrelated_group() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(C, D)>().build();
     let pairs = add_ab(&mut world, 0, 4);
     world.add_entity(A(100));
     world.add_entity((C(0), D(0)));
-    world.group::<(C, D)>();
+    world.regroup();
 
     assert_eq!(pair_items(&world), pair_values(&world, &pairs));
 }
@@ -245,12 +248,12 @@ fn unrelated_group() {
 /// which sit outside the group range.
 #[test]
 fn projection() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B, C)>().build();
     let pairs = add_ab(&mut world, 0, 5);
     for &id in &pairs[..3] {
         world.add_component(id, C(0));
     }
-    world.group::<(A, B, C)>();
+    world.regroup();
 
     assert_eq!(pair_items(&world), pair_values(&world, &pairs));
 }
@@ -301,7 +304,10 @@ struct Overlap {
 /// ranges around. Otherwise their new component is left unevaluated.\
 /// Entity `i` owns `A(i)`, `B(100 + i)` and `C(200 + i)`, among its components.
 fn overlap_world(regroup: bool) -> Overlap {
-    let mut world = World::new();
+    let mut world = World::builder()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let ab: Vec<_> = (0..8)
         .map(|i| world.add_entity((A(i), B(100 + i))))
         .collect();
@@ -314,7 +320,7 @@ fn overlap_world(regroup: bool) -> Overlap {
     for i in 20..23 {
         world.add_entity(B(100 + i));
     }
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
 
     world.add_component(ab[0], C(200));
     world.add_component(ab[1], C(201));
@@ -489,7 +495,10 @@ fn overlapping_unwind() {
 /// in every way. It walks AB and ABCD: 11 candidates, where B or C alone would count 13.
 #[test]
 fn extra_captain() {
-    let mut world = World::new();
+    let mut world = World::builder()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C, D)>()
+        .build();
     add_ab(&mut world, 0, 6);
     for i in 0..6 {
         world.add_entity((A(i), C(i), D(i)));
@@ -501,7 +510,7 @@ fn extra_captain() {
         world.add_entity(B(i));
         world.add_entity(C(i));
     }
-    world.group::<(A, B)>().group::<(A, C, D)>();
+    world.regroup();
 
     assert_eq!(triple_items(&world), triple_values(&world, &triples));
 
@@ -534,8 +543,7 @@ fn overlapping_parallel() {
 /// Asserts that an empty grouped pair yields nothing.
 #[test]
 fn empty() {
-    let mut world = World::new();
-    world.group::<(A, B)>();
+    let world = World::builder().with_group::<(A, B)>().build();
 
     assert_eq!(pair_items(&world), []);
 }
@@ -543,11 +551,11 @@ fn empty() {
 /// Asserts that a group of zero sized components yields every pair in every way.
 #[test]
 fn zero_sized() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(Zst0, Zst1)>().build();
     let pairs: Vec<EntityId> = (0..4).map(|_| world.add_entity((Zst0, Zst1))).collect();
     world.add_entity(Zst0);
     world.add_entity(Zst1);
-    world.group::<(Zst0, Zst1)>();
+    world.regroup();
 
     let (z0, z1) = world.borrow::<(View<Zst0>, View<Zst1>)>().unwrap();
     let items = every_way!((&z0, &z1).iter(), |_: (&Zst0, &Zst1)| ());
@@ -562,9 +570,9 @@ fn zero_sized() {
 /// Mutable ZST outputs can stay alive across an aligned prefix and late coverage.
 #[test]
 fn zero_sized_held_mut() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(Zst0, Zst1)>().build();
     let mut ids: Vec<_> = (0..10).map(|_| world.add_entity((Zst0, Zst1))).collect();
-    world.group::<(Zst0, Zst1)>();
+    world.regroup();
     ids.push(world.add_entity((Zst0, Zst1)));
     let (mut z0, mut z1) = world.borrow::<(ViewMut<Zst0>, ViewMut<Zst1>)>().unwrap();
     let iter = (&mut z0, &mut z1).iter();
@@ -599,10 +607,10 @@ fn new_entities() {
 /// Asserts that an entity whose A was evaluated as ungrouped before it gained B is yielded.
 #[test]
 fn a_ungrouped_then_b() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
     let late = world.add_entity(A(10));
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_component(late, B(10));
     pairs.push(late);
 
@@ -612,10 +620,10 @@ fn a_ungrouped_then_b() {
 /// Asserts that an entity whose B was evaluated as ungrouped before it gained A is yielded.
 #[test]
 fn b_ungrouped_then_a() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
     let late = world.add_entity(B(10));
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_component(late, A(10));
     pairs.push(late);
 
@@ -626,9 +634,9 @@ fn b_ungrouped_then_a() {
 /// and still are after a new pair and a full regroup.
 #[test]
 fn removal_then_regroup() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     world.remove::<A>(pairs.remove(0));
     world.remove::<B>(pairs.remove(4));
 
@@ -647,9 +655,9 @@ fn removal_then_regroup() {
 /// leaves the remaining pairs yielded, before and after a regroup.
 #[test]
 fn deletion() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     world.delete_component::<B>(pairs.remove(7));
     world.delete_component::<A>(pairs.remove(2));
     world.delete_component::<(A, B)>(pairs.remove(0));
@@ -664,10 +672,10 @@ fn deletion() {
 /// before and after a regroup.
 #[test]
 fn entity_deletion() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
     let lone = world.add_entity(A(100));
-    world.group::<(A, B)>();
+    world.regroup();
     world.delete_entity(pairs.remove(9));
     world.delete_entity(pairs.remove(3));
     world.delete_entity(lone);
@@ -682,9 +690,9 @@ fn entity_deletion() {
 /// with the values `retain_mut` wrote, before and after a regroup.
 #[test]
 fn retain() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 12);
-    world.group::<(A, B)>();
+    world.regroup();
 
     world.retain::<A>(|_, a| a.0 % 3 != 0);
     world.retain_mut::<B>(|_, mut b| {
@@ -713,9 +721,9 @@ fn retain() {
 /// yielded once it owns both, the orphaned components never are, before and after a regroup.
 #[test]
 fn replacement() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     let orphan = pairs.remove(4);
     world
         .borrow::<EntitiesViewMut>()
@@ -740,9 +748,9 @@ fn replacement() {
 /// their own entity's components once.
 #[test]
 fn removal_mut() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     world.remove::<A>(pairs.remove(8));
     world.remove::<B>(pairs.remove(1));
     let expected = pair_values(&world, &pairs);
@@ -769,7 +777,7 @@ fn removal_mut() {
 fn thread_local_removal() {
     use shipyard::borrow::NonSend;
 
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(NonSend<A>, B)>().build();
     let pairs: Vec<EntityId> = world.run(
         |mut entities: EntitiesViewMut, mut a: NonSend<ViewMut<A>>, mut b: ViewMut<B>| {
             (0..10)
@@ -777,7 +785,7 @@ fn thread_local_removal() {
                 .collect()
         },
     );
-    world.group::<(NonSend<A>, B)>();
+    world.regroup();
 
     world.run(|mut a: NonSend<ViewMut<A>>| {
         (&mut *a).remove(pairs[2]);
@@ -810,9 +818,9 @@ fn thread_local_removal() {
 /// before and after a regroup, and the deleted one never is.
 #[test]
 fn generation_reuse() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     world.delete_entity(pairs[0]);
     let reused = world.add_entity((A(99), B(99)));
     assert_eq!(reused.index(), pairs[0].index());
@@ -828,12 +836,12 @@ fn generation_reuse() {
 /// the written components, reading flags nothing.
 #[test]
 fn tracked_mutation() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, Tracked)>().build();
     let mut pairs: Vec<EntityId> = (0..10)
         .map(|i| world.add_entity((A(i), Tracked(i))))
         .collect();
     world.add_entity(A(100));
-    world.group::<(A, Tracked)>();
+    world.regroup();
     pairs.push(world.add_entity((A(10), Tracked(10))));
     world.add_entity(Tracked(100));
     world
@@ -869,12 +877,12 @@ fn tracked_mutation() {
 /// Asserts that filters and `Or` in a query over a grouped pair keep every match.
 #[test]
 fn filters() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 4);
     world.add_entity(A(100));
     world.add_component(pairs[0], C(0));
     world.add_entity(D(0));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c, d) = world
         .borrow::<(View<A>, View<B>, View<C>, View<D>)>()
@@ -904,14 +912,14 @@ fn filters() {
 /// Asserts that a grouped pair nested in a query yields its matches.
 #[test]
 fn nested() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 4);
     world.add_entity(A(100));
     for &id in &pairs[1..] {
         world.add_component(id, C(0));
     }
     world.add_entity(C(100));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
     let items = every_way!(((&a, &b), &c).iter(), |((a, b), _): ((&A, &B), &C)| (
@@ -947,13 +955,13 @@ fn owned() {
 /// The grouped walks cost 1600 against 1950 for A captaining alone.
 #[cfg(feature = "parallel")]
 fn parallel_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 500);
     for i in 0..50 {
         world.add_entity(A(1000 + i));
         world.add_entity(B(1000 + i));
     }
-    world.group::<(A, B)>();
+    world.regroup();
     pairs.extend(add_ab(&mut world, 500, 100));
 
     (world, pairs)
@@ -1059,7 +1067,7 @@ mod derived {
     /// The unevaluated walks start past the group range and the ungrouped components.\
     /// The grouped walks cost 26 against 39 for `Pos` captaining alone.
     fn world() -> (World, Matches) {
-        let mut world = World::new();
+        let mut world = World::builder().with_group::<(Pos, Vel)>().build();
 
         let aligned = (0..10)
             .map(|i| world.add_entity((Pos(i), Vel(10 + i), Tag(i))))
@@ -1068,7 +1076,7 @@ mod derived {
         let pos_walk = world.add_entity((Vel(111), Tag(0)));
         world.add_entity((Pos(200), Tag(0)));
         world.add_entity((Vel(201), Tag(0)));
-        world.group::<(Pos, Vel)>();
+        world.regroup();
         world.add_component(vel_walk, Vel(110));
         world.add_component(pos_walk, Pos(101));
         world.borrow::<ViewMut<Vel>>().unwrap().clear_all_modified();

@@ -546,8 +546,7 @@ pub(super) fn analyze(
 
     // Unevaluated components are the only ones that can make an entity leave a kept prefix or
     // an ungrouped region: it has to gain a component to join a larger group.
-    // Losing one lowers that member's trust, so the entity is past the kept prefix,
-    // and declarations drop the trust of every group they overlap.
+    // Losing one lowers that member's trust, so the entity is past the kept prefix.
     let frozen = Frozen::new(storages, storage_ids);
     let mut plan = Plan::new(&frozen.memberships);
     plan.scan_unevaluated(&frozen, &mut discovery);

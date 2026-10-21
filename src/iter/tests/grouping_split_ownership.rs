@@ -276,11 +276,11 @@ impl Component for Modif {
 
 #[test]
 fn tracked_mutation() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(Modif, A)>().build();
     let mut ids: Vec<_> = (0..10)
         .map(|i| world.add_entity((Modif(i), A(i))))
         .collect();
-    world.group::<(Modif, A)>();
+    world.regroup();
     ids.push(world.add_entity((Modif(10), A(10))));
     let (mut m, a) = world.borrow::<(ViewMut<'_, Modif>, View<'_, A>)>().unwrap();
     let iter = (&mut m, &a).iter();
@@ -664,11 +664,11 @@ fn remaining_coverage_drop() {
 /// covered by A's. Each entity `i` owns `A(i)`, `B(10 + i)` and `C(20 + i)`.\
 /// Returns the pairs, the late ones last.
 fn nested_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let add = |world: &mut World, i: u32| world.add_entity((A(i), B(10 + i), C(20 + i)));
 
     let mut pairs: Vec<EntityId> = (0..10).map(|i| add(&mut world, i)).collect();
-    world.group::<(A, B)>();
+    world.regroup();
     pairs.extend((10..14).map(|i| add(&mut world, i)));
     for i in 0..3 {
         world.add_entity(C(1000 + i));

@@ -19,6 +19,7 @@
 //! A failure prints the seed, the step and its mutation, and the query shape.\
 //! `Scenario::replay(seed, steps)` rebuilds the exact same world to reproduce it.
 
+use crate::all_storages::{LockPresent, ThreadIdPresent};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
@@ -30,7 +31,7 @@ use crate::sparse_set::{GroupRegion, Ring, SparseSet};
 use crate::storage::StorageId;
 use crate::track;
 use crate::views::{EntitiesViewMut, View, ViewMut};
-use crate::world::World;
+use crate::world::{World, WorldBuilder};
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::sync::Arc;
@@ -221,9 +222,6 @@ enum Op {
     Retain {
         slot: usize,
     },
-    Group {
-        mask: u8,
-    },
     Regroup,
     /// Moves `id`'s grouped component at `slot` to the unevaluated region.
     Damage {
@@ -245,7 +243,7 @@ struct Scenario {
     orphans: BTreeSet<EntityId>,
     /// Orphan components a newer generation replaced.
     replaced: usize,
-    /// Groups declared so far, as slot masks.
+    /// Groups declared when building the world, as slot masks.
     ///
     /// Picks damaged storages and checks unions, the model doesn't know about layouts.
     declared: Vec<u8>,
@@ -255,24 +253,42 @@ struct Scenario {
 }
 
 impl Scenario {
-    /// Returns the scenario of `seed`, a quarter of them start without any group.
+    /// Returns the scenario of `seed`.
+    ///
+    /// A quarter of them don't declare any group, the others declare one to three of `GROUPS`.
     fn new(seed: u64) -> Scenario {
-        let mut scenario = Scenario {
-            rng: Rng(seed),
-            world: World::new_for_test(),
+        let mut rng = Rng(seed);
+
+        let mut groups = Vec::new();
+        if !seed.is_multiple_of(4) {
+            for _ in 0..1 + rng.below(3) {
+                let mask = GROUPS[rng.below(GROUPS.len())];
+                if !groups.contains(&mask) {
+                    groups.push(mask);
+                }
+            }
+        }
+
+        Scenario::with_groups(rng, &groups)
+    }
+
+    /// Returns an empty scenario declaring `groups`, in order, driven by `rng`.
+    fn with_groups(rng: Rng, groups: &[u8]) -> Scenario {
+        let builder = groups
+            .iter()
+            .fold(World::builder_for_test(), |builder, &mask| {
+                declare(builder, mask)
+            });
+
+        Scenario {
+            rng,
+            world: builder.build(),
             model: BTreeMap::new(),
             orphans: BTreeSet::new(),
             replaced: 0,
-            declared: Vec::new(),
+            declared: groups.to_vec(),
             last_value: 0,
-        };
-
-        if !seed.is_multiple_of(4) {
-            let mask = GROUPS[scenario.rng.below(GROUPS.len())];
-            scenario.apply(Op::Group { mask });
         }
-
-        scenario
     }
 
     /// Returns the scenario of `seed` after its first `steps` steps.
@@ -329,10 +345,7 @@ impl Scenario {
             }
             74..76 => Op::Clear { slot },
             76..78 => Op::Retain { slot },
-            78..83 => Op::Group {
-                mask: GROUPS[self.rng.below(GROUPS.len())],
-            },
-            83..92 => Op::Regroup,
+            78..92 => Op::Regroup,
             _ => self.pick_damage()?,
         };
 
@@ -444,7 +457,6 @@ impl Scenario {
                 }
                 self.forget_empty_orphans();
             }
-            Op::Group { mask } => self.group(mask),
             Op::Regroup => self.world.regroup(),
             Op::Damage { id, slot } => {
                 with_kind!(slot, K => {
@@ -530,24 +542,6 @@ impl Scenario {
         });
     }
 
-    /// Declares the group of `mask`.
-    fn group(&mut self, mask: u8) {
-        match mask {
-            0b00011 => self.world.group::<(A, B)>(),
-            0b01100 => self.world.group::<(C, D)>(),
-            0b00111 => self.world.group::<(A, B, C)>(),
-            0b10001 => self.world.group::<(A, Z)>(),
-            0b00110 => self.world.group::<(B, C)>(),
-            0b00101 => self.world.group::<(A, C)>(),
-            0b01101 => self.world.group::<(A, C, D)>(),
-            _ => unreachable!("not one of `GROUPS`"),
-        };
-
-        if !self.declared.contains(&mask) {
-            self.declared.push(mask);
-        }
-    }
-
     /// Returns the model's items for a query, `item` returns `None` for rows it doesn't match.
     ///
     /// Items are sorted by id.
@@ -556,6 +550,23 @@ impl Scenario {
             .iter()
             .filter_map(|(&id, row)| Some((id, item(row)?)))
             .collect()
+    }
+}
+
+/// Declares the group of `mask` on `builder`.
+fn declare(
+    builder: WorldBuilder<LockPresent, ThreadIdPresent>,
+    mask: u8,
+) -> WorldBuilder<LockPresent, ThreadIdPresent> {
+    match mask {
+        0b00011 => builder.with_group::<(A, B)>(),
+        0b01100 => builder.with_group::<(C, D)>(),
+        0b00111 => builder.with_group::<(A, B, C)>(),
+        0b10001 => builder.with_group::<(A, Z)>(),
+        0b00110 => builder.with_group::<(B, C)>(),
+        0b00101 => builder.with_group::<(A, C)>(),
+        0b01101 => builder.with_group::<(A, C, D)>(),
+        _ => unreachable!("not one of `GROUPS`"),
     }
 }
 
@@ -1383,17 +1394,10 @@ fn reads() {
         let mut seen = Vec::new();
 
         for step in 0..STEPS {
-            let attached = group_masks(&scenario.world);
             let op = scenario.step();
             let context = format!("seed {seed}, step {step} ({op:?})");
 
-            // Declaring a group regroups, unless the same group is already attached:
-            // declared before or created by regroup as a union.
-            let regrouped = match op {
-                Op::Regroup => true,
-                Op::Group { mask } => !attached.contains(&mask),
-                _ => false,
-            };
+            let regrouped = matches!(op, Op::Regroup);
             check_layout(&scenario, regrouped, &mut seen, &mut stats, &context);
             if (step + 1).is_multiple_of(READ_EVERY) {
                 check_reads(&scenario, &mut rng, &mut stats, &context);
@@ -1477,8 +1481,7 @@ fn promotions() {
     const BC: u8 = 0b00110;
     const CD: u8 = 0b01100;
 
-    // Seed 0 starts without any group.
-    let mut scenario = Scenario::new(0);
+    let mut scenario = Scenario::with_groups(Rng(0), &[AB, BC, CD]);
     let mut rng = Rng(0);
     let mut stats = Stats::default();
     let mut seen = Vec::new();
@@ -1498,9 +1501,7 @@ fn promotions() {
         add(&mut scenario, BC);
         add(&mut scenario, CD);
     }
-    for mask in [AB, BC, CD] {
-        run(&mut scenario, Op::Group { mask }, true);
-    }
+    run(&mut scenario, Op::Regroup, true);
 
     let add_component = |id, slot| Op::AddComponent { id, slot };
     run(&mut scenario, add_component(ab[0], C::SLOT), false);
@@ -1537,7 +1538,7 @@ fn promotions() {
     assert!(stats.distinct_rotations > 0, "{stats:?}");
 }
 
-/// Applies scripted mutations to a scenario starting without any group.
+/// Applies scripted mutations to a scenario.
 ///
 /// When `checked`, the layout is checked after every mutation, and reads are compared after every
 /// one outside Miri. Under Miri, `finish` compares them once.
@@ -1551,10 +1552,10 @@ struct Script {
 }
 
 impl Script {
-    fn new(name: &'static str, checked: bool) -> Script {
+    /// Returns a script over an empty world declaring `groups`, in order.
+    fn new(name: &'static str, checked: bool, groups: &[u8]) -> Script {
         Script {
-            // Seed 0 starts without any group.
-            scenario: Scenario::new(0),
+            scenario: Scenario::with_groups(Rng(0), groups),
             checked,
             name,
             rng: Rng(0),
@@ -1564,18 +1565,12 @@ impl Script {
     }
 
     fn run(&mut self, op: Op) {
-        let attached = group_masks(&self.scenario.world);
         self.scenario.apply(op);
         if !self.checked {
             return;
         }
 
-        // Declaring a group regroups, unless the same group is already attached.
-        let regrouped = match op {
-            Op::Regroup => true,
-            Op::Group { mask } => !attached.contains(&mask),
-            _ => false,
-        };
+        let regrouped = matches!(op, Op::Regroup);
         let context = format!("{}, {op:?}", self.name);
         check_layout(
             &self.scenario,
@@ -1637,8 +1632,11 @@ fn logical_range(world: &World, slot: usize, mask: u8) -> (Vec<EntityId>, Ring) 
     (layout.logical(group), *ring)
 }
 
-/// Groups AC, AB and the disjoint CD, entities in each of them and in the ABC union, then
-/// removes, deletes and retains components through the public API, without any regroup:
+/// The groups [`removal_script`] runs over, in declaration order.
+const REMOVAL_GROUPS: [u8; 3] = [AC, AB, CD];
+
+/// Over [`REMOVAL_GROUPS`], adds entities in each of them and in the ABC union, regroups, then
+/// removes, deletes and retains components through the public API, without any other regroup:
 /// - A's rotated AB loses its logical last component, which isn't in its physical last slot
 /// - B's and A's AB lose another component each
 /// - an ABC entity loses its C, it's still in the union in A and B, a subset of the union
@@ -1648,9 +1646,7 @@ fn removal_script(script: &mut Script) -> Vec<EntityId> {
     let abc: Vec<EntityId> = (0..4).map(|_| script.add(ABC)).collect();
     let cd: Vec<EntityId> = (0..4).map(|_| script.add(CD)).collect();
     script.add(AC);
-    for mask in [AC, AB, CD] {
-        script.run(Op::Group { mask });
-    }
+    script.run(Op::Regroup);
 
     // AC is A's first range, appending to it passes holes through AB and rotates it in A.
     for _ in 0..3 {
@@ -1701,7 +1697,7 @@ fn removal_script(script: &mut Script) -> Vec<EntityId> {
 /// second regroup.
 #[test]
 fn removals() {
-    let mut script = Script::new("removals", true);
+    let mut script = Script::new("removals", true, &REMOVAL_GROUPS);
     let ab = removal_script(&mut script);
 
     assert!(is_damaged(&script.scenario.world));
@@ -1726,8 +1722,11 @@ fn removals() {
     script.finish();
 }
 
-/// Groups AB and AC, entities in AB and in the ABC union, then orphans grouped entities and
-/// lets newer generations reuse their indices:
+/// The groups [`replacement_script`] runs over, in declaration order.
+const REPLACEMENT_GROUPS: [u8; 2] = [AB, AC];
+
+/// Over [`REPLACEMENT_GROUPS`], adds entities in AB and in the ABC union, regroups, then orphans
+/// grouped entities and lets newer generations reuse their indices:
 /// - the ABC orphan's A is replaced by an entity owning only A, B and C keep the old generation
 /// - the AB orphan's A and B are both replaced by an AB entity, added in one go
 /// - the entity owning only A gains a B, replacing the orphan's, and now satisfies AB
@@ -1735,9 +1734,7 @@ fn removals() {
 fn replacement_script(script: &mut Script) -> EntityId {
     let ab: Vec<EntityId> = (0..10).map(|_| script.add(AB)).collect();
     let abc: Vec<EntityId> = (0..4).map(|_| script.add(ABC)).collect();
-    for mask in [AB, AC] {
-        script.run(Op::Group { mask });
-    }
+    script.run(Op::Regroup);
 
     script.run(Op::Orphan { id: abc[1] });
     let reused = script.add(A_ONLY);
@@ -1766,7 +1763,7 @@ fn replacement_script(script: &mut Script) -> EntityId {
 /// After a regroup, the entity reusing an orphan's index is in AB, every group aligned.
 #[test]
 fn replacements() {
-    let mut script = Script::new("replacements", true);
+    let mut script = Script::new("replacements", true, &REPLACEMENT_GROUPS);
     let reused = replacement_script(&mut script);
     assert!(is_damaged(&script.scenario.world));
 
@@ -2004,17 +2001,17 @@ fn writes() {
 /// Each consumer runs on its own world, scripted again without checks.
 #[test]
 fn scripted_writes() {
-    let scripts: [(&'static str, fn(&mut Script)); 2] = [
-        ("removals", |script| {
+    let scripts: [(&'static str, &[u8], fn(&mut Script)); 2] = [
+        ("removals", &REMOVAL_GROUPS, |script| {
             removal_script(script);
         }),
-        ("replacements", |script| {
+        ("replacements", &REPLACEMENT_GROUPS, |script| {
             replacement_script(script);
         }),
     ];
     let mut combination = 0;
 
-    for (name, build) in scripts {
+    for (name, groups, build) in scripts {
         for case in &WRITE_CASES {
             // Under Miri, each combination is driven in a single way, the ways take turns.
             let ways = if cfg!(miri) {
@@ -2025,7 +2022,7 @@ fn scripted_writes() {
             combination += 1;
 
             for &way in ways {
-                let mut script = Script::new(name, false);
+                let mut script = Script::new(name, false, groups);
                 build(&mut script);
                 let scenario = &script.scenario;
                 let context = format!("{name}, {} {way:?}", case.shape);
@@ -2061,11 +2058,13 @@ impl Component for Tracked {
 ///
 /// No component is flagged as modified.
 fn tracked_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, Tracked)>()
+        .build();
     let mut e: Vec<EntityId> = (0..12)
         .map(|i| world.add_entity((A(i), Tracked(i))))
         .collect();
-    world.group::<(A, Tracked)>();
+    world.regroup();
     {
         let a = world.borrow::<ViewMut<'_, A>>().unwrap();
         let index = a.index_of(e[10]).unwrap();
@@ -2171,12 +2170,15 @@ fn tracked_writes() {
 ///
 /// No component is flagged as modified.
 fn tracked_overlap_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, Tracked)>()
+        .build();
     let mut e: Vec<EntityId> = (0..8)
         .map(|i| world.add_entity((A(i), Tracked(i))))
         .collect();
     e.extend((8..12).map(|i| world.add_entity((A(i), B(i), Tracked(i)))));
-    world.group::<(A, B)>().group::<(A, Tracked)>();
+    world.regroup();
 
     world.add_component(e[0], B(100));
     world.add_component(e[1], B(101));
@@ -2253,7 +2255,10 @@ fn thread_local_overlap() {
     use crate::AddComponent;
     use crate::borrow::NonSend;
 
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(NonSend<A>, B)>()
+        .with_group::<(NonSend<A>, C)>()
+        .build();
     let e: Vec<EntityId> = (0..12).map(|_| world.add_entity(())).collect();
     {
         let (mut local_a, mut b, mut c) = world
@@ -2270,7 +2275,7 @@ fn thread_local_overlap() {
         }
     }
     world.add_entity((A(100), B(100), C(100)));
-    world.group::<(NonSend<A>, B)>().group::<(NonSend<A>, C)>();
+    world.regroup();
     world.add_component(e[2], C(2));
     world.add_component(e[3], B(3));
     world.regroup();

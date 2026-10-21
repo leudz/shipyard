@@ -216,7 +216,10 @@ fn generation() {
 /// and AC slides one slot in A, only its first entity moving to its other end.
 #[test]
 fn walkthrough() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     for i in 0..4 {
         world.add_entity((A(i), B(i)));
     }
@@ -227,7 +230,7 @@ fn walkthrough() {
     world.add_entity((A(8),));
     world.add_entity((B(9),));
     let e = world.add_entity((B(10),));
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
     let ac = groups_of::<A>(&world)[1].clone();
     let (ac_before, _) = group_of::<A>(&world, &ac);
     world.add_component(e, A(10));
@@ -244,8 +247,10 @@ fn walkthrough() {
 /// and joins the ABC union with its C.
 #[test]
 fn gain_leaves_prefix() {
-    let (mut world, _) = pairs(6);
-    world.group::<(A, C)>();
+    let builder = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>();
+    let (mut world, _) = pairs_in(builder, 6);
     let group = groups_of::<A>(&world)[0].clone();
     let (order, _) = group_of::<A>(&world, &group);
     world.add_component(order[1], C);
@@ -258,8 +263,10 @@ fn gain_leaves_prefix() {
 /// gains C too is gathered past it, instead of swapping it back into the prefix.
 #[test]
 fn gather_edge() {
-    let (mut world, _) = pairs(6);
-    world.group::<(A, C)>();
+    let builder = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>();
+    let (mut world, _) = pairs_in(builder, 6);
     let group = groups_of::<A>(&world)[0].clone();
     let (order, _) = group_of::<A>(&world, &group);
     world.add_component(order[1], C);
@@ -271,8 +278,10 @@ fn gather_edge() {
 /// Asserts that with AB and AC, ungrouped As gaining B, C or both are gathered and grouped.
 #[test]
 fn promotions() {
-    let (mut world, _) = pairs(4);
-    world.group::<(A, C)>();
+    let builder = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>();
+    let (mut world, _) = pairs_in(builder, 4);
     let lone: Vec<EntityId> = (4..8).map(|i| world.add_entity((A(i),))).collect();
     world.regroup();
     world.add_component(lone[0], B(4));
@@ -286,15 +295,16 @@ fn promotions() {
 /// joins them in a single ABCDE union.
 #[test]
 fn joining() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .with_group::<(B, E)>()
+        .with_group::<(C, E)>()
+        .build();
     let e: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C, D)))
         .collect();
-    world
-        .group::<(A, B)>()
-        .group::<(C, D)>()
-        .group::<(B, E)>()
-        .group::<(C, E)>();
+    world.regroup();
     world.add_component(e[2], E);
 
     let declared: [&[StorageId]; 4] = [
@@ -309,33 +319,19 @@ fn joining() {
 /// Asserts that with AB, BC and CD, an entity of the ABCD union losing D lands in a new ABC union.
 #[test]
 fn demotion_union() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(B, C)>()
+        .with_group::<(C, D)>()
+        .build();
     let e: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C, D)))
         .collect();
-    world.group::<(A, B)>().group::<(B, C)>().group::<(C, D)>();
+    world.regroup();
     world.remove::<(D,)>(e[1]);
 
     let declared: [&[StorageId]; 3] = [&ab(), &[id::<B>(), id::<C>()], &[id::<C>(), id::<D>()]];
     check(&world, &declared);
-}
-
-/// Asserts that declaring AC next to AB, invalidated like a declaration does,
-/// sends each entity to AB, AC or their union.
-#[test]
-fn declaration() {
-    let (mut world, _) = pairs(4);
-    world.add_entity((A(4), B(4), C));
-    world.add_entity((A(5), C));
-    world.regroup();
-    let ac = sorted_ids(vec![id::<A>(), id::<C>()]);
-    {
-        let mut all_storages = world.all_storages_mut().unwrap();
-        crate::all_storages::invalidate_overlaps(all_storages.storages.get_mut(), &ac);
-    }
-    attach_ids(&world, &ac);
-
-    check(&world, &[&ab(), &ac]);
 }
 
 /// Asserts that a `NonSend` member is opened and laid out like any other storage,
@@ -346,7 +342,9 @@ fn non_send() {
     use crate::AddComponent;
     use crate::borrow::NonSend;
 
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .build();
     let add_pair = |world: &mut World, i: u32| {
         let entity = world.add_entity((A(i),));
         world
@@ -356,7 +354,7 @@ fn non_send() {
         entity
     };
     let e: Vec<EntityId> = (0..6).map(|i| add_pair(&mut world, i)).collect();
-    world.group::<(A, NonSend<B>)>();
+    world.regroup();
     world.delete_entity(e[1]);
     add_pair(&mut world, 6);
     let non_send_values = |world: &World| {
@@ -382,7 +380,10 @@ fn non_send() {
 
 /// Returns a world with AB, AC and their ABC union rotated in A, and its entities.
 fn rotated() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let e: Vec<EntityId> = (0..24)
         .map(|i| match i % 3 {
             0 => world.add_entity((A(i), B(i))),
@@ -390,7 +391,7 @@ fn rotated() -> (World, Vec<EntityId>) {
             _ => world.add_entity((A(i), B(i), C)),
         })
         .collect();
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
     // Promotions shrink AB and AC in A, which rotates the ABC range behind them.
     world.add_component(e[0], C);
     world.add_component(e[4], B(4));

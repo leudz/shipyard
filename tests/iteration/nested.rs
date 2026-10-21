@@ -80,7 +80,7 @@ fn abc_values(world: &World, ids: &[EntityId]) -> Vec<(EntityId, (u32, u32, u32)
 /// pair costs 30 against 56.\
 /// Returns the pairs.
 fn grouped_pair_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     for i in 0..5 {
         world.add_entity(A(50 + i));
@@ -90,7 +90,7 @@ fn grouped_pair_world() -> (World, Vec<EntityId>) {
     for i in 0..4 {
         world.add_entity(C(200 + i));
     }
-    world.group::<(A, B)>();
+    world.regroup();
 
     (world, pairs)
 }
@@ -130,10 +130,10 @@ fn second_position() {
 /// Asserts that a tiny C keeps the ordinary walk of `((A, B), C)`.
 #[test]
 fn small_captain() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs[4..6]);
-    world.group::<(A, B)>();
+    world.regroup();
     let expected = abc_values(&world, &pairs);
 
     let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
@@ -185,13 +185,16 @@ fn deeper() {
 /// and still finds the entity whose other pair was added after the regroup.
 #[test]
 fn disjoint_groups() {
-    let mut world = World::new();
+    let mut world = World::builder()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     let mut all: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
         .collect();
     let late = world.add_entity((A(4), B(4)));
-    world.group::<(A, B)>();
-    world.group::<(C, D)>();
+    world.regroup();
+    world.regroup();
     world.add_component(late, (C(4), D(4)));
     all.push(late);
 
@@ -210,12 +213,12 @@ fn disjoint_groups() {
 /// Asserts that an AC group doesn't change `((A, B), C)`'s matches, it can't drive the query.
 #[test]
 fn cross_boundary() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, C)>().build();
     let all: Vec<EntityId> = (0..10)
         .map(|i| world.add_entity((A(i), B(i), C(i))))
         .collect();
     world.add_entity((A(50), C(50)));
-    world.group::<(A, C)>();
+    world.regroup();
     let expected = abc_values(&world, &all);
 
     let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
@@ -231,9 +234,9 @@ fn cross_boundary() {
 /// B's rejecting the late pairs A's already yielded. It costs 46 against 48 for C.\
 /// Returns the pairs.
 fn late_pairs_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     pairs.extend(add_ab(&mut world, 10, 2));
     add_c(&mut world, &pairs);
 
@@ -305,9 +308,9 @@ fn owned() {
 fn parallel() {
     use rayon::prelude::*;
 
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, 500);
-    world.group::<(A, B)>();
+    world.regroup();
     pairs.extend(add_ab(&mut world, 500, 50));
     add_c(&mut world, &pairs);
     let expected = abc_values(&world, &pairs);

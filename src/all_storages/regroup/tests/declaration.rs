@@ -7,22 +7,21 @@ fn range_of<T: Component + Send + Sync>(world: &World) -> Vec<EntityId> {
     view.dense[..view.groups.grouped_end()].to_vec()
 }
 
-/// Asserts that declaring a group places the entities holding both components in both ranges,
+/// Asserts that the first regroup places the entities holding both components in both ranges,
 /// and the entities holding only one in that storage's ungrouped region.
 ///
-/// Before the declaration, every component is implicitly ungrouped, the first declaration
-/// evaluates them all again.
+/// Before it, every component added to the grouped storages is unevaluated.
 #[test]
-fn declare() {
-    let mut world = World::new_for_test();
+fn first_regroup() {
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let ab0 = world.add_entity((A(0), B(0)));
     let a1 = world.add_entity(A(1));
     let b2 = world.add_entity(B(2));
     let ab3 = world.add_entity((A(3), B(3)));
-    assert_eq!(ungrouped_of::<A>(&world), [ab0, a1, ab3]);
-    assert!(unevaluated_of::<A>(&world).is_empty());
+    assert_eq!(unevaluated_of::<A>(&world), [ab0, a1, ab3]);
+    assert!(ungrouped_of::<A>(&world).is_empty());
 
-    world.group::<(A, B)>();
+    world.regroup();
 
     assert_regrouped(&world);
     assert_eq!(sorted(range_of::<A>(&world)), [ab0, ab3]);
@@ -33,16 +32,16 @@ fn declare() {
     assert!(unevaluated_of::<B>(&world).is_empty());
 }
 
-/// Asserts that every component keeps its value after declaring a group moves it.
+/// Asserts that every component keeps its value after the first regroup moves it.
 #[test]
-fn declare_values() {
-    let mut world = World::new_for_test();
+fn first_regroup_values() {
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let ab0 = world.add_entity((A(0), B(0)));
     let a1 = world.add_entity(A(1));
     let b2 = world.add_entity(B(2));
     let ab3 = world.add_entity((A(3), B(3)));
 
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     assert_eq!(a.get(ab0), Ok(&A(0)));
@@ -53,29 +52,15 @@ fn declare_values() {
     assert_eq!(b.get(ab3), Ok(&B(3)));
 }
 
-/// Asserts that declaring a group that already exists doesn't regroup,
-/// components added since the first declaration stay unevaluated.
-#[test]
-fn declare_duplicate() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
-    let ab = world.add_entity((A(0), B(0)));
-
-    world.group::<(A, B)>();
-
-    assert_eq!(unevaluated_of::<A>(&world), [ab]);
-    assert_eq!(unevaluated_of::<B>(&world), [ab]);
-}
-
 /// Asserts that new entities land in both unevaluated regions,
 /// and that regroup appends them to both ranges without moving the previous range contents.
 #[test]
 fn new_components() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     world.add_entity((A(0), B(0)));
     world.add_entity(A(1));
     world.add_entity((A(2), B(2)));
-    world.group::<(A, B)>();
+    world.regroup();
     let range_before = range_of::<A>(&world);
 
     let ab3 = world.add_entity((A(3), B(3)));
@@ -96,10 +81,10 @@ fn new_components() {
 /// and that regroup then moves the entity into both ranges.
 #[test]
 fn late_component() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let ab0 = world.add_entity((A(0), B(0)));
     let a1 = world.add_entity(A(1));
-    world.group::<(A, B)>();
+    world.regroup();
 
     world.add_component(a1, B(1));
 
@@ -118,11 +103,11 @@ fn late_component() {
 /// Regroup then leaves the entity that lost A ungrouped in B and the others grouped.
 #[test]
 fn removal() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let ab0 = world.add_entity((A(0), B(0)));
     let ab1 = world.add_entity((A(1), B(1)));
     let ab2 = world.add_entity((A(2), B(2)));
-    world.group::<(A, B)>();
+    world.regroup();
 
     world.remove::<(A,)>(ab1);
 
@@ -144,7 +129,9 @@ fn removal() {
 /// Asserts that regroup moves insertion and modification timestamps with their components.
 #[test]
 fn tracking() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(TrackedA, TrackedB)>()
+        .build();
     // Holding only A, it sits before the others in A and forces them to move.
     world.add_entity(TrackedA(0));
     let old = world.add_entity((TrackedA(1), TrackedB));
@@ -165,7 +152,7 @@ fn tracking() {
     };
 
     let before = state(&world);
-    world.group::<(TrackedA, TrackedB)>();
+    world.regroup();
     let after = state(&world);
 
     assert_eq!(before, [false, true, true, false]);
@@ -174,7 +161,7 @@ fn tracking() {
 
 /// Builds a world with a group, then adds, removes and regroups components.
 fn build_world() -> World {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut entities = Vec::new();
     for index in 0..30 {
         let entity = match index % 3 {
@@ -185,7 +172,7 @@ fn build_world() -> World {
         entities.push(entity);
     }
 
-    world.group::<(A, B)>();
+    world.regroup();
 
     for index in 30..40 {
         world.add_entity((A(index), B(index)));
@@ -214,13 +201,12 @@ fn determinism() {
 /// all their components stay implicitly ungrouped.
 #[test]
 fn ungrouped_storage() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let e0 = world.add_entity((A(0), C));
     let e1 = world.add_entity((B(1), C));
     let e2 = world.add_entity((A(2), B(2), C));
     let dense_before = dense_of::<C>(&world);
 
-    world.group::<(A, B)>();
     world.regroup();
 
     assert_eq!(ungrouped_of::<C>(&world), [e0, e1, e2]);
@@ -234,10 +220,10 @@ fn ungrouped_storage() {
 /// Asserts that iterating `(A, B)` yields the same items before and after regroup, in any order.
 #[test]
 fn iteration() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     world.add_entity((A(0), B(0)));
     world.add_entity(A(1));
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_entity((A(2), B(2)));
     world.add_entity(B(3));
     world.add_entity((A(4), B(4)));
@@ -264,7 +250,9 @@ fn non_send() {
     use crate::add_component::AddComponent;
     use crate::borrow::NonSend;
 
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .build();
     let ab0 = world.add_entity(A(0));
     let a1 = world.add_entity(A(1));
     let ab2 = world.add_entity(A(2));
@@ -274,7 +262,7 @@ fn non_send() {
         b.add_component_unchecked(ab0, B(0));
     }
 
-    world.group::<(A, NonSend<B>)>();
+    world.regroup();
 
     // `assert_regrouped` checks B's range holds the same logical sequence as A's.
     assert_regrouped(&world);

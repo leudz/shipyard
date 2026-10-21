@@ -91,6 +91,11 @@ fn spread(i: u32, count: u32, total: u32) -> u32 {
     (i as u64 * total as u64 / count as u64) as u32
 }
 
+/// Returns an empty world declaring the `(A, B)` group.
+fn ab_world() -> World {
+    World::builder().with_group::<(A, B)>().build()
+}
+
 /// An entity owning an A, with the index its values were built from and its other components.
 #[derive(Clone, Copy)]
 struct Owner {
@@ -421,9 +426,9 @@ pub fn nested() -> Fixture {
 ///
 /// Candidates: `SMALL_CAPTAIN`. Yields: `SMALL_CAPTAIN`.
 pub fn small_captain() -> Fixture {
-    let mut fixture = Fixture::new(World::new(), SMALL_CAPTAIN, false);
+    let mut fixture = Fixture::new(ab_world(), SMALL_CAPTAIN, false);
     pairs_with_c(&mut fixture, SMALL_CAPTAIN);
-    fixture.world.group::<(A, B)>();
+    fixture.world.regroup();
     fixture
 }
 
@@ -440,15 +445,15 @@ pub fn aligned() -> Fixture {
 /// Candidates: `count`, exact. Yields: `count`.
 fn aligned_pairs(count: u32) -> Fixture {
     let mut fixture = ungrouped_pairs(count);
-    fixture.world.group::<(A, B)>();
+    fixture.world.regroup();
     fixture
 }
 
-/// `aligned_pairs`'s entities, without any group yet.
+/// `aligned_pairs`'s entities, in a world declaring `(A, B)` that wasn't regrouped yet.
 ///
 /// The candidates are the grouped ones: `count`, exact. Yields: `count`.
 fn ungrouped_pairs(count: u32) -> Fixture {
-    let mut fixture = Fixture::new(World::new(), count, true);
+    let mut fixture = Fixture::new(ab_world(), count, true);
     for i in 0..count {
         fixture.add_pair(i);
     }
@@ -459,9 +464,10 @@ fn ungrouped_pairs(count: u32) -> Fixture {
     fixture
 }
 
-/// `aligned`'s entities, without any group yet, for the case declaring it.
+/// `aligned`'s entities, declared in `(A, B)` but not regrouped yet, for the case timing the
+/// first regroup.
 ///
-/// Once grouped, candidates: `N`, exact. Yields: `N`.
+/// Once regrouped, candidates: `N`, exact. Yields: `N`.
 pub fn ungrouped() -> Fixture {
     ungrouped_pairs(N)
 }
@@ -490,14 +496,14 @@ pub fn ungrouped() -> Fixture {
 /// With B captaining alone the ordinary walk would cost `120_009 * 3`, the grouped walks cost
 /// `N * 2 + 4 * LATE * 3`.
 pub fn coverage() -> Fixture {
-    let mut fixture = Fixture::new(World::new(), N + 4 * LATE, false);
+    let mut fixture = Fixture::new(ab_world(), N + 4 * LATE, false);
     for i in 0..N {
         fixture.add_pair(i);
     }
     let pre: Vec<_> = (N..N + LATE)
         .map(|i| fixture.world.add_entity(A(a_value(i))))
         .collect();
-    fixture.world.group::<(A, B)>();
+    fixture.world.regroup();
     let post: Vec<_> = (N + LATE..N + 2 * LATE)
         .map(|i| fixture.world.add_entity(A(a_value(i))))
         .collect();
@@ -532,7 +538,7 @@ pub fn coverage() -> Fixture {
 ///
 /// Candidates: `N`. Yields: `(N + 1) / 2` (50,002).
 pub fn partial() -> Fixture {
-    let mut fixture = Fixture::new(World::new(), N, false);
+    let mut fixture = Fixture::new(ab_world(), N, false);
     let ids: Vec<_> = (0..N)
         .map(|i| fixture.world.add_entity((A(a_value(i)), B(b_value(i)))))
         .collect();
@@ -544,7 +550,7 @@ pub fn partial() -> Fixture {
     for i in N..N + lone_c {
         fixture.world.add_entity(C(c_value(i)));
     }
-    fixture.world.group::<(A, B)>();
+    fixture.world.regroup();
 
     fixture
 }
@@ -587,14 +593,15 @@ pub fn small_filtered() -> Fixture {
 ///
 /// Candidates: `SMALL_QUERY`. Yields: `SMALL_QUERY`.
 pub fn small_projection() -> Fixture {
-    let mut fixture = Fixture::new(World::new(), SMALL_QUERY, false);
+    let world = World::builder().with_group::<(A, B, C)>().build();
+    let mut fixture = Fixture::new(world, SMALL_QUERY, false);
     for i in 0..SMALL_QUERY {
         let id = fixture.add_pair(i);
         if i % 2 == 0 {
             fixture.world.add_component(id, C(c_value(i)));
         }
     }
-    fixture.world.group::<(A, B, C)>();
+    fixture.world.regroup();
     fixture
 }
 
@@ -608,14 +615,20 @@ pub enum Layout {
 /// AB and AC groups, overlapping on A, and the ABC union they generate.
 ///
 /// 1. `MULTI_AB` AB pairs, `MULTI_ABC` ABC triples, `MULTI_AC` AC pairs and 3 B-only entities.
-/// 2. `(A, B)` then `(A, C)` are grouped, the ABC triples land in the union.
+/// 2. A regroup over the `(A, B)` and `(A, C)` groups puts the ABC triples in the union.
 /// 3. `JOINS` AB pairs gain a C and `JOINS` AC pairs a B, spread over their sets.
 /// 4. A regroup promotes them into the union.
 ///
 /// Values are built from each entity's index in the returned owners.
 /// An ordinary layout creates and mutates the same entities, without any group or regroup.
 fn multiple_world(layout: Layout) -> (World, Vec<Owner>) {
-    let mut world = World::new();
+    let mut world = match layout {
+        Layout::Grouped => World::builder()
+            .with_group::<(A, B)>()
+            .with_group::<(A, C)>()
+            .build(),
+        Layout::Ordinary => World::new(),
+    };
     let mut owners = Vec::new();
 
     let abc_start = MULTI_AB;
@@ -636,7 +649,7 @@ fn multiple_world(layout: Layout) -> (World, Vec<Owner>) {
     }
 
     if layout == Layout::Grouped {
-        world.group::<(A, B)>().group::<(A, C)>();
+        world.regroup();
     }
 
     for k in 0..JOINS {
@@ -700,7 +713,11 @@ pub fn multiple_triples(layout: Layout) -> Fixture {
 /// over the second half lose their B, storage-local removals leaving A in place,
 /// and `CHURN` new pairs are added.
 fn churned_pairs(layout: Layout, regroup: bool, candidates: u32, exact: bool) -> Fixture {
-    let mut fixture = Fixture::new(World::new(), candidates, exact);
+    let world = match layout {
+        Layout::Grouped => ab_world(),
+        Layout::Ordinary => World::new(),
+    };
+    let mut fixture = Fixture::new(world, candidates, exact);
     let pairs: Vec<_> = (0..N)
         .map(|i| fixture.world.add_entity((A(a_value(i)), B(b_value(i)))))
         .collect();
@@ -710,7 +727,7 @@ fn churned_pairs(layout: Layout, regroup: bool, candidates: u32, exact: bool) ->
     }
 
     if layout == Layout::Grouped {
-        fixture.world.group::<(A, B)>();
+        fixture.world.regroup();
     }
 
     let half = N / 2;
@@ -782,8 +799,15 @@ pub fn tail(layout: Layout) -> Fixture {
         Layout::Grouped => HEAD + N,
         Layout::Ordinary => HEAD + N + 3,
     };
+    let world = match layout {
+        Layout::Grouped => World::builder()
+            .with_group::<(A, B)>()
+            .with_group::<(A, B, C)>()
+            .build(),
+        Layout::Ordinary => World::new(),
+    };
     // Neither walk claims an exact length: one has a follow-up segment, the other looks up B.
-    let mut fixture = Fixture::new(World::new(), candidates, false);
+    let mut fixture = Fixture::new(world, candidates, false);
     for i in 0..HEAD {
         fixture.add_pair(i);
     }
@@ -798,7 +822,7 @@ pub fn tail(layout: Layout) -> Fixture {
     }
 
     if layout == Layout::Grouped {
-        fixture.world.group::<(A, B)>().group::<(A, B, C)>();
+        fixture.world.regroup();
     }
 
     fixture
@@ -892,13 +916,14 @@ impl Churn {
 ///
 /// For `(&A, &B, &H)`, candidates: `N`, exact. Yields: `N`.
 pub fn heavy() -> Fixture {
-    let mut fixture = Fixture::new(World::new(), N, true);
+    let world = World::builder().with_group::<(A, B, H)>().build();
+    let mut fixture = Fixture::new(world, N, true);
     for i in 0..N {
         let (a, b) = (a_value(i), b_value(i));
         let id = fixture.world.add_entity((A(a), B(b), H(h_value(a))));
         fixture.matches.push(Match { id, a, b, c: None });
     }
-    fixture.world.group::<(A, B, H)>();
+    fixture.world.regroup();
 
     fixture
 }

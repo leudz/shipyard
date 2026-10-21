@@ -227,9 +227,9 @@ fn add_lone_c(world: &mut World, count: u32) {
 /// B's covered by A's.\
 /// Returns the pairs, the late ones last.
 fn late_pairs_world(grouped: u32, late: u32) -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 0, grouped);
-    world.group::<(A, B)>();
+    world.regroup();
     pairs.extend(add_ab(&mut world, grouped, late));
 
     (world, pairs)
@@ -264,11 +264,11 @@ fn abc_values(
 /// The pair's ordinary walk costs 30 and looking C up 10 more. Its aligned walk costs 20.\
 /// Returns the pairs.
 fn large_c_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs);
     add_lone_c(&mut world, 10);
-    world.group::<(A, B)>();
+    world.regroup();
 
     (world, pairs)
 }
@@ -315,10 +315,10 @@ fn large_c() {
 /// the pair up, the pair keeping its ordinary state.
 #[test]
 fn tiny_c() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs[3..5]);
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
@@ -374,7 +374,7 @@ fn second_position() {
 /// with its members in the reverse of the group's order.
 #[test]
 fn deeper() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     for (i, &id) in (0..).zip(&pairs) {
         world.add_component(id, (C(i), D(i)));
@@ -383,7 +383,7 @@ fn deeper() {
     for i in 0..10 {
         world.add_entity(D(1000 + i));
     }
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c, d) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
@@ -424,13 +424,13 @@ fn deeper() {
 /// Asserts that the grouped pair drives from the middle of `(C, (A, B), D)`.
 #[test]
 fn middle_position() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     for (i, &id) in (0..).zip(&pairs) {
         world.add_component(id, (C(i), D(i)));
     }
     add_lone_c(&mut world, 10);
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c, d) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
@@ -467,14 +467,17 @@ fn middle_position() {
 ///
 /// Returns the 21 entities owning every component.
 fn disjoint_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     let mut all: Vec<EntityId> = (0..20)
         .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
         .collect();
     add_ab(&mut world, 100, 30);
     let late = world.add_entity((A(50), B(50)));
-    world.group::<(A, B)>();
-    world.group::<(C, D)>();
+    world.regroup();
+    world.regroup();
     world.add_component(late, (C(50), D(50)));
     all.push(late);
 
@@ -543,13 +546,16 @@ fn disjoint_cd() {
 /// through the CD pair's lookups.
 #[test]
 fn disjoint_ab() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     let mut all: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
         .collect();
     let late = world.add_entity((A(4), B(4)));
-    world.group::<(A, B)>();
-    world.group::<(C, D)>();
+    world.regroup();
+    world.regroup();
     world.add_component(late, (C(4), D(4)));
     all.push(late);
 
@@ -589,11 +595,11 @@ fn disjoint_ab() {
 /// it would cross the nested `Mixed`'s boundary.
 #[test]
 fn cross_boundary() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, C)>().build();
     let all: Vec<EntityId> = (0..10)
         .map(|i| world.add_entity((A(i), B(i), C(i))))
         .collect();
-    world.group::<(A, C)>();
+    world.regroup();
 
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
@@ -667,11 +673,11 @@ fn coverage() {
 /// with the ordinary one and loses, then wins again after a regroup.
 #[test]
 fn removal_then_regroup() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs);
     add_lone_c(&mut world, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     world.remove::<A>(pairs[0]);
 
     {
@@ -811,10 +817,10 @@ fn repeated_pair() {
 ///
 /// Returns `lone`, followed by the aligned pairs.
 fn sparse_c_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 0, 10);
     let lone = world.add_entity(A(10));
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_component(lone, B(10));
     world.add_entity(A(11));
     world.add_entity(A(12));
@@ -872,14 +878,14 @@ fn empty_segments() {
 /// at once, each write landing once on its own entity and flagging only the matches.
 #[test]
 fn held_mut() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, Modif)>().build();
     let all: Vec<EntityId> = (0..6)
         .map(|i| world.add_entity((A(i), Modif(i), C(i))))
         .collect();
     let lone_a = world.add_entity(A(100));
     world.add_entity(A(101));
     add_lone_c(&mut world, 10);
-    world.group::<(A, Modif)>();
+    world.regroup();
 
     let (mut a, mut modifs, mut c) = world
         .borrow::<(ViewMut<'_, A>, ViewMut<'_, Modif>, ViewMut<'_, C>)>()

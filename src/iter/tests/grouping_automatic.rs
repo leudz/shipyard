@@ -93,11 +93,11 @@ fn fold_ids<S: Shiperator>(iter: Shiper<S>) -> Vec<EntityId> {
 ///
 /// Returns the pairs, `late` last.
 fn follow_ups_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 10);
     world.add_entity(A(100));
     world.add_entity(A(101));
-    world.group::<(A, B)>();
+    world.regroup();
     pairs.push(world.add_entity((A(10), B(10))));
 
     (world, pairs)
@@ -107,11 +107,11 @@ fn follow_ups_world() -> (World, Vec<EntityId>) {
 /// as a single aligned segment where both members drive, and yields exactly the pairs.
 #[test]
 fn aligned() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 4);
     world.add_entity(A(10));
     world.add_entity(B(10));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let iter = (&a, &b).iter();
@@ -129,11 +129,11 @@ fn aligned() {
 /// lands on its own entity's components, leaving the unmatched ones alone.
 #[test]
 fn aligned_mut() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 4);
     let lone_a = world.add_entity(A(10));
     let lone_b = world.add_entity(B(10));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
     let iter = (&mut a, &mut b).iter();
@@ -157,14 +157,14 @@ fn aligned_mut() {
 /// when C is larger, rejecting the pairs lacking C.
 #[test]
 fn rejecting_sailor() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 4);
     world.add_component(pairs[1], C(1));
     world.add_component(pairs[3], C(3));
     for i in 0..5 {
         world.add_entity(C(10 + i));
     }
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
@@ -184,7 +184,7 @@ fn rejecting_sailor() {
 /// AB pair it still finds the pairs owning it, with their values.
 #[test]
 fn group_free_sailor() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 4);
     world.add_component(pairs[1], C(1));
     world.add_component(pairs[3], C(3));
@@ -192,7 +192,7 @@ fn group_free_sailor() {
     for i in 0..5 {
         owners.push(world.add_entity(C(10 + i)));
     }
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
@@ -218,10 +218,10 @@ fn group_free_sailor() {
 /// the ordinary walk is installed, without plan.
 #[test]
 fn small_captain() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 4);
     world.add_component(pairs[2], C(2));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
@@ -237,12 +237,15 @@ fn small_captain() {
 /// has entities left to walk in its unevaluated regions.
 #[test]
 fn cd_over_ab() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     let all: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
         .collect();
-    world.group::<(A, B)>();
-    world.group::<(C, D)>();
+    world.regroup();
+    world.regroup();
     add_ab(&mut world, 2);
 
     let (a, b, c, d) = world
@@ -266,12 +269,15 @@ fn cd_over_ab() {
 /// has entities left to walk in its unevaluated regions.
 #[test]
 fn ab_over_cd() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     let all: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
         .collect();
-    world.group::<(A, B)>();
-    world.group::<(C, D)>();
+    world.regroup();
+    world.regroup();
     world.add_entity((C(10), D(10)));
     world.add_entity((C(11), D(11)));
 
@@ -295,11 +301,11 @@ fn ab_over_cd() {
 /// Asserts that a group of other storages doesn't make an AB query grouped.
 #[test]
 fn unrelated_group() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(C, D)>().build();
     let pairs = add_ab(&mut world, 4);
     world.add_entity(A(10));
     world.add_entity((C(0), D(0)));
-    world.group::<(C, D)>();
+    world.regroup();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let iter = (&a, &b).iter();
@@ -313,12 +319,12 @@ fn unrelated_group() {
 /// lacking C, which sit outside the group range.
 #[test]
 fn projection() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B, C)>().build();
     let pairs = add_ab(&mut world, 5);
     for &id in &pairs[..3] {
         world.add_component(id, C(0));
     }
-    world.group::<(A, B, C)>();
+    world.regroup();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let (_, _, metadata) = (&a, &b).into_shiperator();
@@ -338,14 +344,17 @@ fn projection() {
 ///
 /// Returns every entity.
 fn overlap_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let ab = add_ab(&mut world, 8);
     let ac: Vec<EntityId> = (0..8).map(|i| world.add_entity((A(i), C(i)))).collect();
     let abc: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C(i))))
         .collect();
     let b_only: Vec<EntityId> = (0..3).map(|i| world.add_entity(B(i))).collect();
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
 
     world.add_component(ab[0], C(0));
     world.add_component(ab[1], C(1));
@@ -362,11 +371,14 @@ fn overlap_world() -> (World, Vec<EntityId>) {
 ///
 /// Returns every entity.
 fn extra_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C, D)>()
+        .build();
     let mut all = add_ab(&mut world, 6);
     all.extend((0..6).map(|i| world.add_entity((A(i), C(i), D(i)))));
     all.extend((0..5).map(|i| world.add_entity((A(i), B(i), C(i), D(i)))));
-    world.group::<(A, B)>().group::<(A, C, D)>();
+    world.regroup();
 
     (world, all)
 }
@@ -479,13 +491,16 @@ fn union_triples() {
 /// reject it thanks to the records of the walks before them.
 #[test]
 fn absent_union() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let mut all = Vec::new();
     for i in 0..3 {
         all.push(world.add_entity((A(i), B(i))));
         all.push(world.add_entity((A(i), C(i))));
     }
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
     let late = world.add_entity((A(10), B(10), C(10)));
     all.push(late);
 
@@ -605,10 +620,10 @@ fn follow_ups() {
 /// by B's unevaluated walk, while A's ungrouped region is skipped.
 #[test]
 fn ungrouped_member() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 10);
     let late = world.add_entity(A(10));
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_component(late, B(10));
     pairs.push(late);
 
@@ -631,9 +646,9 @@ fn ungrouped_member() {
 /// once regrouped, and the deleted one isn't.
 #[test]
 fn generation_reuse() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut pairs = add_ab(&mut world, 10);
-    world.group::<(A, B)>();
+    world.regroup();
     world.delete_entity(pairs[0]);
     let reused = world.add_entity((A(99), B(99)));
     assert_eq!(reused.index(), pairs[0].index());
@@ -654,8 +669,7 @@ fn generation_reuse() {
 /// Asserts that an empty grouped pair ties with the ordinary walk, which yields nothing.
 #[test]
 fn empty() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let world = World::builder_for_test().with_group::<(A, B)>().build();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let iter = (&a, &b).iter();
@@ -667,11 +681,13 @@ fn empty() {
 /// Asserts that a group of zero sized components is walked aligned like any other.
 #[test]
 fn zero_sized() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(Zst0, Zst1)>()
+        .build();
     let pairs: Vec<EntityId> = (0..4).map(|_| world.add_entity((Zst0, Zst1))).collect();
     world.add_entity(Zst0);
     world.add_entity(Zst1);
-    world.group::<(Zst0, Zst1)>();
+    world.regroup();
 
     let (z0, z1) = world.borrow::<(View<'_, Zst0>, View<'_, Zst1>)>().unwrap();
     let iter = (&z0, &z1).iter();
@@ -688,14 +704,14 @@ fn zero_sized() {
 /// the parent drives through the pair alone and looks C up. `grouping_nested` goes further.
 #[test]
 fn nested() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 4);
     world.add_entity(A(10));
     for &id in &pairs {
         world.add_component(id, C(0));
     }
     world.add_entity(C(10));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
@@ -712,12 +728,12 @@ fn nested() {
 /// Asserts that a filter or an `Or` in a query over a grouped pair keeps the ordinary walk.
 #[test]
 fn filtered() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let pairs = add_ab(&mut world, 4);
     world.add_entity(A(10));
     world.add_component(pairs[0], C(0));
     world.add_entity(D(0));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c, d) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()

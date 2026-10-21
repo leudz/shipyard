@@ -130,7 +130,7 @@ pub struct MemberInfo {
     pub(crate) thread_safe: bool,
 }
 
-/// Trait used as bound for [`WorldBuilder::with_group`], [`World::group`] and [`AllStorages::group`].
+/// Trait used as bound for [`WorldBuilder::with_group`].
 ///
 /// Only implemented for tuples of two or more elements, since a group needs at least two storages.\
 /// It can't be implemented outside of shipyard.
@@ -307,7 +307,7 @@ impl Grouping {
 ///
 /// - The same storage is listed twice.
 #[track_caller]
-pub(crate) fn sorted_ids(mut ids: Vec<StorageId>) -> Vec<StorageId> {
+fn sorted_ids(mut ids: Vec<StorageId>) -> Vec<StorageId> {
     ids.sort_unstable();
 
     assert!(

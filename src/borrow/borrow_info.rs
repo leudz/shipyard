@@ -166,9 +166,9 @@ where
 {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T>>().into(),
+            name: type_name::<NonSend<SparseSet<T>>>().into(),
             mutability: Mutability::Shared,
-            storage_id: StorageId::of::<SparseSet<T>>(),
+            storage_id: StorageId::of::<NonSend<SparseSet<T>>>(),
             thread_safe: true,
         });
     }
@@ -193,9 +193,9 @@ where
 {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T>>().into(),
+            name: type_name::<NonSync<SparseSet<T>>>().into(),
             mutability: Mutability::Shared,
-            storage_id: StorageId::of::<SparseSet<T>>(),
+            storage_id: StorageId::of::<NonSync<SparseSet<T>>>(),
             thread_safe: false,
         });
     }
@@ -220,9 +220,9 @@ where
 {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T>>().into(),
+            name: type_name::<NonSendSync<SparseSet<T>>>().into(),
             mutability: Mutability::Shared,
-            storage_id: StorageId::of::<SparseSet<T>>(),
+            storage_id: StorageId::of::<NonSendSync<SparseSet<T>>>(),
             thread_safe: false,
         });
     }
@@ -272,9 +272,9 @@ where
 {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T>>().into(),
+            name: type_name::<NonSend<SparseSet<T>>>().into(),
             mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<SparseSet<T>>(),
+            storage_id: StorageId::of::<NonSend<SparseSet<T>>>(),
             thread_safe: false,
         });
     }
@@ -299,9 +299,9 @@ where
 {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T>>().into(),
+            name: type_name::<NonSync<SparseSet<T>>>().into(),
             mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<SparseSet<T>>(),
+            storage_id: StorageId::of::<NonSync<SparseSet<T>>>(),
             thread_safe: true,
         });
     }
@@ -326,9 +326,9 @@ where
 {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T>>().into(),
+            name: type_name::<NonSendSync<SparseSet<T>>>().into(),
             mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<SparseSet<T>>(),
+            storage_id: StorageId::of::<NonSendSync<SparseSet<T>>>(),
             thread_safe: false,
         });
     }

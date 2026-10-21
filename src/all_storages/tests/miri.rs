@@ -548,9 +548,10 @@ fn values_of(world: &World, entity: EntityId) -> Vec<u32> {
 #[test]
 fn regroup_moves() {
     let counter = Arc::new(AtomicUsize::new(0));
-    let mut world = World::new_for_test();
-    world.group::<(Counted, Aligned)>();
-    world.group::<(Counted, Marker)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(Counted, Aligned)>()
+        .with_group::<(Counted, Marker)>()
+        .build();
 
     // The (Counted, Marker) range is filled first. Appending to the (Counted, Aligned) range,
     // which comes before it in `Counted`, then rotates it.
@@ -618,8 +619,9 @@ fn regroup_tracked() {
     use crate::views::ViewMut;
 
     let counter = Arc::new(AtomicUsize::new(0));
-    let mut world = World::new_for_test();
-    world.group::<(TrackedCounted, Aligned)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(TrackedCounted, Aligned)>()
+        .build();
     let e: Vec<EntityId> = (0..8)
         .map(|i| world.add_entity((tracked_counted(i, &counter), Aligned(u64::from(i)))))
         .collect();
@@ -702,8 +704,9 @@ fn regroup_generation_reuse() {
     use crate::views::ViewMut;
 
     let counter = Arc::new(AtomicUsize::new(0));
-    let mut world = World::new_for_test();
-    world.group::<(Counted, Aligned)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(Counted, Aligned)>()
+        .build();
     let old = world.add_entity((counted(0, &counter), Aligned(0)));
     let other = world.add_entity((counted(1, &counter), Aligned(1)));
     world.regroup();
@@ -743,8 +746,9 @@ fn regroup_churn() {
     use crate::iter::IntoIter;
 
     let counter = Arc::new(AtomicUsize::new(0));
-    let mut world = World::new_for_test();
-    world.group::<(Counted, Aligned)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(Counted, Aligned)>()
+        .build();
     let e: Vec<EntityId> = (0..24)
         .map(|i| world.add_entity((counted(i, &counter), Aligned(u64::from(i)))))
         .collect();
@@ -801,7 +805,9 @@ macro_rules! regroup_wrapped {
             use crate::views::ViewMut;
 
             let counter = Arc::new(AtomicUsize::new(0));
-            let mut world = World::new_for_test();
+            let mut world = World::builder_for_test()
+                .with_group::<(Aligned, $wrapper<Counted>)>()
+                .build();
             let add = |world: &mut World, i: u32| {
                 let entity = world.add_entity((Aligned(u64::from(i)),));
                 world
@@ -811,7 +817,7 @@ macro_rules! regroup_wrapped {
                 entity
             };
             let e: Vec<EntityId> = (0..6).map(|i| add(&mut world, i)).collect();
-            world.group::<(Aligned, $wrapper<Counted>)>();
+            world.regroup();
 
             world.delete_entity(e[1]);
             {

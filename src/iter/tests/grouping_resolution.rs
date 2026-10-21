@@ -60,9 +60,9 @@ fn captain_32() {
     }
     macro_rules! check {
         ($($n:tt),+) => {{
-            let mut world = World::new_for_test();
+            let mut world = World::builder_for_test().with_group::<($(Member<$n>,)+)>().build();
             let ids: Vec<_> = (0..3).map(|i| world.add_entity(($(Member::<$n>(i),)+))).collect();
-            // Before grouping, make the final child the cheapest ordinary captain.
+            // Before regrouping, make the final child the cheapest ordinary captain.
             $(if $n != 31 { world.add_entity(Member::<$n>(100)); })+
             {
                 let views = world.borrow::<($(View<'_, Member<$n>>,)+)>().unwrap();
@@ -74,7 +74,7 @@ fn captain_32() {
                     id
                 }).collect::<Vec<_>>(), ids);
             }
-            world.group::<($(Member<$n>,)+)>();
+            world.regroup();
             let views = world.borrow::<($(View<'_, Member<$n>>,)+)>().unwrap();
             let iter = ($(&views.$n,)+).iter();
             assert_eq!(iter.shiperator.captain_mask, u32::MAX);

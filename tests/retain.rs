@@ -58,11 +58,11 @@ fn grouped() {
         type Tracking = track::Untracked;
     }
 
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(U32, Other)>().build();
     let entities: Vec<EntityId> = (0..6)
         .map(|i| world.add_entity((U32(i), Other(i))))
         .collect();
-    world.group::<(U32, Other)>();
+    world.regroup();
 
     world.retain_mut::<U32>(|_, mut i| {
         i.0 *= 2;

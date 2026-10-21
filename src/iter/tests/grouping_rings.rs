@@ -163,8 +163,7 @@ fn assert_triples(a: &View<'_, A>, b: &View<'_, B>, c: &View<'_, C>, all: &[Enti
 /// Both members hold the same logical sequence, as group metadata requires.\
 /// `shifts` are A's and B's shifts, any shift with these remainders describes the same rings.
 fn rotated_world(shifts: (isize, isize)) -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let e: Vec<EntityId> = (0..4).map(|_| world.add_entity(())).collect();
 
     // Components land at the end of their storage in the order they're added.
@@ -235,8 +234,7 @@ fn unnormalized_shifts() {
 /// ranges.
 #[test]
 fn damaged_wrap() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let e: Vec<EntityId> = (0..5).map(|_| world.add_entity(())).collect();
     let late = e[4];
 
@@ -288,8 +286,10 @@ fn damaged_wrap() {
 /// A and B hold the same logical sequences in both ranges, C holds ABCD's as well.\
 /// No query borrows D, its reset doesn't change what the others' metadata says.
 fn projection_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>().group::<(A, B, C, D)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, B, C, D)>()
+        .build();
     let p: Vec<EntityId> = (0..2).map(|_| world.add_entity(())).collect();
     let q: Vec<EntityId> = (0..3).map(|_| world.add_entity(())).collect();
 
@@ -385,8 +385,10 @@ fn projection() {
 /// a component in A's or B's range and the other one unevaluated.
 #[test]
 fn damaged_captains() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>().group::<(A, B, C, D)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, B, C, D)>()
+        .build();
     let q: Vec<EntityId> = (0..3).map(|_| world.add_entity(())).collect();
     let r = world.add_entity(());
 
@@ -446,10 +448,13 @@ fn damaged_captains() {
 /// A second promotion shrinks AB, so regroup slides the ABC range after it by one slot in
 /// A and B, which rotates it in both.
 fn promoted_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let mut all: Vec<EntityId> = (0..6).map(|i| world.add_entity((A(i), B(i)))).collect();
     all.extend((6..10).map(|i| world.add_entity((A(i), C(i)))));
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
 
     for &i in &[1, 4] {
         world.add_component(all[i], C(i as u32));

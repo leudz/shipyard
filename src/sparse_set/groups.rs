@@ -289,15 +289,6 @@ impl Groups {
             .find(|range| Arc::ptr_eq(&range.group, group))
     }
 
-    /// Returns `group`'s range in this storage.
-    ///
-    /// Groups are compared by pointer, an equal group allocated separately doesn't match.
-    pub(crate) fn range_mut(&mut self, group: &Arc<[StorageId]>) -> Option<&mut GroupRange> {
-        self.ranges
-            .iter_mut()
-            .find(|range| Arc::ptr_eq(&range.group, group))
-    }
-
     /// Attaches an empty range for `group` after the last range.
     ///
     /// No component moves and the regions keep their bounds.\
@@ -314,17 +305,6 @@ impl Groups {
             trust: 0,
         });
         self.storage_id = Some(storage_id);
-    }
-
-    /// Returns the group of a range whose member ids are equal to `ids`.
-    ///
-    /// This compares by value. It's only meant to detect duplicate declarations and to reuse
-    /// an existing union, everywhere else groups are compared by pointer.
-    pub(crate) fn find_by_value(&self, ids: &[StorageId]) -> Option<&Arc<[StorageId]>> {
-        self.ranges
-            .iter()
-            .map(|range| &range.group)
-            .find(|group| group[..] == *ids)
     }
 
     /// Makes the whole storage unevaluated, without moving any component.

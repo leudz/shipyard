@@ -565,3 +565,36 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
 fn with_system_return_type() {
     Workload::new("").with_system(|| 0usize).build().unwrap();
 }
+
+/// Asserts that a system borrowing `T` exclusively and one borrowing `NonSend<T>` exclusively
+/// share a batch, since they are different storages.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send_distinct_storage() {
+    use crate::borrow::NonSend;
+
+    fn sys1(_: ViewMut<'_, Usize>) {}
+    fn sys2(_: NonSend<ViewMut<'_, Usize>>) {}
+
+    let world = World::new_for_test();
+
+    Workload::new("Test")
+        .with_system(sys1)
+        .with_system(sys2)
+        .add_to_world(&world)
+        .unwrap();
+
+    let scheduler = world.scheduler.borrow_mut().unwrap();
+    let label: Box<dyn Label> = Box::new("Test");
+    assert_eq!(
+        scheduler.workloads.get(&label),
+        Some(&Batches {
+            parallel: vec![(Some(1), vec![0])],
+            parallel_run_if: Vec::new(),
+            sequential: vec![0, 1],
+            sequential_run_if: Vec::new(),
+            workload_run_if: None,
+            systems_run_if: Vec::new(),
+        })
+    );
+}

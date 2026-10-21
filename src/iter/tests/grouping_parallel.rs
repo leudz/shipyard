@@ -466,11 +466,11 @@ fn opt_len_follow_ups() {
 }
 
 fn aligned_world() -> World {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     for i in 0..200 {
         world.add_entity((A(i), B(i)));
     }
-    world.group::<(A, B)>();
+    world.regroup();
     world
 }
 
@@ -553,11 +553,11 @@ fn exact_split_at() {
 /// The planner prefers its grouped walks, they have follow-ups so they're unindexed,
 /// and they're longer than a chunk.
 fn late_world() -> World {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     for i in 0..1000 {
         world.add_entity((A(i), B(i)));
     }
-    world.group::<(A, B)>();
+    world.regroup();
     for i in 1000..1100 {
         world.add_entity((A(i), B(i)));
     }

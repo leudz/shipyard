@@ -6,7 +6,7 @@ mod tests;
 pub use builder::WorldBuilder;
 
 use crate::all_storages::{
-    AllStorages, CustomStorageAccess, TupleClone, TupleDeleteAny, TupleGroup, TupleRetainStorage,
+    AllStorages, CustomStorageAccess, TupleClone, TupleDeleteAny, TupleRetainStorage,
 };
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
@@ -1359,43 +1359,10 @@ impl World {
         self.all_storages.get_mut().track_all::<T>();
     }
 
-    /// Declares a group made of the given storages.
-    ///
-    /// Iterating a group's storages together walks their components without check.\
-    /// Other storages in the query are looked up as usual.
-    ///
-    /// Declaring a new group creates the storages that don't exist and runs a [`regroup`](World::regroup).\
-    /// If the group already exists, nothing happens.\
-    /// Groups can't be removed.
-    ///
-    /// ### Overlapping groups
-    ///
-    /// A storage can belong to multiple groups. When groups overlap, a union is created.\
-    /// With `A+B` and `A+C` groups, an entity owning A, B and C moves to an `A+B+C` union.\
-    /// An `(&a, &b)` query then walks both `A+B` and `A+B+C`.
-    ///
-    /// The more groups overlap, the more pieces a group is split into and the slower iteration gets.
-    ///
-    /// ### Current limitations
-    ///
-    /// - All of a group's storages have to be in the same tuple when creating an iterator.\
-    ///   `((&a, &b), &c)` uses an `A+B` group, `(&a, (&b, &c))` doesn't.
-    /// - Queries using `Not`, `Optional`, `Or` or a tracking filter like `inserted` don't use groups.
-    /// - Only bulk consumers like `for_each` or `fold` benefit from groups.\
-    ///   A `for` loop, or any other use of `next`, can be slower than without groups.
-    ///
-    /// ### Panics
-    ///
-    /// - The same storage is listed twice.
-    #[track_caller]
-    pub fn group<G: TupleGroup>(&mut self) -> &mut World {
-        self.all_storages.get_mut().group::<G>();
-        self
-    }
-
     /// Moves components to the groups they belong to, to speed up iteration.
     ///
-    /// Components only move to their group during a regroup, explicit or from declaring a new group.\
+    /// Groups are declared with [`WorldBuilder::with_group`].\
+    /// Components only move to their group during a regroup.\
     /// Iteration stays correct between regroups, but adding or removing components slows it down.
     pub fn regroup(&mut self) {
         self.all_storages.get_mut().regroup();

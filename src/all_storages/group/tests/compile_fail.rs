@@ -60,3 +60,35 @@ struct SingleMemberGroup;
 /// World::builder().with_group::<A>();
 /// ```
 struct NonTupleGroup;
+
+/// Asserts that a built `World` can't declare groups, only its builder can.
+///
+/// ```compile_fail,E0599
+/// use shipyard::{Component, World};
+///
+/// #[derive(Component)]
+/// struct A;
+///
+/// #[derive(Component)]
+/// struct B;
+///
+/// let mut world = World::new();
+/// world.group::<(A, B)>();
+/// ```
+struct WorldGroup;
+
+/// Asserts that `AllStorages` can't declare groups, only the world's builder can.
+///
+/// ```compile_fail,E0599
+/// use shipyard::{Component, World};
+///
+/// #[derive(Component)]
+/// struct A;
+///
+/// #[derive(Component)]
+/// struct B;
+///
+/// let world = World::new();
+/// world.all_storages_mut().unwrap().group::<(A, B)>();
+/// ```
+struct AllStoragesGroup;

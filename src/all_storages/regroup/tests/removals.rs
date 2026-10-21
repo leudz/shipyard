@@ -268,12 +268,15 @@ fn regroup_after_removals() {
 /// components, and that regroup aligns the damaged one again.
 #[test]
 fn regroup_disjoint_after_removals() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
     let entities: Vec<EntityId> = (0..8)
         .map(|index| world.add_entity((A(index), B(index), C, D)))
         .collect();
-    world.group::<(A, B)>();
-    world.group::<(C, D)>();
+    world.regroup();
+    world.regroup();
     let before = (dense_of::<C>(&world), dense_of::<D>(&world));
 
     world.remove::<(A,)>(entities[1]);

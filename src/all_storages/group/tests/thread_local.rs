@@ -1,28 +1,5 @@
 use super::*;
 
-/// Asserts that a `NonSend` member attaches its range to the same storage `NonSend` views borrow.
-#[cfg(feature = "thread_local")]
-#[test]
-fn non_send() {
-    use crate::borrow::NonSend;
-    use crate::sparse_set::SparseSet;
-    use crate::storage::StorageId;
-
-    let mut world = World::new_for_test();
-
-    world.group::<(A, NonSend<B>)>();
-
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let b = world.borrow::<NonSend<View<'_, B>>>().unwrap();
-    let group = &b.groups.ranges[0].group;
-    assert!(Arc::ptr_eq(group, &a.groups.ranges[0].group));
-    assert!(group.contains(&StorageId::of::<NonSend<SparseSet<B>>>()));
-    assert_eq!(
-        b.groups.storage_id,
-        Some(StorageId::of::<NonSend<SparseSet<B>>>())
-    );
-}
-
 /// Asserts that a `NonSend` member can be part of overlapping groups,
 /// an entity satisfying both ending in their union.
 #[cfg(feature = "thread_local")]
@@ -31,14 +8,17 @@ fn non_send_overlap() {
     use crate::borrow::NonSend;
     use crate::{AddComponent, ViewMut};
 
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .with_group::<(A, C)>()
+        .build();
     let entity = world.add_entity((A(0), C));
     world
         .borrow::<NonSend<ViewMut<'_, B>>>()
         .unwrap()
         .add_component_unchecked(entity, B(0));
 
-    world.group::<(A, NonSend<B>)>().group::<(A, C)>();
+    world.regroup();
 
     let all = [
         id::<A>(),
@@ -52,48 +32,19 @@ fn non_send_overlap() {
     assert_eq!(b.dense[b.groups.ranges[1].start], entity);
 }
 
-/// Asserts that `NonSync` and `NonSendSync` members attach their range to their wrapper's own
-/// storage, sharing the group with their `Send + Sync` partner, without creating the
-/// `Send + Sync` storage of the same component.
-#[test]
-fn non_sync_and_non_send_sync() {
-    use crate::borrow::{NonSendSync, NonSync};
-    use crate::sparse_set::SparseSet;
-    use crate::storage::StorageId;
-
-    let mut world = World::new_for_test();
-
-    world
-        .group::<(A, NonSync<C>)>()
-        .group::<(B, NonSendSync<D>)>();
-
-    let c = world.borrow::<NonSync<View<'_, C>>>().unwrap();
-    let d = world.borrow::<NonSendSync<View<'_, D>>>().unwrap();
-    let c_id = StorageId::of::<NonSync<SparseSet<C>>>();
-    let d_id = StorageId::of::<NonSendSync<SparseSet<D>>>();
-    assert_eq!(c.groups.storage_id, Some(c_id));
-    assert_eq!(d.groups.storage_id, Some(d_id));
-    assert_eq!(&c.groups.ranges[0].group[..], group_ids(&[id::<A>(), c_id]));
-    assert_eq!(&d.groups.ranges[0].group[..], group_ids(&[id::<B>(), d_id]));
-    drop((c, d));
-
-    let storages = world.all_storages.get_mut().storages.get_mut();
-    assert!(!storages.contains_key(&id::<C>()));
-    assert!(!storages.contains_key(&id::<D>()));
-}
-
 /// Asserts that each thread-local wrapper can be declared on the builder,
-/// its range attached to the wrapper's own storage and shared with its partner.
+/// its range attached to the wrapper's own storage and shared with its partner,
+/// without creating the `Send + Sync` storage of the same component.
 #[test]
 fn builder_wrappers() {
     use crate::borrow::{NonSend, NonSendSync, NonSync};
     use crate::sparse_set::SparseSet;
     use crate::storage::StorageId;
 
-    let world = World::builder_for_test()
+    let mut world = World::builder_for_test()
         .with_group::<(A, NonSend<B>)>()
-        .with_group::<(B, NonSync<C>)>()
-        .with_group::<(C, NonSendSync<D>)>()
+        .with_group::<(A, NonSync<C>)>()
+        .with_group::<(A, NonSendSync<D>)>()
         .build();
 
     let b_id = StorageId::of::<NonSend<SparseSet<B>>>();
@@ -106,8 +57,48 @@ fn builder_wrappers() {
     assert_eq!(c.groups.storage_id, Some(c_id));
     assert_eq!(d.groups.storage_id, Some(d_id));
     assert_eq!(&b.groups.ranges[0].group[..], group_ids(&[id::<A>(), b_id]));
-    assert_eq!(&c.groups.ranges[0].group[..], group_ids(&[id::<B>(), c_id]));
-    assert_eq!(&d.groups.ranges[0].group[..], group_ids(&[id::<C>(), d_id]));
+    assert_eq!(&c.groups.ranges[0].group[..], group_ids(&[id::<A>(), c_id]));
+    assert_eq!(&d.groups.ranges[0].group[..], group_ids(&[id::<A>(), d_id]));
+    drop((b, c, d));
+
+    let storages = world.all_storages.get_mut().storages.get_mut();
+    assert!(!storages.contains_key(&id::<B>()));
+    assert!(!storages.contains_key(&id::<C>()));
+    assert!(!storages.contains_key(&id::<D>()));
+}
+
+/// Asserts that each thread-local view tells the scheduler the id of the storage it borrows,
+/// the same id the matching group member uses, so workloads can match borrows with group members.
+#[test]
+fn view_ids() {
+    use crate::all_storages::GroupMember;
+    use crate::borrow::{BorrowInfo, NonSend, NonSendSync, NonSync};
+    use crate::views::ViewMut;
+
+    fn id_of<V: BorrowInfo>() -> StorageId {
+        let mut info = Vec::new();
+        V::borrow_info(&mut info);
+        info[0].storage_id
+    }
+
+    assert_eq!(id_of::<NonSend<View<'_, A>>>(), NonSend::<A>::storage_id());
+    assert_eq!(
+        id_of::<NonSend<ViewMut<'_, A>>>(),
+        NonSend::<A>::storage_id()
+    );
+    assert_eq!(id_of::<NonSync<View<'_, A>>>(), NonSync::<A>::storage_id());
+    assert_eq!(
+        id_of::<NonSync<ViewMut<'_, A>>>(),
+        NonSync::<A>::storage_id()
+    );
+    assert_eq!(
+        id_of::<NonSendSync<View<'_, A>>>(),
+        NonSendSync::<A>::storage_id()
+    );
+    assert_eq!(
+        id_of::<NonSendSync<ViewMut<'_, A>>>(),
+        NonSendSync::<A>::storage_id()
+    );
 }
 
 /// Returns the connected set holding `A`'s storage.

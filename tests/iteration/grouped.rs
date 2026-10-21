@@ -28,13 +28,19 @@ impl Component for C {
     type Tracking = track::Untracked;
 }
 
+/// The world declares the `(A, B)` group when `grouped` is `true`.
+///
 /// `e0` to `e5` own `A(i)`, `e1`, `e2` and `e4` own `B(10 + i)`, `e2` and `e5` own `C(20 + i)`.
-/// `B` is cleared of its insertions, then `(A, B)` is grouped when `grouped` is `true`.
+/// `B` is cleared of its insertions, then the world is regrouped.
 ///
 /// Afterwards, `e6` owns `A(6)` and `B(16)`, `e7` only `B(17)` and `e8` owns `A(8)`, `B(18)`
 /// and `C(28)`. `e1`'s `B` is modified last.
 fn world(grouped: bool) -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = if grouped {
+        World::builder().with_group::<(A, B)>().build()
+    } else {
+        World::new()
+    };
 
     let mut e: Vec<EntityId> = (0..6).map(|i| world.add_entity(A(i))).collect();
     for i in [1, 2, 4] {
@@ -45,9 +51,7 @@ fn world(grouped: bool) -> (World, Vec<EntityId>) {
     }
     world.borrow::<ViewMut<B>>().unwrap().clear_all_inserted();
 
-    if grouped {
-        world.group::<(A, B)>();
-    }
+    world.regroup();
 
     e.push(world.add_entity((A(6), B(16))));
     e.push(world.add_entity(B(17)));

@@ -272,12 +272,12 @@ struct PlaceView<'v> {
 /// is grouped. The aligned walk costs 12, against 18 for `Tag` captaining.
 #[test]
 fn grouped_mut() {
-    let mut world = World::new();
+    let mut world = World::builder().with_group::<(Pos, Tag)>().build();
     let pairs: Vec<EntityId> = (0..6)
         .map(|i| world.add_entity((Pos(i), Tag(10 + i))))
         .collect();
     let lone: Vec<EntityId> = (6..10).map(|i| world.add_entity(Pos(i))).collect();
-    world.group::<(Pos, Tag)>();
+    world.regroup();
 
     {
         let mut place = world.borrow::<PlaceView>().unwrap();

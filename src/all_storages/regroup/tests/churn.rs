@@ -170,9 +170,9 @@ fn mixed() {
 /// every entity is grouped again in all three members with its values.
 #[test]
 fn one_member_of_three() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B, C)>().build();
     let e: Vec<EntityId> = (0..20).map(|i| world.add_entity((A(i), B(i), C))).collect();
-    world.group::<(A, B, C)>();
+    world.regroup();
     let reinserted = [0, 6, 11, 19];
     for i in reinserted {
         world.remove::<(B,)>(e[i]);
@@ -218,7 +218,10 @@ fn abc_range<T: Component + Send + Sync>(world: &World) -> (Ring, usize) {
 /// entities that have to leave it, and others have to join it from outside.
 #[test]
 fn rotated_promotion_demotion() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let e: Vec<EntityId> = (0..24)
         .map(|i| match i % 3 {
             0 => world.add_entity((A(i), B(i))),
@@ -226,7 +229,7 @@ fn rotated_promotion_demotion() {
             _ => world.add_entity((A(i), B(i), C)),
         })
         .collect();
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
     // Promotions shrink AB and AC in A, which rotates the ABC range behind them.
     world.add_component(e[0], C);
     world.add_component(e[4], B(4));
@@ -298,7 +301,9 @@ fn clear_refill() {
 fn tracking_removals() {
     use core::sync::atomic::{AtomicUsize, Ordering};
 
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(TrackedA, TrackedB)>()
+        .build();
     let e: Vec<EntityId> = (0..12)
         .map(|i| world.add_entity((TrackedA(i), TrackedB)))
         .collect();
@@ -311,7 +316,7 @@ fn tracking_removals() {
             (&mut a).get(e[i]).unwrap().0 += 100;
         }
     });
-    world.group::<(TrackedA, TrackedB)>();
+    world.regroup();
 
     let calls = Arc::new(AtomicUsize::new(0));
     {
@@ -356,11 +361,13 @@ fn tracking_removals() {
 /// Then a mutable grouped traversal reaches every pair exactly once, modifying only them.
 #[test]
 fn queries() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(TrackedA, TrackedB)>()
+        .build();
     let e: Vec<EntityId> = (0..16)
         .map(|i| world.add_entity((TrackedA(i), TrackedB)))
         .collect();
-    world.group::<(TrackedA, TrackedB)>();
+    world.regroup();
     world.run(|a: ViewMut<'_, TrackedA, track::All>| a.clear_all_inserted());
     world.run(|mut a: ViewMut<'_, TrackedA, track::All>| {
         for i in [2, 9] {

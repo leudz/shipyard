@@ -195,8 +195,7 @@ fn ordinary_world() -> (World, Vec<EntityId>) {
 /// Every entity owns `A(i)` and `B(10 + i)`, in the order returned:
 /// `e0`, `e1`, `e2`, `damaged`, `late_b`, `unevaluated` then `late_a`.
 fn partial_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
 
     // Components land at the end of their storage in the order they're added,
     // we set the regions afterwards.
@@ -266,10 +265,10 @@ fn ordinary_held_mut() {
 #[test]
 fn plan_free_held_mut() {
     // A's unevaluated pairs start after its A-only component, B is evaluated as ungrouped.
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     world.add_entity(A(0));
     let b_only: Vec<EntityId> = (0..4).map(|i| world.add_entity(B(20 + i))).collect();
-    world.group::<(A, B)>();
+    world.regroup();
     let pairs = &b_only[..3];
     for (i, &id) in (0..).zip(pairs) {
         world.add_component(id, A(10 + i));
@@ -429,8 +428,10 @@ fn grouped_held_mut() {
 /// at A's wrap point, and that items held from the first piece stay valid after the second.
 #[test]
 fn ring_wrap() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>().group::<(A, C)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     // The AC range is filled first. Appending to the AB range, which comes before it in A,
     // then rotates it in A only.
     let e: Vec<EntityId> = (0..3).map(|i| world.add_entity((A(i), C(i)))).collect();
@@ -461,11 +462,11 @@ fn ring_wrap() {
 /// held until the end.
 #[test]
 fn nested_held_mut() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut e: Vec<EntityId> = (0..3)
         .map(|i| world.add_entity((A(i), B(10 + i), C(i))))
         .collect();
-    world.group::<(A, B)>();
+    world.regroup();
     e.push(world.add_entity((A(3), B(13), C(3))));
 
     {
@@ -692,8 +693,9 @@ fn for_each_panic() {
 /// landing on an aligned component of the right entity.
 #[test]
 fn zero_sized_and_aligned() {
-    let mut world = World::new_for_test();
-    world.group::<(Zst, Aligned)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(Zst, Aligned)>()
+        .build();
     let e: Vec<EntityId> = (0..3)
         .map(|i| world.add_entity((Zst, Aligned(i))))
         .collect();
@@ -880,12 +882,12 @@ fn owned_borrow_error() {
 /// its mutable items can all be held then written.
 #[test]
 fn owned_selected_mut() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let e: Vec<EntityId> = (0..3)
         .map(|i| world.add_entity((A(i), B(10 + i))))
         .collect();
     world.add_entity(A(50));
-    world.group::<(A, B)>();
+    world.regroup();
 
     {
         let mut iter = world.iter::<(&mut A, &mut B)>();

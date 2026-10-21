@@ -31,12 +31,12 @@ pub(super) const ALIGNED: usize = 20;
 /// The real planner prefers these walks (76) over the ordinary walk (78).
 /// Returned ids are indexed by their A value, independent of storage order.
 pub(super) fn coverage_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut ids: Vec<_> = (0..ALIGNED as u32)
         .map(|i| world.add_entity((A(i), B(10 + i))))
         .collect();
     let late_b: Vec<_> = (23..26).map(|i| world.add_entity(A(i))).collect();
-    world.group::<(A, B)>();
+    world.regroup();
     ids.extend((20..23).map(|i| world.add_entity(A(i))));
     ids.extend(late_b);
     for i in [23, 20, 24, 21, 25, 22] {
@@ -99,7 +99,10 @@ pub(super) const RING_PAIRS: usize = 15;
 /// - B's unevaluated pairs, which A's region covers\
 /// Returned ids are indexed by pair, independent of storage order.
 pub(super) fn ring_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let mut pairs: Vec<EntityId> = (0..8)
         .map(|i| world.add_entity((A(i), B(100 + i))))
         .collect();
@@ -111,7 +114,7 @@ pub(super) fn ring_world() -> (World, Vec<EntityId>) {
     for i in 0..3 {
         world.add_entity(B(300 + i));
     }
-    world.group::<(A, B)>().group::<(A, C)>();
+    world.regroup();
 
     world.add_component(pairs[0], C(0));
     world.add_component(pairs[1], C(1));
@@ -158,8 +161,10 @@ fn set_regions(
 /// two damaged segments split at C's wrap point where A and C drive, A's unevaluated segment,
 /// then B's which rejects `q2` thanks to the damaged walk's records.
 pub(super) fn trust_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>().group::<(A, B, C, D)>();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, B, C, D)>()
+        .build();
     let e: Vec<EntityId> = (0..4).map(|_| world.add_entity(())).collect();
     let (q0, q1, q2, r) = (0, 1, 2, 3);
 

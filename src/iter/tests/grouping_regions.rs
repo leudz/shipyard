@@ -290,11 +290,11 @@ fn set_regions(groups: &mut Groups, range: Range<usize>, trust: usize, unevaluat
 /// skipping the components each storage evaluated as ungrouped.
 #[test]
 fn aligned() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut all: Vec<EntityId> = (0..4).map(|i| world.add_entity((A(i), B(i)))).collect();
     all.push(world.add_entity(A(10)));
     all.push(world.add_entity(B(10)));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let segments = pair_segments(&a, &b);
@@ -313,12 +313,12 @@ fn aligned() {
 /// which rejects the entities lacking C, so the traversal isn't exact.
 #[test]
 fn rejecting_sailor() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let all: Vec<EntityId> = (0..4).map(|i| world.add_entity((A(i), B(i)))).collect();
     world.add_component(all[1], C(1));
     world.add_component(all[3], C(3));
     world.add_entity(C(10));
-    world.group::<(A, B)>();
+    world.regroup();
 
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
@@ -358,9 +358,9 @@ fn rejecting_sailor() {
 /// rejected by B's thanks to the record of A's unevaluated region.
 #[test]
 fn new_entities() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut all: Vec<EntityId> = (0..3).map(|i| world.add_entity((A(i), B(i)))).collect();
-    world.group::<(A, B)>();
+    world.regroup();
     all.push(world.add_entity(A(10)));
     all.push(world.add_entity(B(10)));
     all.push(world.add_entity((A(11), B(11))));
@@ -382,11 +382,11 @@ fn new_entities() {
 /// by B's unevaluated walk: A's ungrouped region is neither walked nor covered.
 #[test]
 fn a_ungrouped_then_b() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut all: Vec<EntityId> = (0..2).map(|i| world.add_entity((A(i), B(i)))).collect();
     let late = world.add_entity(A(10));
     all.push(late);
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_component(late, B(10));
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
@@ -407,11 +407,11 @@ fn a_ungrouped_then_b() {
 /// by A's unevaluated walk: B's ungrouped region is neither walked nor covered.
 #[test]
 fn b_ungrouped_then_a() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut all: Vec<EntityId> = (0..2).map(|i| world.add_entity((A(i), B(i)))).collect();
     let late = world.add_entity(B(10));
     all.push(late);
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_component(late, A(10));
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
@@ -432,8 +432,7 @@ fn b_ungrouped_then_a() {
 /// walks and yielded once, by the first.
 #[test]
 fn both_unevaluated() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let all = [world.add_entity((A(0), B(0)))];
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
@@ -452,8 +451,7 @@ fn both_unevaluated() {
 /// without a plan.
 #[test]
 fn empty_group() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     world.add_entity(C(0));
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
@@ -469,8 +467,7 @@ fn empty_group() {
 /// a nonempty segment can yield nothing.
 #[test]
 fn unmatched_candidates() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let all = [world.add_entity(A(0)), world.add_entity(A(1))];
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
@@ -489,8 +486,7 @@ fn unmatched_candidates() {
 /// B trusts all of it, the unevaluated regions are empty.
 #[test]
 fn zero_trust() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     let first = world.add_entity(B(0));
     let second = world.add_entity((A(1), B(1)));
     world.add_component(first, A(0));
@@ -539,8 +535,7 @@ struct Partial {
 /// Members hold the same entities over the 2 positions they both trust and every match
 /// with both components evaluated is in both ranges, as group metadata guarantees.
 fn partial_world() -> Partial {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>();
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
 
     // Every component lands at the end of its storage, the regions are set afterwards.
     let e1 = world.add_entity((A(1), B(1)));
@@ -718,14 +713,17 @@ fn split_left_dropped() {
 /// D, E and C stop trusting the ABCDEF range at 2, 4 and 6, each one splitting it.
 #[test]
 fn many_captains() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, B, C, D, E, F)>()
+        .build();
     for i in 0..8 {
         world.add_entity((A(i), B(i), C(i), D(i), E(i), F(i)));
     }
     // In the AB range, the second one is rejected looking C up.
     world.add_entity((A(8), B(8), C(8), D(8), E(8)));
     world.add_entity((A(9), B(9)));
-    world.group::<(A, B)>().group::<(A, B, C, D, E, F)>();
+    world.regroup();
     {
         // Trusting fewer positions is always valid, these members are looked up instead.
         let (mut c, mut d, mut e) = world

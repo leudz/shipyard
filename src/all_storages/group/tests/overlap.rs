@@ -1,35 +1,18 @@
 use super::*;
 
-/// Asserts that a storage can be part of two groups, holding a range for each.
-#[test]
-fn second_group() {
-    let mut world = World::new_for_test();
-
-    world.group::<(A, B)>().group::<(A, C)>();
-
-    assert_eq!(
-        groups_of::<A>(&world),
-        [
-            group_ids(&[id::<A>(), id::<B>()]),
-            group_ids(&[id::<A>(), id::<C>()])
-        ]
-    );
-    assert_eq!(groups_of::<B>(&world).len(), 1);
-    assert_eq!(groups_of::<C>(&world).len(), 1);
-}
-
-/// Asserts that declaring AC after AB was populated moves the AB entities holding C
-/// to an ABC union, while the others stay in AB or join AC.
+/// Asserts that with overlapping AB and AC, regroup moves the entities holding A, B and C
+/// to an ABC union, while the others join AB or AC.
 #[test]
 fn overlap_populated() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let abc = world.add_entity((A(0), B(0), C));
     let ab = world.add_entity((A(1), B(1)));
     let ac = world.add_entity((A(2), C));
-    world.group::<(A, B)>();
-    assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]).len(), 2);
 
-    world.group::<(A, C)>();
+    world.regroup();
 
     let all = [id::<A>(), id::<B>(), id::<C>()];
     assert_eq!(range_of::<A>(&world, &all), [abc]);
@@ -40,16 +23,18 @@ fn overlap_populated() {
     assert!(is_evaluated::<A>(&world) && is_evaluated::<B>(&world) && is_evaluated::<C>(&world));
 }
 
-/// Asserts that declaring BC connects the disjoint AB and CD,
-/// an entity holding all four moving to an ABCD union.
+/// Asserts that BC connects AB and CD, an entity holding all four moving to an ABCD union
+/// instead of staying in AB and CD.
 #[test]
 fn overlap_connecting() {
-    let mut world = World::new_for_test();
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .with_group::<(B, C)>()
+        .build();
     let entity = world.add_entity((A(0), B(0), C, D));
-    world.group::<(A, B)>().group::<(C, D)>();
-    assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), [entity]);
 
-    world.group::<(B, C)>();
+    world.regroup();
 
     let all = [id::<A>(), id::<B>(), id::<C>(), id::<D>()];
     assert_eq!(range_of::<A>(&world, &all), [entity]);
@@ -58,61 +43,52 @@ fn overlap_connecting() {
     assert!(range_of::<D>(&world, &[id::<C>(), id::<D>()]).is_empty());
 }
 
-/// Asserts that a component left ungrouped by an earlier group joins a new group it satisfies.
+/// Asserts that an entity satisfying only one of two overlapping groups joins that group alone.
 #[test]
-fn overlap_ungrouped() {
-    let mut world = World::new_for_test();
+fn overlap_partial() {
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     let entity = world.add_entity((A(0), C));
-    world.group::<(A, B)>();
+
+    world.regroup();
+
     assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), []);
-
-    world.group::<(A, C)>();
-
     assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<C>()]), [entity]);
     assert_eq!(range_of::<C>(&world, &[id::<A>(), id::<C>()]), [entity]);
 }
 
-/// Asserts that declaring an existing group again doesn't regroup,
-/// even when other components are waiting for it.
+/// Asserts that a declared group equal to the union of two others is used as their union,
+/// regroup doesn't attach another range for it.
 #[test]
-fn duplicate_unevaluated() {
-    let mut world = World::new_for_test();
-    world.group::<(A, B)>().group::<(A, C)>();
-    world.add_entity((A(0), B(0), C));
-
-    world.group::<(B, A)>();
-
-    assert!(!is_evaluated::<A>(&world));
-    assert!(!is_evaluated::<C>(&world));
-}
-
-/// Asserts that declaring a group equal to an existing union reuses the union,
-/// without attaching anything or regrouping.
-#[test]
-fn duplicate_union() {
-    let mut world = World::new_for_test();
-    let entity = world.add_entity((A(0), B(0), C));
-    world.group::<(A, B)>().group::<(A, C)>();
-    let union = world.borrow::<View<'_, A>>().unwrap().groups.ranges[2]
+fn declared_union() {
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .with_group::<(C, B, A)>()
+        .build();
+    let declared = world.borrow::<View<'_, A>>().unwrap().groups.ranges[2]
         .group
         .clone();
-    world.add_entity((A(1), B(1), C));
+    let entity = world.add_entity((A(0), B(0), C));
 
-    world.group::<(C, B, A)>();
+    world.regroup();
 
     let a = world.borrow::<View<'_, A>>().unwrap();
     assert_eq!(a.groups.ranges.len(), 3);
-    assert!(Arc::ptr_eq(&a.groups.ranges[2].group, &union));
+    assert!(Arc::ptr_eq(&a.groups.ranges[2].group, &declared));
     assert_eq!(a.dense[a.groups.ranges[2].start], entity);
-    assert_ne!(a.groups.unevaluated_start, a.len());
 }
 
-/// Asserts that overlapping groups can be declared on empty storages.
+/// Asserts that overlapping groups on empty storages attach a range per group to each member.
 #[test]
 fn overlap_empty() {
-    let mut world = World::new_for_test();
-
-    world.group::<(A, B)>().group::<(A, C)>().group::<(C, D)>();
+    let world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .with_group::<(C, D)>()
+        .build();
 
     assert_eq!(groups_of::<A>(&world).len(), 2);
     assert_eq!(groups_of::<C>(&world).len(), 2);
@@ -131,12 +107,18 @@ fn overlap_order() {
             };
         }
     };
-    let mut ab_first = World::new_for_test();
+    let mut ab_first = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(A, C)>()
+        .build();
     populate(&mut ab_first);
-    ab_first.group::<(A, B)>().group::<(A, C)>();
-    let mut ac_first = World::new_for_test();
+    ab_first.regroup();
+    let mut ac_first = World::builder_for_test()
+        .with_group::<(A, C)>()
+        .with_group::<(A, B)>()
+        .build();
     populate(&mut ac_first);
-    ac_first.group::<(A, C)>().group::<(A, B)>();
+    ac_first.regroup();
 
     for ids in [
         [id::<A>(), id::<B>()].as_slice(),

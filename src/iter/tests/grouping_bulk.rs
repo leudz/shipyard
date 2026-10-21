@@ -147,11 +147,13 @@ fn strategies_and_prefixes() {
 
 #[test]
 fn partial_strategy() {
-    let mut world = crate::World::new_for_test();
+    let mut world = crate::World::builder_for_test()
+        .with_group::<(A, B)>()
+        .build();
     let ids: Vec<_> = (0..10)
         .map(|i| world.add_entity((A(i), B(10 + i))))
         .collect();
-    world.group::<(A, B)>();
+    world.regroup();
     world.add_component(ids[1], C(1));
     // Keep the ordinary C walk more expensive than the grouped alternative.
     for i in 0..100 {
