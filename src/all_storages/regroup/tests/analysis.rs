@@ -344,3 +344,74 @@ fn rotated() {
 
     assert_plan(&world, &[&ab(), &[id::<A>(), id::<C>()]]);
 }
+
+/// Asserts that a missing union is created once, as a single shared definition attached
+/// as an empty range after the last range of every member, and reused by the next analysis.
+#[test]
+fn union_created_once() {
+    let mut world = World::new_for_test();
+    world.add_entity((A(0), B(0), C));
+    let ab = attach_ids(&world, &[id::<A>(), id::<B>()]);
+    let ac = attach_ids(&world, &[id::<A>(), id::<C>()]);
+
+    analyze_world(&world);
+
+    let a = groups_of::<A>(&world);
+    assert_eq!(a.len(), 3);
+    assert!(Arc::ptr_eq(&a[0], &ab) && Arc::ptr_eq(&a[1], &ac));
+    let abc = a[2].clone();
+    assert_eq!(*abc, *sorted_ids(vec![id::<A>(), id::<B>(), id::<C>()]));
+    assert!(Arc::ptr_eq(&groups_of::<B>(&world)[1], &abc));
+    assert!(Arc::ptr_eq(&groups_of::<C>(&world)[1], &abc));
+    assert_eq!(group_of::<A>(&world, &abc), (vec![], 0));
+
+    world.add_entity((A(1), B(1), C));
+    analyze_world(&world);
+
+    assert_eq!(groups_of::<A>(&world).len(), 3);
+}
+
+/// Asserts that a group satisfied alone is its own union, nothing new is attached.
+#[test]
+fn union_existing_group() {
+    let mut world = World::new_for_test();
+    world.add_entity((A(0), B(0)));
+    attach_ids(&world, &[id::<A>(), id::<B>()]);
+
+    analyze_world(&world);
+
+    assert_eq!(groups_of::<A>(&world).len(), 1);
+}
+
+/// Asserts that a declared group equal to the union is reused instead of creating a new one.
+#[test]
+fn union_declared() {
+    let mut world = World::new_for_test();
+    world.add_entity((A(0), B(0), C));
+    attach_ids(&world, &[id::<A>(), id::<B>()]);
+    attach_ids(&world, &[id::<A>(), id::<C>()]);
+    attach_ids(&world, &[id::<A>(), id::<B>(), id::<C>()]);
+
+    analyze_world(&world);
+
+    assert_eq!(groups_of::<A>(&world).len(), 3);
+}
+
+/// Asserts that a transitive union is created directly, without any intermediate union:
+/// with AB, BC and CD, only ABCD is added.
+#[test]
+fn union_direct() {
+    let mut world = World::new_for_test();
+    world.add_entity((A(0), B(0), C, D));
+    attach_ids(&world, &[id::<A>(), id::<B>()]);
+    attach_ids(&world, &[id::<B>(), id::<C>()]);
+    attach_ids(&world, &[id::<C>(), id::<D>()]);
+
+    analyze_world(&world);
+
+    assert_eq!(groups_of::<A>(&world).len(), 2);
+    assert_eq!(groups_of::<B>(&world).len(), 3);
+    assert_eq!(groups_of::<C>(&world).len(), 3);
+    assert_eq!(groups_of::<D>(&world).len(), 2);
+    assert_eq!(groups_of::<D>(&world)[1].len(), 4);
+}

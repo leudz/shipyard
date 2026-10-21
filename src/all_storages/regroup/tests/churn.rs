@@ -350,3 +350,92 @@ fn tracking_removals() {
     assert_eq!(state(&world), before);
     assert_eq!(calls.load(Ordering::Relaxed), 0);
 }
+
+/// Asserts that a regroup after scattered changes leaves every query with the same results:
+/// the grouped pairs, grouped queries filtered on insertion and modification, and the removal log.
+/// Then a mutable grouped traversal reaches every pair exactly once, modifying only them.
+#[test]
+fn queries() {
+    let mut world = World::new_for_test();
+    let e: Vec<EntityId> = (0..16)
+        .map(|i| world.add_entity((TrackedA(i), TrackedB)))
+        .collect();
+    world.group::<(TrackedA, TrackedB)>();
+    world.run(|a: ViewMut<'_, TrackedA, track::All>| a.clear_all_inserted());
+    world.run(|mut a: ViewMut<'_, TrackedA, track::All>| {
+        for i in [2, 9] {
+            (&mut a).get(e[i]).unwrap().0 += 100;
+        }
+    });
+    for i in [1, 6, 13] {
+        world.remove::<(TrackedB,)>(e[i]);
+    }
+    world.add_component(e[6], TrackedB);
+    world.add_entity((TrackedA(16), TrackedB));
+    world.delete_entity(e[11]);
+
+    let results = |world: &World| {
+        let (a, b) = world
+            .borrow::<(
+                View<'_, TrackedA, track::All>,
+                View<'_, TrackedB, track::All>,
+            )>()
+            .unwrap();
+        let ids = |iter: &mut dyn Iterator<Item = EntityId>| sorted(iter.collect());
+
+        (
+            ids(&mut (&a, &b).iter().with_id().map(|(entity, _)| entity)),
+            ids(&mut (a.inserted(), &b)
+                .iter()
+                .with_id()
+                .map(|(entity, _)| entity)),
+            ids(&mut (a.modified(), &b)
+                .iter()
+                .with_id()
+                .map(|(entity, _)| entity)),
+            ids(&mut b.removed()),
+        )
+    };
+    let values = |world: &World| {
+        let a = world.borrow::<View<'_, TrackedA, track::All>>().unwrap();
+        let mut values: Vec<(EntityId, u32)> = a
+            .iter()
+            .with_id()
+            .map(|(entity, a)| (entity, a.0))
+            .collect();
+        values.sort_unstable();
+        values
+    };
+    let before = results(&world);
+    let values_before = values(&world);
+
+    world.regroup();
+
+    assert_regrouped(&world);
+    assert_eq!(results(&world), before);
+    assert_eq!(values(&world), values_before);
+
+    world.run(
+        |(mut a, b): (
+            ViewMut<'_, TrackedA, track::All>,
+            View<'_, TrackedB, track::All>,
+        )| {
+            for (mut a, _) in (&mut a, &b).iter() {
+                a.0 += 1000;
+            }
+        },
+    );
+
+    let pairs = &before.0;
+    let expected: Vec<(EntityId, u32)> = values_before
+        .iter()
+        .map(|&(entity, value)| {
+            (
+                entity,
+                value + if pairs.contains(&entity) { 1000 } else { 0 },
+            )
+        })
+        .collect();
+    assert_eq!(values(&world), expected);
+    assert_eq!(results(&world).2, *pairs);
+}

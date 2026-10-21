@@ -2111,13 +2111,14 @@ fn member_groups(
 /// An entity moves only if it satisfies the new group, so it owns a component in each of its
 /// members. Each of these components is either:
 /// - in the range of a group sharing that member: we drop the trust of these groups,
-///   regroup's repair then evicts their ranges to their members' unevaluated regions
+///   so regroup's analysis classifies their whole ranges again, in every member
 /// - ungrouped: we make the new members' ungrouped regions unevaluated
 /// - unevaluated already
 ///
 /// Its other components move only to join a union with the new group. The groups linking them
 /// to the new group's members already linked them before, so they're in a range that contains
-/// one of these members, and gets evicted as well. Other ranges and regions are left alone.
+/// one of these members, and gets classified again as well. Other ranges and regions are
+/// left alone.
 fn invalidate_overlaps(storages: &mut ShipHashMap<StorageId, SBox>, ids: &[StorageId]) {
     // We collect the groups first, each one is invalidated once in all its members.
     let mut overlapping: Vec<Arc<[StorageId]>> = Vec::new();

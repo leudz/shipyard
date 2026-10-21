@@ -442,6 +442,9 @@ fn damaged_captains() {
 
 /// Builds a world with AB and AC groups through public calls only, where regroup promoted
 /// grouped entities into ABC after they gained a component.
+///
+/// A second promotion shrinks AB, so regroup slides the ABC range after it by one slot in
+/// A and B, which rotates it in both.
 fn promoted_world() -> (World, Vec<EntityId>) {
     let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..6).map(|i| world.add_entity((A(i), B(i)))).collect();
@@ -452,6 +455,8 @@ fn promoted_world() -> (World, Vec<EntityId>) {
         world.add_component(all[i], C(i as u32));
     }
     world.add_component(all[7], B(7));
+    world.regroup();
+    world.add_component(all[0], C(0));
     world.regroup();
 
     (world, all)

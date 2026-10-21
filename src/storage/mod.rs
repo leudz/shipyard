@@ -20,10 +20,6 @@ use core::ops::Range;
 /// A grouped storage's ids, lent by [`Storage::reorder_ids`] to be reordered,
 /// next to the parts that stay as they are.
 #[doc(hidden)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "regroup doesn't use the two-phase path yet")
-)]
 pub struct ReorderParts<'a> {
     /// The `EntityId` of every component, in physical order.
     pub(crate) dense: &'a mut [EntityId],

@@ -17,15 +17,6 @@ fn evict<T: Component + Send + Sync>(world: &World, entity: EntityId) {
     t.private_move_to(entity, GroupRegion::Unevaluated);
 }
 
-/// Runs the repair pass alone, without evaluating anything.
-fn repair(world: &World) {
-    let mut all_storages = world.all_storages_mut().unwrap();
-    let storages = all_storages.storages.get_mut();
-    let storage_ids = sorted_storage_ids(storages);
-
-    repair_all(storages, &storage_ids);
-}
-
 /// Returns a world with AB holding `e0`, `e1` and `e2`, AC holding `e3` and `e4`,
 /// all aligned and fully trusted, with the entities in index order.
 ///
@@ -73,17 +64,33 @@ fn overlapping_fixture() {
     assert_eq!(group_of::<C>(&world, &ac), (vec![e[3], e[4]], 2));
 }
 
-/// Asserts that repairing aligned, fully trusted groups doesn't move anything.
+/// The `(A, B)` and `(A, C)` groups, for [`assert_memberships`].
+fn ab_ac() -> [[StorageId; 2]; 2] {
+    [ab(), [id::<A>(), id::<C>()]]
+}
+
+/// Regroups `world`, then panics unless every group is aligned and fully trusted
+/// and every entity sits where its components say, with AB and AC declared.
+fn regroup(world: &mut World) {
+    world.regroup();
+
+    assert_regrouped(world);
+    let [ab, ac] = ab_ac();
+    assert_memberships(world, &[&ab, &ac]);
+}
+
+/// Asserts that regrouping aligned, fully trusted groups doesn't move anything,
+/// even with AC rotated in A.
 #[test]
-fn repair_aligned() {
-    let (world, _, _, _) = overlapping();
+fn aligned() {
+    let (mut world, _, _, _) = overlapping();
     let before = (
         dense_of::<A>(&world),
         dense_of::<B>(&world),
         dense_of::<C>(&world),
     );
 
-    repair(&world);
+    regroup(&mut world);
 
     let after = (
         dense_of::<A>(&world),
@@ -93,36 +100,22 @@ fn repair_aligned() {
     assert_eq!(after, before);
 }
 
-/// Asserts that repair shrinks each of two overlapping groups to the prefix all its members
-/// trust, in every member, even with B shorter than A and AC rotated in A.
+/// Asserts that with components moved out of both groups to their unevaluated region,
+/// each group keeps the prefix all its members trust and gets its entities back,
+/// even with B shorter than A and AC rotated in A.
 #[test]
-fn repair_overlapping() {
-    let (world, ab, ac, e) = overlapping();
+fn evicted() {
+    let (mut world, ab, ac, e) = overlapping();
     // B's AB becomes [e0, e2] and only trusts e0. C's AC becomes [e3] and trusts it.
     evict::<B>(&world, e[1]);
     evict::<C>(&world, e[4]);
 
-    repair(&world);
+    regroup(&mut world);
 
-    assert_eq!(group_of::<A>(&world, &ab), (vec![e[0]], 1));
-    assert_eq!(group_of::<B>(&world, &ab), (vec![e[0]], 1));
-    assert_eq!(group_of::<A>(&world, &ac), (vec![e[3]], 1));
-    assert_eq!(group_of::<C>(&world, &ac), (vec![e[3]], 1));
-}
-
-/// Asserts that repair evicts each damaged suffix to its own storage's unevaluated region
-/// and that every component stays reachable with its value.
-#[test]
-fn repair_evictions() {
-    let (world, _, _, e) = overlapping();
-    evict::<B>(&world, e[1]);
-    evict::<C>(&world, e[4]);
-
-    repair(&world);
-
-    assert_eq!(unevaluated_of::<A>(&world), [e[1], e[2], e[4]]);
-    assert_eq!(unevaluated_of::<B>(&world), [e[1], e[2]]);
-    assert_eq!(unevaluated_of::<C>(&world), [e[4]]);
+    assert_eq!(sorted(group_of::<A>(&world, &ab).0), e[..3]);
+    assert_eq!(group_of::<A>(&world, &ab).0[0], e[0]);
+    assert_eq!(sorted(group_of::<A>(&world, &ac).0), e[3..]);
+    assert_eq!(group_of::<A>(&world, &ac).0[0], e[3]);
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     for (index, &entity) in e.iter().enumerate() {
         assert_eq!(a.get(entity), Ok(&A(index as u32)));
@@ -132,63 +125,58 @@ fn repair_evictions() {
     }
 }
 
-/// Asserts that evicting from AB in A passes holes through the rotated AC
-/// without changing its order or trust.
+/// Asserts that a component moved out of AB's end in B comes back to it,
+/// while the rotated AC keeps its order.
 #[test]
-fn repair_keeps_other_groups() {
-    let (world, ab, ac, e) = overlapping();
+fn other_groups_kept() {
+    let (mut world, ab, ac, e) = overlapping();
     evict::<B>(&world, e[2]);
 
-    repair(&world);
+    regroup(&mut world);
 
-    assert_eq!(group_of::<A>(&world, &ab), (vec![e[0], e[1]], 2));
-    assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1]], 2));
-    assert_eq!(group_of::<A>(&world, &ac), (vec![e[3], e[4]], 2));
-    assert_eq!(group_of::<C>(&world, &ac), (vec![e[3], e[4]], 2));
+    assert_eq!(group_of::<A>(&world, &ab).0, e[..3]);
+    assert_eq!(group_of::<A>(&world, &ac).0, e[3..]);
+    assert_eq!(group_of::<C>(&world, &ac).0, e[3..]);
 }
 
-/// Asserts that a removal from B's AB lowers B's trust, and repair shrinks AB to that trust in
-/// both members while the rotated AC keeps its order and trust.
+/// Asserts that a removal from B's AB keeps the prefix both members trust,
+/// while the rotated AC keeps its order.
 #[test]
-fn repair_removal() {
+fn removal() {
     let (mut world, ab, ac, e) = overlapping();
     world.remove::<(B,)>(e[1]);
     // B's AB isn't rotated, so its physical last component is e2 and only e0 is unchanged.
     assert_eq!(group_of::<B>(&world, &ab).1, 1);
 
-    repair(&world);
+    regroup(&mut world);
 
-    assert_eq!(group_of::<A>(&world, &ab), (vec![e[0]], 1));
-    assert_eq!(group_of::<B>(&world, &ab), (vec![e[0]], 1));
-    assert_eq!(group_of::<A>(&world, &ac), (vec![e[3], e[4]], 2));
-    assert_eq!(group_of::<C>(&world, &ac), (vec![e[3], e[4]], 2));
-    assert_eq!(unevaluated_of::<A>(&world), [e[1], e[2]]);
-    assert_eq!(unevaluated_of::<B>(&world), [e[2]]);
+    assert_eq!(group_of::<A>(&world, &ab).0[0], e[0]);
+    assert_eq!(sorted(group_of::<A>(&world, &ab).0), [e[0], e[2]]);
+    assert_eq!(group_of::<A>(&world, &ac).0, e[3..]);
+    assert_eq!(ungrouped_of::<A>(&world), [e[1]]);
 }
 
-/// Asserts that a removal from a rotated range lowers its trust to what stays unchanged:
-/// in A, AC's physical last slot holds e3, so removing e4 leaves nothing trusted.
-/// Repair then empties AC in both members, AC stays attached and AB is untouched.
+/// Asserts that a removal from a rotated range that leaves nothing trusted,
+/// in A, AC's physical last slot holds e3 so removing e4 does, regroups what's left
+/// while AB keeps its order.
 #[test]
-fn repair_removal_rotated() {
+fn removal_rotated() {
     let (mut world, ab, ac, e) = overlapping();
     world.remove::<(A,)>(e[4]);
     assert_eq!(group_of::<A>(&world, &ac), (vec![e[3]], 0));
 
-    repair(&world);
+    regroup(&mut world);
 
-    assert_eq!(group_of::<A>(&world, &ac), (vec![], 0));
-    assert_eq!(group_of::<C>(&world, &ac), (vec![], 0));
-    assert_eq!(group_of::<A>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
-    assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
-    assert_eq!(unevaluated_of::<A>(&world), [e[3]]);
-    assert_eq!(unevaluated_of::<C>(&world), [e[3], e[4]]);
+    assert_eq!(group_of::<A>(&world, &ac).0, [e[3]]);
+    assert_eq!(group_of::<C>(&world, &ac).0, [e[3]]);
+    assert_eq!(group_of::<A>(&world, &ab).0, e[..3]);
+    assert_eq!(ungrouped_of::<C>(&world), [e[4]]);
 }
 
-/// Asserts that with removals in several members, repair shrinks each group to the smallest
-/// trust of its members: A's AB keeps 2 positions and B's all 3, C's AC keeps 1 and A's both.
+/// Asserts that with removals in several members, each group keeps the prefix all its members
+/// trust: AB keeps e0 and e1, AC keeps e3.
 #[test]
-fn repair_removals_minimum() {
+fn removals_minimum() {
     let (mut world, ab, ac, e) = overlapping();
     world.remove::<(A,)>(e[2]);
     world.remove::<(C,)>(e[4]);
@@ -197,28 +185,26 @@ fn repair_removals_minimum() {
     assert_eq!(group_of::<A>(&world, &ac).1, 2);
     assert_eq!(group_of::<C>(&world, &ac).1, 1);
 
-    repair(&world);
+    regroup(&mut world);
 
-    assert_eq!(group_of::<A>(&world, &ab), (vec![e[0], e[1]], 2));
-    assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1]], 2));
-    assert_eq!(group_of::<A>(&world, &ac), (vec![e[3]], 1));
-    assert_eq!(group_of::<C>(&world, &ac), (vec![e[3]], 1));
+    assert_eq!(group_of::<B>(&world, &ab).0, [e[0], e[1]]);
+    assert_eq!(group_of::<A>(&world, &ac).0, [e[3]]);
 }
 
 /// Asserts that removing a group's components until its range is empty in one member
-/// leaves it attached and empty in every member once repaired.
+/// leaves it attached and empty in every member once regrouped.
 #[test]
-fn repair_emptied() {
+fn emptied() {
     let (mut world, ab, _, e) = overlapping();
     for &entity in &e[..3] {
         world.remove::<(B,)>(entity);
     }
 
-    repair(&world);
+    regroup(&mut world);
 
     assert_eq!(group_of::<A>(&world, &ab), (vec![], 0));
     assert_eq!(group_of::<B>(&world, &ab), (vec![], 0));
-    assert_eq!(unevaluated_of::<A>(&world), [e[0], e[1], e[2]]);
+    assert_eq!(ungrouped_of::<A>(&world), e[..3]);
 }
 
 /// Returns the entities owning a `T` and a `U`, sorted.

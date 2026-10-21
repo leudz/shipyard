@@ -5,10 +5,10 @@ mod discovery;
 mod layout;
 mod original_row;
 mod promotion;
-mod repair;
+mod removals;
 
 use super::analysis::{Discovery, Frozen, Plan, analyze};
-use super::{repair_all, sorted_storage_ids, storage_ptr, union_group};
+use super::{sorted_storage_ids, storage_ptr};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;

@@ -271,6 +271,7 @@ impl Groups {
     ///
     /// `index` must be the index of one of the storage's components.
     /// Every component of a storage without any range is ungrouped.
+    #[cfg(test)]
     pub(crate) fn region_of(&self, index: usize) -> GroupRegion<'_> {
         if !self.has_ranges() {
             GroupRegion::Ungrouped

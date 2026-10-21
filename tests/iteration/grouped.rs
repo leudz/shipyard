@@ -112,7 +112,10 @@ fn reordered() {
         ids(&ungrouped),
         [e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[8]]
     );
-    assert_eq!(ids(&grouped)[..3], [e[1], e[2], e[4]]);
+    // Regroup doesn't promise an order inside a group, only which entities it holds.
+    let mut front = ids(&grouped)[..3].to_vec();
+    front.sort_unstable();
+    assert_eq!(front, [e[1], e[2], e[4]]);
 }
 
 /// Asserts that the grouped storages yield every entity owning both components.

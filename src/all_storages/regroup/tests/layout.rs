@@ -24,7 +24,7 @@ fn sorted_values(mut values: Vec<(EntityId, u32)>) -> Vec<(EntityId, u32)> {
 /// Regroups `world` with the two-phase path, panicking unless, before any component moves,
 /// every storage only reordered its ids, its sparse array still points at their starting rows,
 /// the rows outside its envelope kept their id, and every group's members hold the same
-/// logical sequence.
+/// logical sequence. Afterwards the world has to be clean, a second regroup has nothing to do.
 ///
 /// Returns the number of rows whose id changed in each grouped storage.
 fn two_phases(world: &World) -> BTreeMap<StorageId, usize> {
@@ -95,6 +95,9 @@ fn two_phases(world: &World) -> BTreeMap<StorageId, usize> {
 
     // SAFE: `layouts` come from `build` just above, nothing touched the storages since.
     unsafe { finish(storages, &layouts) };
+
+    // A regroup right after this one has nothing to do, it doesn't move anything.
+    assert!(analyze(storages, &storage_ids).is_none());
 
     changed
 }
