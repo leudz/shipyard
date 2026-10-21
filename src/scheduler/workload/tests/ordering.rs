@@ -207,6 +207,7 @@ fn after_all_single_system() {
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
+            grouped_writes: Vec::new(),
         }
     );
 }

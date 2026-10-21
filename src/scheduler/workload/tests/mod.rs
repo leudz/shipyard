@@ -2,6 +2,9 @@ mod batching;
 mod conditions;
 mod info_tests;
 mod ordering;
+// The parallel path doesn't track pending storages yet.
+#[cfg(not(feature = "parallel"))]
+mod pending;
 mod prepare;
 mod regroup;
 mod requirements;
@@ -50,4 +53,11 @@ impl Component for C {
 }
 impl Component for D {
     type Tracking = crate::track::Untracked;
+}
+
+/// Returns `true` when every component of `T` was evaluated by a regroup.
+fn evaluated<T: Component + Send + Sync>(world: &World) -> bool {
+    let view = world.borrow::<View<'_, T>>().unwrap();
+
+    view.groups.unevaluated_start == view.len()
 }

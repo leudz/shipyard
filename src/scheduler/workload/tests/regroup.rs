@@ -22,13 +22,6 @@ fn two_sets() -> World {
     world
 }
 
-/// Returns `true` when every component of `T` was evaluated by a regroup.
-fn evaluated<T: Component + Send + Sync>(world: &World) -> bool {
-    let view = world.borrow::<View<'_, T>>().unwrap();
-
-    view.groups.unevaluated_start == view.len()
-}
-
 /// Returns the entry regroup of the connected set holding `T`.
 fn entry_regroup<T: GroupMember>(world: &World) -> RegroupStep {
     let all_storages = world.all_storages.borrow().unwrap();

@@ -38,6 +38,7 @@ pub(super) fn prepare_regroups(
     }
 
     let user_batches = take_batches(batches, batches_info);
+    batches.grouped_writes = systems_writes(&user_batches, grouping);
 
     let mut planner = Planner::new(grouping);
     for batch in user_batches {
@@ -306,21 +307,13 @@ impl<'a> Planner<'a> {
     fn push_user(&mut self, batch: Batch) {
         let index = self.planned.len();
 
-        // We can't know what a system does with an exclusive borrow,
-        // even one only updating values could add or remove components.
         for job in batch.iter() {
-            if !matches!(job.kind, JobKind::System { .. }) {
+            let JobKind::System { info, .. } = &job.kind else {
                 continue;
-            }
+            };
 
-            for type_info in job.borrow() {
-                let storage_id = type_info.storage_id;
-                if type_info.mutability != Mutability::Exclusive {
-                    continue;
-                }
-                let Some(set) = set_index(self.grouping, storage_id) else {
-                    continue;
-                };
+            for storage_id in grouped_writes(info, self.grouping) {
+                let set = set_index(self.grouping, storage_id).expect("the storage is grouped");
 
                 if let Err(position) = self.pending.binary_search(&storage_id) {
                     self.pending.insert(position, storage_id);
@@ -340,6 +333,42 @@ impl<'a> Planner<'a> {
         self.pending
             .retain(|storage_id| members.binary_search(storage_id).is_err());
     }
+}
+
+/// Returns the grouped storages `info`'s system borrows exclusively, the ones it leaves pending.
+fn grouped_writes(info: &SystemInfo, grouping: &Grouping) -> Vec<StorageId> {
+    // We can't know what a system does with an exclusive borrow,
+    // even one only updating values could add or remove components.
+    info.borrow
+        .iter()
+        .filter(|type_info| type_info.mutability == Mutability::Exclusive)
+        .map(|type_info| type_info.storage_id)
+        .filter(|&storage_id| set_index(grouping, storage_id).is_some())
+        .collect()
+}
+
+/// Returns the grouped storages each system of `user_batches` leaves pending,
+/// indexed like the systems list.
+fn systems_writes(user_batches: &[Batch], grouping: &Grouping) -> Vec<Vec<StorageId>> {
+    let mut writes = Vec::new();
+
+    for job in user_batches.iter().flat_map(Batch::iter) {
+        let (Step::System(index), JobKind::System { info, .. }) = (job.step, &job.kind) else {
+            continue;
+        };
+
+        let storage_ids = grouped_writes(info, grouping);
+        if storage_ids.is_empty() {
+            continue;
+        }
+
+        if writes.len() <= index {
+            writes.resize(index + 1, Vec::new());
+        }
+        writes[index] = storage_ids;
+    }
+
+    writes
 }
 
 /// Adds `regroup` to the first batch of `own_batches` able to take it, or a new one.

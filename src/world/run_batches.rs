@@ -1,7 +1,10 @@
 use crate::error;
+use crate::scheduler::info::RegroupTrigger;
 use crate::scheduler::{Batches, Label, RegroupStep, Step};
+use crate::storage::StorageId;
 use crate::world::World;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 
 impl World {
     #[cfg(feature = "parallel")]
@@ -18,6 +21,8 @@ impl World {
         #[cfg(feature = "tracing")]
         let _parent_span = parent_span.enter();
 
+        // We don't track pending storages here yet,
+        // so pending regroups run every time, like entry ones.
         let run_batch = || -> Result<(), error::RunWorkload> {
             for (batch, batch_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if) {
                 let mut result = Ok(());
@@ -36,7 +41,7 @@ impl World {
                         .map(|(&step, &run_if_index)| {
                             self.should_run(batches, system_names, step, run_if_index)
                         })
-                        .collect::<Result<alloc::vec::Vec<_>, error::RunWorkload>>()?,
+                        .collect::<Result<Vec<_>, error::RunWorkload>>()?,
                 );
 
                 let mut start = 0;
@@ -132,24 +137,25 @@ impl World {
         #[cfg(feature = "tracing")]
         let _parent_span = parent_span.enter();
 
-        batches
-            .sequential
-            .iter()
-            .zip(&batches.sequential_run_if)
-            .try_for_each(|(&step, &run_if_index)| {
-                if !self.should_run(batches, system_names, step, run_if_index)? {
-                    return Ok(());
-                }
+        // Each run starts with nothing pending, the entry regroups take care of what changed before.
+        let mut pending = Pending::default();
 
-                #[cfg(feature = "tracing")]
-                {
-                    self.run_step(systems, system_names, &batches.regroups, &parent_span, step)
-                }
-                #[cfg(not(feature = "tracing"))]
-                {
-                    self.run_step(systems, system_names, &batches.regroups, step)
-                }
-            })
+        for (&step, &run_if_index) in batches.sequential.iter().zip(&batches.sequential_run_if) {
+            if !self.should_run(batches, system_names, step, run_if_index)?
+                || !pending.needs(batches, step)
+            {
+                continue;
+            }
+
+            #[cfg(feature = "tracing")]
+            self.run_step(systems, system_names, &batches.regroups, &parent_span, step)?;
+            #[cfg(not(feature = "tracing"))]
+            self.run_step(systems, system_names, &batches.regroups, step)?;
+
+            pending.ran(batches, step);
+        }
+
+        Ok(())
     }
 
     /// Evaluates `step`'s condition, the one at `run_if_index` in `batches.systems_run_if`.
@@ -218,8 +224,6 @@ impl World {
 
     /// Regroups `regroup`'s connected set, borrowing all its storages exclusively.
     fn run_regroup(&self, regroup: &RegroupStep) -> Result<(), error::RunWorkload> {
-        // We don't track which storages systems wrote to yet,
-        // so pending regroups run every time, like entry ones.
         let all_storages = self.all_storages.borrow().map_err(|borrow| {
             error::RunWorkload::Regroup(error::GetStorage::AllStoragesBorrow(borrow))
         })?;
@@ -227,5 +231,71 @@ impl World {
         all_storages
             .regroup_connected_set(&regroup.set)
             .map_err(error::RunWorkload::Regroup)
+    }
+}
+
+/// The grouped storages a workload run left pending, sorted.
+///
+/// A storage is pending after a system that borrows it exclusively ran,
+/// until a regroup of its connected set.
+#[derive(Default)]
+#[cfg_attr(
+    feature = "parallel",
+    expect(
+        dead_code,
+        reason = "the parallel path doesn't track pending storages yet"
+    )
+)]
+struct Pending(Vec<StorageId>);
+
+#[cfg_attr(
+    feature = "parallel",
+    expect(
+        dead_code,
+        reason = "the parallel path doesn't track pending storages yet"
+    )
+)]
+impl Pending {
+    /// Returns `false` for a regroup with nothing to do.
+    ///
+    /// Entry regroups always run, for the changes made outside the workload.
+    /// The others only run when a member of their set is pending.
+    fn needs(&self, batches: &Batches, step: Step) -> bool {
+        let Step::Regroup(index) = step else {
+            return true;
+        };
+        let regroup = &batches.regroups[index];
+
+        regroup.trigger == RegroupTrigger::Entry
+            || regroup
+                .set
+                .members
+                .iter()
+                .any(|storage_id| self.0.binary_search(storage_id).is_ok())
+    }
+
+    /// Records the effects of `step`, that just ran successfully.
+    fn ran(&mut self, batches: &Batches, step: Step) {
+        match step {
+            Step::System(index) => {
+                // Workloads that didn't plan regroups don't have writes for their systems.
+                let writes = batches
+                    .grouped_writes
+                    .get(index)
+                    .map_or(&[][..], Vec::as_slice);
+
+                for &storage_id in writes {
+                    if let Err(position) = self.0.binary_search(&storage_id) {
+                        self.0.insert(position, storage_id);
+                    }
+                }
+            }
+            Step::Regroup(index) => {
+                let members = &batches.regroups[index].set.members;
+
+                self.0
+                    .retain(|storage_id| members.binary_search(storage_id).is_err());
+            }
+        }
     }
 }
