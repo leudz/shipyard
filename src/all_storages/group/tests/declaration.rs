@@ -158,3 +158,135 @@ fn custom_storage() {
         .exclusive_storage_or_insert_mut(StorageId::of::<Custom>(), || Custom(0));
     assert_eq!(custom.0, 7);
 }
+
+/// Returns the member ids of every group declared when building `world`, in declaration order.
+fn declared(world: &mut World) -> Vec<Vec<StorageId>> {
+    world
+        .all_storages
+        .get_mut()
+        .grouping
+        .groups
+        .iter()
+        .map(|group| group.to_vec())
+        .collect()
+}
+
+/// Asserts that declaring a group on the builder creates its missing storages empty,
+/// attaches one range sharing the same `Arc` to each member and records the declaration.
+#[test]
+fn builder() {
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
+
+    assert_eq!(declared(&mut world), [group_ids(&[id::<A>(), id::<B>()])]);
+    let a = world.borrow::<View<'_, A>>().unwrap();
+    let b = world.borrow::<View<'_, B>>().unwrap();
+    assert!(a.is_empty());
+    assert!(b.is_empty());
+    assert_eq!(a.groups.ranges.len(), 1);
+    assert_eq!(b.groups.ranges.len(), 1);
+    assert!(Arc::ptr_eq(
+        &a.groups.ranges[0].group,
+        &b.groups.ranges[0].group
+    ));
+}
+
+/// Asserts that chained builder declarations each attach their own group.
+#[test]
+fn builder_chaining() {
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
+
+    assert_eq!(
+        declared(&mut world),
+        [
+            group_ids(&[id::<A>(), id::<B>()]),
+            group_ids(&[id::<C>(), id::<D>()])
+        ]
+    );
+    let a = world.borrow::<View<'_, A>>().unwrap();
+    let c = world.borrow::<View<'_, C>>().unwrap();
+    let d = world.borrow::<View<'_, D>>().unwrap();
+    assert_eq!(a.groups.ranges.len(), 1);
+    assert!(Arc::ptr_eq(
+        &c.groups.ranges[0].group,
+        &d.groups.ranges[0].group
+    ));
+    assert!(!Arc::ptr_eq(
+        &a.groups.ranges[0].group,
+        &c.groups.ranges[0].group
+    ));
+}
+
+/// Asserts that a storage declared in two groups gets its ranges in declaration order,
+/// without any union since the world is empty.
+#[test]
+fn builder_order() {
+    let world = World::builder_for_test()
+        .with_group::<(A, C)>()
+        .with_group::<(A, B)>()
+        .build();
+
+    assert_eq!(
+        groups_of::<A>(&world),
+        [
+            group_ids(&[id::<A>(), id::<C>()]),
+            group_ids(&[id::<A>(), id::<B>()])
+        ]
+    );
+}
+
+/// Asserts that declaring the same group twice on the builder, in a different order,
+/// declares it once.
+#[test]
+fn builder_duplicate() {
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(B, A)>()
+        .build();
+
+    assert_eq!(declared(&mut world).len(), 1);
+    assert_eq!(groups_of::<A>(&world).len(), 1);
+    assert_eq!(groups_of::<B>(&world).len(), 1);
+}
+
+/// Asserts that a builder group listing the same storage twice is rejected when declared.
+#[test]
+#[should_panic(expected = "a group cannot contain identical storages")]
+fn builder_repeated_storage() {
+    let _ = World::builder_for_test().with_group::<(A, B, A)>();
+}
+
+/// Asserts that declarations survive every builder transition, the ones made before
+/// and after the transitions all end up attached.
+#[test]
+fn builder_transitions() {
+    let builder = World::builder()
+        .with_group::<(A, B)>()
+        .with_custom_lock::<parking_lot::RawRwLock>();
+    #[cfg(feature = "thread_local")]
+    let builder = builder.with_custom_thread_id(|| 0);
+    #[cfg(feature = "parallel")]
+    let builder = builder.with_local_thread_pool(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap(),
+    );
+    let mut world = builder.with_group::<(C, D)>().build();
+
+    assert_eq!(declared(&mut world).len(), 2);
+    assert_eq!(groups_of::<A>(&world).len(), 1);
+    assert_eq!(groups_of::<B>(&world).len(), 1);
+    assert_eq!(groups_of::<C>(&world).len(), 1);
+    assert_eq!(groups_of::<D>(&world).len(), 1);
+}
+
+/// Asserts that a world built without groups has no declaration.
+#[test]
+fn builder_none() {
+    let mut world = World::builder_for_test().build();
+
+    assert!(declared(&mut world).is_empty());
+}

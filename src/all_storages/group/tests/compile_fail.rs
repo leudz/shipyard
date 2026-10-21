@@ -29,11 +29,33 @@ struct ForeignGroupMember;
 /// struct Foreign;
 ///
 /// impl TupleGroup for Foreign {
-///     fn storage_ids() -> Vec<StorageId> {
+///     fn members() -> Vec<(StorageId, fn(&mut AllStorages))> {
 ///         Vec::new()
 ///     }
-///
-///     fn get_or_insert_storages(_: &mut AllStorages) {}
 /// }
 /// ```
 struct ForeignTupleGroup;
+
+/// Asserts that a single storage can't be declared as a group, a group needs at least two members.
+///
+/// ```compile_fail,E0277
+/// use shipyard::{Component, World};
+///
+/// #[derive(Component)]
+/// struct A;
+///
+/// World::builder().with_group::<(A,)>();
+/// ```
+struct SingleMemberGroup;
+
+/// Asserts that a group has to be a tuple, a bare component isn't one.
+///
+/// ```compile_fail,E0277
+/// use shipyard::{Component, World};
+///
+/// #[derive(Component)]
+/// struct A;
+///
+/// World::builder().with_group::<A>();
+/// ```
+struct NonTupleGroup;

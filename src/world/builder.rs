@@ -1,4 +1,4 @@
-use crate::all_storages::{AllStoragesBuilder, LockPresent, ThreadIdPresent};
+use crate::all_storages::{AllStoragesBuilder, LockPresent, ThreadIdPresent, TupleGroup};
 use crate::atomic_refcell::AtomicRefCell;
 use crate::public_transport::ShipyardRwLock;
 use crate::world::World;
@@ -101,6 +101,54 @@ impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
         thread_pool: rayon::ThreadPool,
     ) -> WorldBuilder<Lock, ThreadId> {
         self.thread_pool = Some(thread_pool);
+
+        self
+    }
+
+    /// Declares a group made of the given storages.
+    ///
+    /// Iterating a group's storages together walks their components without check.\
+    /// Other storages in the query are looked up as usual.
+    ///
+    /// [`build`](WorldBuilder::build) creates the storages that don't exist yet.\
+    /// Declaring the same group twice, in any order, declares it once.
+    ///
+    /// ### Overlapping groups
+    ///
+    /// A storage can belong to multiple groups. When groups overlap, a union is created.\
+    /// With `A+B` and `A+C` groups, an entity owning A, B and C moves to an `A+B+C` union.\
+    /// An `(&a, &b)` query then walks both `A+B` and `A+B+C`.
+    ///
+    /// The more groups overlap, the more pieces a group is split into and the slower iteration gets.
+    ///
+    /// ### Current limitations
+    ///
+    /// - All of a group's storages have to be in the same tuple when creating an iterator.\
+    ///   `((&a, &b), &c)` uses an `A+B` group, `(&a, (&b, &c))` doesn't.
+    /// - Queries using `Not`, `Optional`, `Or` or a tracking filter like `inserted` don't use groups.
+    /// - Only bulk consumers like `for_each` or `fold` benefit from groups.\
+    ///   A `for` loop, or any other use of `next`, can be slower than without groups.
+    ///
+    /// ### Panics
+    ///
+    /// - The same storage is listed twice.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct Pos(f32);
+    ///
+    /// #[derive(Component)]
+    /// struct Vel(f32);
+    ///
+    /// let world = World::builder().with_group::<(Pos, Vel)>().build();
+    /// ```
+    #[track_caller]
+    pub fn with_group<G: TupleGroup>(mut self) -> WorldBuilder<Lock, ThreadId> {
+        self.all_storages_builder.grouping.declare::<G>();
 
         self
     }

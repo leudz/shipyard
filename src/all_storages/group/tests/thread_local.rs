@@ -81,3 +81,31 @@ fn non_sync_and_non_send_sync() {
     assert!(!storages.contains_key(&id::<C>()));
     assert!(!storages.contains_key(&id::<D>()));
 }
+
+/// Asserts that each thread-local wrapper can be declared on the builder,
+/// its range attached to the wrapper's own storage and shared with its partner.
+#[test]
+fn builder_wrappers() {
+    use crate::borrow::{NonSend, NonSendSync, NonSync};
+    use crate::sparse_set::SparseSet;
+    use crate::storage::StorageId;
+
+    let world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .with_group::<(B, NonSync<C>)>()
+        .with_group::<(C, NonSendSync<D>)>()
+        .build();
+
+    let b_id = StorageId::of::<NonSend<SparseSet<B>>>();
+    let c_id = StorageId::of::<NonSync<SparseSet<C>>>();
+    let d_id = StorageId::of::<NonSendSync<SparseSet<D>>>();
+    let b = world.borrow::<NonSend<View<'_, B>>>().unwrap();
+    let c = world.borrow::<NonSync<View<'_, C>>>().unwrap();
+    let d = world.borrow::<NonSendSync<View<'_, D>>>().unwrap();
+    assert_eq!(b.groups.storage_id, Some(b_id));
+    assert_eq!(c.groups.storage_id, Some(c_id));
+    assert_eq!(d.groups.storage_id, Some(d_id));
+    assert_eq!(&b.groups.ranges[0].group[..], group_ids(&[id::<A>(), b_id]));
+    assert_eq!(&c.groups.ranges[0].group[..], group_ids(&[id::<B>(), c_id]));
+    assert_eq!(&d.groups.ranges[0].group[..], group_ids(&[id::<C>(), d_id]));
+}

@@ -16,6 +16,7 @@ pub use retain::TupleRetainStorage;
 
 pub(crate) use builder::AllStoragesBuilder;
 pub(crate) use clone::TupleClone;
+pub(crate) use group::Grouping;
 
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;
@@ -78,6 +79,8 @@ pub struct AllStorages {
     #[cfg(feature = "thread_local")]
     thread_id_generator: Arc<dyn Fn() -> u64 + Send + Sync>,
     counter: Arc<AtomicU64>,
+    /// The groups declared when building the world, see [`Grouping`].
+    pub(crate) grouping: Grouping,
 }
 
 #[cfg(not(feature = "thread_local"))]
@@ -99,6 +102,7 @@ impl AllStorages {
             #[cfg(feature = "thread_local")]
             thread_id_generator: Arc::new(std_thread_id_generator),
             counter,
+            grouping: Grouping::default(),
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
@@ -1496,8 +1500,12 @@ let i = all_storages.run(sys1);
     /// - The same storage is listed twice.
     #[track_caller]
     pub fn group<G: TupleGroup>(&mut self) -> &mut AllStorages {
-        G::get_or_insert_storages(self);
-        self.group_by_id(G::storage_ids());
+        let members = G::members();
+        for &(_, create) in &members {
+            create(self);
+        }
+
+        self.group_by_id(members.iter().map(|&(storage_id, _)| storage_id).collect());
         self
     }
 
@@ -1506,14 +1514,8 @@ let i = all_storages.run(sys1);
     /// Every member storage must already exist. An equal definition, including a union,
     /// returns without regrouping. A new definition attaches one shared empty range to each member.
     #[track_caller]
-    fn group_by_id(&mut self, mut ids: Vec<StorageId>) {
-        // Sorted ids are the group's identity, `(A, B)` and `(B, A)` are the same group.
-        ids.sort_unstable();
-
-        assert!(
-            ids.windows(2).all(|pair| pair[0] != pair[1]),
-            "a group cannot contain identical storages"
-        );
+    fn group_by_id(&mut self, ids: Vec<StorageId>) {
+        let ids = group::sorted_ids(ids);
 
         let storages = self.storages.get_mut();
 

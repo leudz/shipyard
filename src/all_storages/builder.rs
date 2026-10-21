@@ -3,7 +3,7 @@ use crate::ShipHashMap;
 use crate::all_storages::MissingLock;
 #[cfg(all(not(feature = "std"), feature = "thread_local"))]
 use crate::all_storages::MissingThreadId;
-use crate::all_storages::{AllStorages, LockPresent, ThreadIdPresent};
+use crate::all_storages::{AllStorages, Grouping, LockPresent, ThreadIdPresent};
 use crate::atomic_refcell::AtomicRefCell;
 use crate::entities::Entities;
 use crate::public_transport::{RwLock, ShipyardRwLock};
@@ -18,6 +18,7 @@ use core::sync::atomic::AtomicU64;
 pub(crate) struct AllStoragesBuilder<Lock, ThreadId> {
     pub(crate) custom_lock: Option<Box<dyn ShipyardRwLock + Send + Sync>>,
     pub(crate) custom_thread_id: Option<Arc<dyn Fn() -> u64 + Send + Sync>>,
+    pub(crate) grouping: Grouping,
     pub(crate) _phantom: PhantomData<(Lock, ThreadId)>,
 }
 
@@ -27,6 +28,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
         AllStoragesBuilder {
             custom_lock: None,
             custom_thread_id: Some(Arc::new(std_thread_id_generator)),
+            grouping: Grouping::default(),
             _phantom: PhantomData,
         }
     }
@@ -36,6 +38,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
         AllStoragesBuilder {
             custom_lock: None,
             custom_thread_id: None,
+            grouping: Grouping::default(),
             _phantom: PhantomData,
         }
     }
@@ -45,6 +48,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
         AllStoragesBuilder {
             custom_lock: None,
             custom_thread_id: None,
+            grouping: Grouping::default(),
             _phantom: PhantomData,
         }
     }
@@ -55,6 +59,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
         AllStoragesBuilder {
             custom_lock: Some(L::new()),
             custom_thread_id: self.custom_thread_id,
+            grouping: self.grouping,
             _phantom: PhantomData,
         }
     }
@@ -67,6 +72,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
         AllStoragesBuilder {
             custom_lock: self.custom_lock,
             custom_thread_id: Some(Arc::new(thread_id)),
+            grouping: self.grouping,
             _phantom: PhantomData,
         }
     }
@@ -97,21 +103,25 @@ impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
         #[cfg(feature = "thread_local")]
         let main_thread_id = (thread_id_generator)();
 
+        let mut all_storages = AllStorages {
+            storages,
+            #[cfg(feature = "thread_local")]
+            main_thread_id,
+            #[cfg(feature = "thread_local")]
+            thread_id_generator: thread_id_generator.clone(),
+            counter,
+            grouping: Grouping::default(),
+        };
+
+        self.grouping.install(&mut all_storages);
+
         #[cfg(feature = "thread_local")]
         {
-            AtomicRefCell::new_non_send(
-                AllStorages {
-                    storages,
-                    main_thread_id,
-                    thread_id_generator: thread_id_generator.clone(),
-                    counter,
-                },
-                thread_id_generator,
-            )
+            AtomicRefCell::new_non_send(all_storages, thread_id_generator)
         }
         #[cfg(not(feature = "thread_local"))]
         {
-            AtomicRefCell::new(AllStorages { storages, counter })
+            AtomicRefCell::new(all_storages)
         }
     }
 }

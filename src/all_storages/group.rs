@@ -5,14 +5,15 @@ mod tests;
 #[path = "group/tests/compile_fail.rs"]
 mod compile_fail_tests;
 
-use crate::all_storages::AllStorages;
+use crate::all_storages::{AllStorages, member_groups};
 #[cfg(feature = "thread_local")]
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 #[cfg(doc)]
-use crate::world::World;
+use crate::world::{World, WorldBuilder};
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -107,16 +108,17 @@ impl<T: Component> GroupMember for NonSendSync<T> {
     }
 }
 
-/// Trait used as bound for [`World::group`] and [`AllStorages::group`].
+/// Creates a group member's storage if it doesn't exist yet.
+type CreateStorage = fn(&mut AllStorages);
+
+/// Trait used as bound for [`WorldBuilder::with_group`], [`World::group`] and [`AllStorages::group`].
 ///
 /// Only implemented for tuples of two or more elements, since a group needs at least two storages.\
 /// It can't be implemented outside of shipyard.
 #[doc(hidden)]
 pub trait TupleGroup: seal::Tuple {
-    /// Returns the id of every member storage, in tuple order.
-    fn storage_ids() -> Vec<StorageId>;
-    /// Creates every member storage that doesn't exist yet.
-    fn get_or_insert_storages(all_storages: &mut AllStorages);
+    /// Returns every member's storage id and the function creating its storage, in tuple order.
+    fn members() -> Vec<(StorageId, CreateStorage)>;
 }
 
 macro_rules! impl_group {
@@ -125,15 +127,11 @@ macro_rules! impl_group {
 
         impl<$($member: GroupMember),+> TupleGroup for ($($member,)+) {
             #[inline]
-            fn storage_ids() -> Vec<StorageId> {
-                vec![$($member::storage_id()),+]
-            }
-
-            #[inline]
-            fn get_or_insert_storages(all_storages: &mut AllStorages) {
-                $(
-                    $member::get_or_insert(all_storages);
-                )+
+            fn members() -> Vec<(StorageId, CreateStorage)> {
+                vec![$({
+                    let create: CreateStorage = $member::get_or_insert;
+                    ($member::storage_id(), create)
+                }),+]
             }
         }
     }
@@ -159,3 +157,77 @@ group![
     (U, 20) (V, 21) (W, 22) (X, 23) (Y, 24) (Z, 25) (AA, 26) (BB, 27) (CC, 28) (DD, 29)
     (EE, 30) (FF, 31)
 ];
+
+/// The groups declared when building a [`World`].
+///
+/// This is configuration only: each group's members and how to create each member storage.\
+/// It never changes once the world is built. Ranges, unions and trust are storage state
+/// and live in each member's [`Groups`](crate::sparse_set::Groups).
+#[derive(Clone, Default)]
+pub(crate) struct Grouping {
+    /// Every declared group's sorted member ids, in declaration order, without duplicates.
+    pub(crate) groups: Vec<Arc<[StorageId]>>,
+    /// The function creating each member storage, a single entry per storage.
+    members: Vec<(StorageId, CreateStorage)>,
+}
+
+impl Grouping {
+    /// Adds the group made of `G`'s storages, unless an equal group was already declared.
+    ///
+    /// ### Panics
+    ///
+    /// - The same storage is listed twice.
+    #[track_caller]
+    pub(crate) fn declare<G: TupleGroup>(&mut self) {
+        let members = G::members();
+        let ids = sorted_ids(members.iter().map(|&(storage_id, _)| storage_id).collect());
+
+        if self.groups.iter().any(|group| group[..] == ids[..]) {
+            return;
+        }
+
+        for (storage_id, create) in members {
+            if !self.members.iter().any(|&(known, _)| known == storage_id) {
+                self.members.push((storage_id, create));
+            }
+        }
+
+        self.groups.push(Arc::from(ids));
+    }
+
+    /// Creates the member storages, attaches the groups and keeps `self` as `all_storages`'s configuration.
+    ///
+    /// Each member gets an empty range per group, in declaration order.\
+    /// This is meant for a world without components, nothing is regrouped.
+    pub(crate) fn install(self, all_storages: &mut AllStorages) {
+        for &(_, create) in &self.members {
+            create(all_storages);
+        }
+
+        let storages = all_storages.storages.get_mut();
+        for group in &self.groups {
+            for &storage_id in group.iter() {
+                member_groups(storages, storage_id).attach(group.clone(), storage_id);
+            }
+        }
+
+        all_storages.grouping = self;
+    }
+}
+
+/// Returns `ids` sorted, the identity of the group they make. `(A, B)` and `(B, A)` are the same group.
+///
+/// ### Panics
+///
+/// - The same storage is listed twice.
+#[track_caller]
+pub(crate) fn sorted_ids(mut ids: Vec<StorageId>) -> Vec<StorageId> {
+    ids.sort_unstable();
+
+    assert!(
+        ids.windows(2).all(|pair| pair[0] != pair[1]),
+        "a group cannot contain identical storages"
+    );
+
+    ids
+}
