@@ -137,6 +137,33 @@ fn clean_still_borrows() {
     drop(held);
 }
 
+/// Returns `TrackedA`'s insertion and modification timestamps, in dense order.
+fn timestamps(world: &World) -> (Vec<u64>, Vec<u64>) {
+    let a = world.borrow::<View<'_, TrackedA, track::All>>().unwrap();
+    let insertions = a.insertion_data.iter().map(|timestamp| timestamp.get());
+    let modifications = a.modification_data.iter().map(|timestamp| timestamp.get());
+
+    (insertions.collect(), modifications.collect())
+}
+
+/// Asserts that regrouping a clean set leaves its tracking timestamps as they were.
+#[test]
+fn clean_timestamps() {
+    let mut world = World::builder_for_test()
+        .with_group::<(TrackedA, TrackedB)>()
+        .build();
+    let entity = world.add_entity((TrackedA(0), TrackedB));
+    world.add_entity((TrackedA(1), TrackedB));
+    regroup_set_of::<TrackedA>(&world).unwrap();
+    world.run(|mut a: ViewMut<'_, TrackedA, track::All>| (&mut a).get(entity).unwrap().0 = 5);
+    let before = timestamps(&world);
+
+    let regrouped = regroup_set_of::<TrackedA>(&world).unwrap();
+
+    assert!(!regrouped);
+    assert_eq!(timestamps(&world), before);
+}
+
 /// Asserts that a set with a `NonSend` member regroups from the world's thread.
 #[cfg(feature = "thread_local")]
 #[test]

@@ -2,6 +2,8 @@ use super::*;
 use crate::error;
 use crate::scheduler::workload::prepare::prepare_regroups;
 use crate::views::EntitiesViewMut;
+use alloc::sync::Arc;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 pub(super) fn read_a(_: View<'_, A>) {}
 /// Only updates values, so it doesn't change the group.
@@ -195,4 +197,25 @@ fn system_error() {
 
     assert!(evaluated::<A>(&world));
     assert!(evaluated::<B>(&world));
+}
+
+/// Asserts that a condition pushed behind a regroup sees the regrouped storage: the read of a
+/// written storage waits for the regroup, and so does the read's condition.
+#[test]
+fn delayed() {
+    let world = world();
+    let saw_regrouped = Arc::new(AtomicBool::new(false));
+    let seen = saw_regrouped.clone();
+    let workload = Workload::new("")
+        .with_system(add_ab)
+        .with_system(read_a.run_if(move |a: View<'_, A>| {
+            seen.store(a.groups.unevaluated_start == a.len(), Ordering::Relaxed);
+
+            true
+        }));
+    let workload = prepare(workload, &world);
+
+    run(&workload, &world).unwrap();
+
+    assert!(saw_regrouped.load(Ordering::Relaxed));
 }

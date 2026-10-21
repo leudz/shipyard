@@ -585,6 +585,62 @@ fn regroup_moves() {
     assert_eq!(drops(&counter), 4);
 }
 
+/// Returns the `(Counted, Aligned)` values of every entity owning both, sorted, iterating them
+/// together.
+#[cfg(feature = "std")]
+fn grouped_values(world: &World) -> Vec<(u32, u64)> {
+    use crate::iter::IntoIter;
+
+    let (counted, aligned) = world
+        .borrow::<(View<'_, Counted>, View<'_, Aligned>)>()
+        .unwrap();
+    let mut values = Vec::new();
+    (&counted, &aligned)
+        .iter()
+        .for_each(|(counted, aligned)| values.push((counted.values[0], aligned.0)));
+    values.sort_unstable();
+
+    values
+}
+
+/// Asserts that replacing a grouped member with a clone keeps the destination's groups and
+/// union working: a grouped iteration right after the replacement, and after the next regroup,
+/// reaches every copied component. Each original and each copy is dropped exactly once.
+#[cfg(feature = "std")]
+#[test]
+fn regroup_clone() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut destination = World::builder_for_test()
+        .with_group::<(Counted, Aligned)>()
+        .with_group::<(Counted, Marker)>()
+        .build();
+    let mut source = World::builder_for_test().build();
+    source.register_clone::<SparseSet<Counted>>();
+
+    // The destination's entities own all three components, so the regroup attaches the union.
+    // The source's entities get the same ids.
+    for value in 0..3 {
+        destination.add_entity((counted(value, &counter), Aligned(value.into()), Marker));
+        source.add_entity(counted(10 + value, &counter));
+    }
+    destination.regroup();
+
+    source
+        .all_storages()
+        .unwrap()
+        .clone_storages_to(&mut destination.all_storages_mut().unwrap());
+    assert_eq!(drops(&counter), 3);
+    assert_eq!(grouped_values(&destination), [(10, 0), (11, 1), (12, 2)]);
+
+    destination.regroup();
+    assert_eq!(grouped_values(&destination), [(10, 0), (11, 1), (12, 2)]);
+
+    drop(destination);
+    assert_eq!(drops(&counter), 6);
+    drop(source);
+    assert_eq!(drops(&counter), 9);
+}
+
 /// Asserts that regrouping one connected set through borrow guards moves heap-owning,
 /// over-aligned and zero-sized components and attaches their union, while a storage outside the
 /// set stays borrowed exclusively and is written through. A held borrow of a member then fails
