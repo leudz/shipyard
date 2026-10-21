@@ -1,4 +1,22 @@
 //! Plans the regroups a registered workload runs around its systems.
+//!
+//! Planning uses the world's fixed connected sets and the systems' declared
+//! borrows. It inserts entry regroups for changes made outside the workload,
+//! then places later regroups before a written storage's next borrow or at exit.
+//!
+//! Deadlines belong to individual storages, but a regroup borrows its whole
+//! connected set exclusively. With an A+B group, write A -> read B -> read A
+//! can become write A -> read B -> regroup A+B -> read A. Placement must still
+//! keep that regroup apart from every system borrowing A or B.
+//!
+//! These are potential regroup steps. At execution, world::run_batches tracks
+//! which grouped storages were borrowed exclusively by systems that actually
+//! ran. Entry regroups always run; later steps run only when their set has
+//! pending writes. A successful regroup clears the whole set's pending writes.
+//!
+//! We can't tell what a system did with its mutable borrows, so we regroup
+//! even if it only changed component values. A skipped system doesn't require
+//! a regroup. Regroup itself checks whether anything needs moving.
 
 use crate::all_storages::{AllStorages, Grouping};
 use crate::borrow::Mutability;

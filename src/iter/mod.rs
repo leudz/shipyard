@@ -48,7 +48,8 @@ pub struct Shiper<S> {
     pub(crate) shiperator: S,
     /// Candidates left in the current segment.
     pub(crate) cursor: EntityCursor,
-    /// Follow-up segments, `None` when the traversal is a single segment.
+    /// Shared plan and position in its follow-up segments. Can remain present without
+    /// follow-ups to keep the current segment's coverage alive, including after splitting.
     pub(crate) schedule: Option<SegmentSchedule>,
     pub(crate) is_exact_sized: bool,
 }

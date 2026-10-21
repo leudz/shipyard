@@ -5,8 +5,9 @@
 //! ungrouped region stay there unless they have to join a group. Regroup only looks at the rest:
 //! the untrusted suffixes and the unevaluated regions. From these alone it counts, for each group,
 //! the entities leaving its kept prefix and the ones joining it, and for each storage,
-//! the ungrouped components joining a group. Nothing is scanned where nothing changed,
-//! so the work follows the changes rather than the size of the storages.
+//! the ungrouped components joining a group. Scanning follows the untrusted suffixes and
+//! unevaluated regions, not the number of changes: even a few removals can leave a large
+//! suffix untrusted. Clean ranges and evaluated ungrouped regions aren't scanned.
 //!
 //! Sparse arrays and `Groups` are left as regroup found them, frozen rows are read against them.
 //! The only change is attaching the unions that don't exist yet, as empty ranges holding no row.
