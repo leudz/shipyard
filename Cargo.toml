@@ -54,6 +54,10 @@ harness = false
 name = "iteration"
 harness = false
 
+[[bench]]
+name = "workload_regroup"
+harness = false
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
