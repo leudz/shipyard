@@ -34,6 +34,9 @@ mod seal {
 /// outside of shipyard.
 #[doc(hidden)]
 pub trait GroupMember: seal::Member {
+    /// `false` when the storage is `!Send`, it can then only be borrowed exclusively from the world's thread.
+    const THREAD_SAFE: bool;
+
     /// Returns the id of the storage this element refers to.
     fn storage_id() -> StorageId;
     /// Creates the storage if it doesn't exist yet.
@@ -43,6 +46,8 @@ pub trait GroupMember: seal::Member {
 impl<T: Component + Send + Sync> seal::Member for T {}
 
 impl<T: Component + Send + Sync> GroupMember for T {
+    const THREAD_SAFE: bool = true;
+
     #[inline]
     fn storage_id() -> StorageId {
         StorageId::of::<SparseSet<T>>()
@@ -59,6 +64,8 @@ impl<T: Component + Sync> seal::Member for NonSend<T> {}
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Sync> GroupMember for NonSend<T> {
+    const THREAD_SAFE: bool = false;
+
     #[inline]
     fn storage_id() -> StorageId {
         StorageId::of::<NonSend<SparseSet<T>>>()
@@ -77,6 +84,8 @@ impl<T: Component + Send> seal::Member for NonSync<T> {}
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Send> GroupMember for NonSync<T> {
+    const THREAD_SAFE: bool = true;
+
     #[inline]
     fn storage_id() -> StorageId {
         StorageId::of::<NonSync<SparseSet<T>>>()
@@ -95,6 +104,8 @@ impl<T: Component> seal::Member for NonSendSync<T> {}
 
 #[cfg(feature = "thread_local")]
 impl<T: Component> GroupMember for NonSendSync<T> {
+    const THREAD_SAFE: bool = false;
+
     #[inline]
     fn storage_id() -> StorageId {
         StorageId::of::<NonSendSync<SparseSet<T>>>()
@@ -108,8 +119,16 @@ impl<T: Component> GroupMember for NonSendSync<T> {
     }
 }
 
-/// Creates a group member's storage if it doesn't exist yet.
-type CreateStorage = fn(&mut AllStorages);
+/// What the world keeps about a [`GroupMember`].
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct MemberInfo {
+    pub(crate) storage_id: StorageId,
+    /// Creates the storage if it doesn't exist yet.
+    pub(crate) create: fn(&mut AllStorages),
+    /// `false` when the storage can only be borrowed exclusively from the world's thread.
+    pub(crate) thread_safe: bool,
+}
 
 /// Trait used as bound for [`WorldBuilder::with_group`], [`World::group`] and [`AllStorages::group`].
 ///
@@ -117,8 +136,8 @@ type CreateStorage = fn(&mut AllStorages);
 /// It can't be implemented outside of shipyard.
 #[doc(hidden)]
 pub trait TupleGroup: seal::Tuple {
-    /// Returns every member's storage id and the function creating its storage, in tuple order.
-    fn members() -> Vec<(StorageId, CreateStorage)>;
+    /// Returns every member's information, in tuple order.
+    fn members() -> Vec<MemberInfo>;
 }
 
 macro_rules! impl_group {
@@ -127,10 +146,11 @@ macro_rules! impl_group {
 
         impl<$($member: GroupMember),+> TupleGroup for ($($member,)+) {
             #[inline]
-            fn members() -> Vec<(StorageId, CreateStorage)> {
-                vec![$({
-                    let create: CreateStorage = $member::get_or_insert;
-                    ($member::storage_id(), create)
+            fn members() -> Vec<MemberInfo> {
+                vec![$(MemberInfo {
+                    storage_id: $member::storage_id(),
+                    create: $member::get_or_insert,
+                    thread_safe: $member::THREAD_SAFE,
                 }),+]
             }
         }
@@ -160,15 +180,33 @@ group![
 
 /// The groups declared when building a [`World`].
 ///
-/// This is configuration only: each group's members and how to create each member storage.\
+/// This is configuration only: each group's members, how to create and borrow each member storage,
+/// and the connected sets they make.\
 /// It never changes once the world is built. Ranges, unions and trust are storage state
 /// and live in each member's [`Groups`](crate::sparse_set::Groups).
 #[derive(Clone, Default)]
 pub(crate) struct Grouping {
     /// Every declared group's sorted member ids, in declaration order, without duplicates.
     pub(crate) groups: Vec<Arc<[StorageId]>>,
-    /// The function creating each member storage, a single entry per storage.
-    members: Vec<(StorageId, CreateStorage)>,
+    /// A single entry per member storage.
+    members: Vec<MemberInfo>,
+    /// The connected sets made by `groups`, each member is in exactly one.
+    pub(crate) sets: Vec<ConnectedSet>,
+}
+
+/// Storages linked together by overlapping declared groups.
+///
+/// `AB`, `AC` and `CD` make a single `ABCD` set, while `AB` and `CD` make two sets,
+/// even when an entity owns all four components.\
+/// Regroup only creates unions of groups that overlap, so the unions of a set stay inside it.
+/// A set is everything regrouping one of its members can touch.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ConnectedSet {
+    /// Sorted member ids.
+    pub(crate) members: Vec<StorageId>,
+    /// `false` when a member can only be borrowed exclusively from the world's thread,
+    /// regrouping the set then has to happen there.
+    pub(crate) thread_safe: bool,
 }
 
 impl Grouping {
@@ -180,19 +218,67 @@ impl Grouping {
     #[track_caller]
     pub(crate) fn declare<G: TupleGroup>(&mut self) {
         let members = G::members();
-        let ids = sorted_ids(members.iter().map(|&(storage_id, _)| storage_id).collect());
+        let ids = sorted_ids(members.iter().map(|member| member.storage_id).collect());
 
         if self.groups.iter().any(|group| group[..] == ids[..]) {
             return;
         }
 
-        for (storage_id, create) in members {
-            if !self.members.iter().any(|&(known, _)| known == storage_id) {
-                self.members.push((storage_id, create));
+        for member in members {
+            if self.member(member.storage_id).is_none() {
+                self.members.push(member);
             }
         }
 
+        self.link(&ids);
         self.groups.push(Arc::from(ids));
+    }
+
+    /// Merges the new group made of `ids` with every set sharing one of its members.
+    ///
+    /// Each set is merged as soon as a group links it, so the sets are always complete.
+    fn link(&mut self, ids: &[StorageId]) {
+        let mut members = ids.to_vec();
+        self.sets.retain(|set| {
+            let linked = set.members.iter().any(|member| ids.contains(member));
+            if linked {
+                members.extend_from_slice(&set.members);
+            }
+
+            !linked
+        });
+
+        members.sort_unstable();
+        members.dedup();
+
+        let thread_safe = members.iter().all(|&storage_id| {
+            self.member(storage_id)
+                .expect("members are known before being linked")
+                .thread_safe
+        });
+
+        self.sets.push(ConnectedSet {
+            members,
+            thread_safe,
+        });
+    }
+
+    /// Returns the information about the member storage `storage_id`, `None` if it isn't one.
+    fn member(&self, storage_id: StorageId) -> Option<&MemberInfo> {
+        self.members
+            .iter()
+            .find(|member| member.storage_id == storage_id)
+    }
+
+    /// Returns the connected set `storage_id` is part of, `None` if it isn't in any declared group.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "workload preparation will use it")
+    )]
+    pub(crate) fn set_of(&self, storage_id: StorageId) -> Option<&ConnectedSet> {
+        self.sets
+            .iter()
+            .find(|set| set.members.binary_search(&storage_id).is_ok())
     }
 
     /// Creates the member storages, attaches the groups and keeps `self` as `all_storages`'s configuration.
@@ -200,8 +286,8 @@ impl Grouping {
     /// Each member gets an empty range per group, in declaration order.\
     /// This is meant for a world without components, nothing is regrouped.
     pub(crate) fn install(self, all_storages: &mut AllStorages) {
-        for &(_, create) in &self.members {
-            create(all_storages);
+        for member in &self.members {
+            (member.create)(all_storages);
         }
 
         let storages = all_storages.storages.get_mut();

@@ -10,6 +10,8 @@
 /// struct Foreign;
 ///
 /// impl GroupMember for Foreign {
+///     const THREAD_SAFE: bool = true;
+///
 ///     fn storage_id() -> StorageId {
 ///         StorageId::of::<Foreign>()
 ///     }
@@ -23,13 +25,12 @@ struct ForeignGroupMember;
 /// implementation.
 ///
 /// ```compile_fail,E0277
-/// use shipyard::advanced::StorageId;
-/// use shipyard::all_storages::{AllStorages, TupleGroup};
+/// use shipyard::all_storages::{MemberInfo, TupleGroup};
 ///
 /// struct Foreign;
 ///
 /// impl TupleGroup for Foreign {
-///     fn members() -> Vec<(StorageId, fn(&mut AllStorages))> {
+///     fn members() -> Vec<MemberInfo> {
 ///         Vec::new()
 ///     }
 /// }

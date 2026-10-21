@@ -1,5 +1,6 @@
 mod declaration;
 mod overlap;
+mod sets;
 #[cfg(feature = "thread_local")]
 mod thread_local;
 

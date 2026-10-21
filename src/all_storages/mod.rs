@@ -11,7 +11,7 @@ mod tests;
 pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
 #[doc(hidden)]
-pub use group::{GroupMember, TupleGroup};
+pub use group::{GroupMember, MemberInfo, TupleGroup};
 pub use retain::TupleRetainStorage;
 
 pub(crate) use builder::AllStoragesBuilder;
@@ -1501,11 +1501,11 @@ let i = all_storages.run(sys1);
     #[track_caller]
     pub fn group<G: TupleGroup>(&mut self) -> &mut AllStorages {
         let members = G::members();
-        for &(_, create) in &members {
-            create(self);
+        for member in &members {
+            (member.create)(self);
         }
 
-        self.group_by_id(members.iter().map(|&(storage_id, _)| storage_id).collect());
+        self.group_by_id(members.iter().map(|member| member.storage_id).collect());
         self
     }
 

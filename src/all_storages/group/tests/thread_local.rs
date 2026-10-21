@@ -109,3 +109,69 @@ fn builder_wrappers() {
     assert_eq!(&c.groups.ranges[0].group[..], group_ids(&[id::<B>(), c_id]));
     assert_eq!(&d.groups.ranges[0].group[..], group_ids(&[id::<C>(), d_id]));
 }
+
+/// Returns the connected set holding `A`'s storage.
+fn set_of_a(world: &mut World) -> crate::all_storages::group::ConnectedSet {
+    world
+        .all_storages
+        .get_mut()
+        .grouping
+        .set_of(id::<A>())
+        .cloned()
+        .unwrap()
+}
+
+/// Asserts that a `NonSend` member is in its set under its wrapper's storage id,
+/// and makes the set regroupable from the world's thread only.
+#[test]
+fn set_non_send() {
+    use crate::borrow::NonSend;
+
+    let mut world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .build();
+
+    let set = set_of_a(&mut world);
+    let b_id = StorageId::of::<NonSend<SparseSet<B>>>();
+    assert_eq!(set.members, group_ids(&[id::<A>(), b_id]));
+    assert!(!set.thread_safe);
+}
+
+/// Asserts that a `NonSync` member can be borrowed exclusively from any thread,
+/// so it doesn't restrict its set.
+#[test]
+fn set_non_sync() {
+    use crate::borrow::NonSync;
+
+    let mut world = World::builder_for_test()
+        .with_group::<(A, NonSync<B>)>()
+        .build();
+
+    assert!(set_of_a(&mut world).thread_safe);
+}
+
+/// Asserts that a `NonSendSync` member makes its set regroupable from the world's thread only.
+#[test]
+fn set_non_send_sync() {
+    use crate::borrow::NonSendSync;
+
+    let mut world = World::builder_for_test()
+        .with_group::<(A, NonSendSync<B>)>()
+        .build();
+
+    assert!(!set_of_a(&mut world).thread_safe);
+}
+
+/// Asserts that a `NonSend` member restricts its whole set, including members it doesn't share
+/// a group with: `A` is only grouped with `B`, but `B` links it to `NonSend<C>`.
+#[test]
+fn set_non_send_transitive() {
+    use crate::borrow::NonSend;
+
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(B, NonSend<C>)>()
+        .build();
+
+    assert!(!set_of_a(&mut world).thread_safe);
+}
