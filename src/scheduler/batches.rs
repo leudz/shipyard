@@ -55,6 +55,29 @@ pub(crate) struct RegroupStep {
     /// Every member of the set, borrowed exclusively.
     pub(crate) borrow: Vec<TypeInfo>,
     pub(crate) trigger: RegroupTrigger,
+    /// Runs right before the regroup, so tests can watch it.
+    #[cfg(test)]
+    pub(crate) hook: Option<RegroupHook>,
+}
+
+/// Code a test runs right before a regroup step.
+#[cfg(test)]
+#[derive(Clone)]
+pub(crate) struct RegroupHook(pub(crate) alloc::sync::Arc<dyn Fn() + Send + Sync>);
+
+#[cfg(test)]
+impl core::fmt::Debug for RegroupHook {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("RegroupHook")
+    }
+}
+
+/// Hooks don't change what a step does, we don't compare them.
+#[cfg(test)]
+impl PartialEq for RegroupHook {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
 }
 
 impl RegroupStep {
@@ -85,6 +108,8 @@ impl RegroupStep {
             set: set.clone(),
             borrow,
             trigger,
+            #[cfg(test)]
+            hook: None,
         }
     }
 

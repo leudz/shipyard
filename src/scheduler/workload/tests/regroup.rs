@@ -215,3 +215,26 @@ fn non_send() {
     assert!(evaluated::<C>(&world));
     assert!(evaluated::<D>(&world));
 }
+
+/// Asserts that a borrowed storage only reached through another group of the set
+/// stops the workload's regroup, with an error naming it.
+#[test]
+fn transitive_member() {
+    use super::pending::{prepare, read_a, run};
+
+    let world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(B, C)>()
+        .build();
+    let workload = prepare(Workload::new("").with_system(read_a), &world);
+    let c = world.borrow::<View<'_, C>>().unwrap();
+
+    let result = run(&workload, &world);
+
+    let Err(error::RunWorkload::Regroup(error::GetStorage::StorageBorrow { name, .. })) = result
+    else {
+        panic!("expected a regroup borrow error, got {:?}", result);
+    };
+    assert_eq!(name, Some(type_name::<SparseSet<C>>()));
+    drop(c);
+}

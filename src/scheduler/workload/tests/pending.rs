@@ -3,9 +3,9 @@ use crate::error;
 use crate::scheduler::workload::prepare::prepare_regroups;
 use crate::views::EntitiesViewMut;
 
-fn read_a(_: View<'_, A>) {}
+pub(super) fn read_a(_: View<'_, A>) {}
 /// Only updates values, so it doesn't change the group.
-fn write_a(_: ViewMut<'_, A>) {}
+pub(super) fn write_a(_: ViewMut<'_, A>) {}
 
 /// Adds an `(A, B)` entity, it stays out of the group until a regroup.
 fn add_ab(mut entities: EntitiesViewMut<'_>, mut a: ViewMut<'_, A>, mut b: ViewMut<'_, B>) {
@@ -18,12 +18,12 @@ fn add_ab_indirectly(mut all_storages: AllStoragesViewMut<'_>) {
 }
 
 /// Returns a world with the AB group.
-fn world() -> World {
+pub(super) fn world() -> World {
     World::builder_for_test().with_group::<(A, B)>().build()
 }
 
 /// Builds `workload` with the regroups it needs in `world`.
-fn prepare(workload: Workload, world: &World) -> ScheduledWorkload {
+pub(super) fn prepare(workload: Workload, world: &World) -> ScheduledWorkload {
     let (mut scheduled, mut info) = workload.build().unwrap();
 
     let all_storages = world.all_storages.borrow().unwrap();
@@ -37,7 +37,7 @@ fn prepare(workload: Workload, world: &World) -> ScheduledWorkload {
 }
 
 /// Runs `scheduled` once on `world`.
-fn run(scheduled: &ScheduledWorkload, world: &World) -> Result<(), error::RunWorkload> {
+pub(super) fn run(scheduled: &ScheduledWorkload, world: &World) -> Result<(), error::RunWorkload> {
     world.run_batches(
         &scheduled.systems,
         &scheduled.system_names,

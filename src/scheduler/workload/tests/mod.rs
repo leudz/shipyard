@@ -2,8 +2,8 @@ mod batching;
 mod conditions;
 mod info_tests;
 mod ordering;
-// The parallel path doesn't track pending storages yet.
-#[cfg(not(feature = "parallel"))]
+#[cfg(all(feature = "parallel", feature = "std"))]
+mod parallel;
 mod pending;
 mod prepare;
 mod regroup;

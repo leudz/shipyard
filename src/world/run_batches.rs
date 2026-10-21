@@ -21,16 +21,20 @@ impl World {
         #[cfg(feature = "tracing")]
         let _parent_span = parent_span.enter();
 
-        // We don't track pending storages here yet,
-        // so pending regroups run every time, like entry ones.
         let run_batch = || -> Result<(), error::RunWorkload> {
+            // Each run starts with nothing pending, the entry regroups take care of what changed before.
+            let mut pending = Pending::default();
+
             for (batch, batch_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if) {
                 let mut result = Ok(());
 
+                // A batch's regroups only depend on the batches before it:
+                // its systems don't borrow from the sets it regroups.
                 let run_if = (
                     match batch.0 {
                         Some(step) => {
                             self.should_run(batches, system_names, step, batch_run_if.0)?
+                                && pending.needs(batches, step)
                         }
                         None => true,
                     },
@@ -39,7 +43,8 @@ impl World {
                         .iter()
                         .zip(&batch_run_if.1)
                         .map(|(&step, &run_if_index)| {
-                            self.should_run(batches, system_names, step, run_if_index)
+                            Ok(self.should_run(batches, system_names, step, run_if_index)?
+                                && pending.needs(batches, step))
                         })
                         .collect::<Result<Vec<_>, error::RunWorkload>>()?,
                 );
@@ -110,6 +115,16 @@ impl World {
                 })?;
 
                 result?;
+
+                // Every job of the batch is done, we can record what they did.
+                if let Some(step) = batch.0.filter(|_| run_if.0) {
+                    pending.ran(batches, step);
+                }
+                for (&step, &ran) in batch.1.iter().zip(&run_if.1) {
+                    if ran {
+                        pending.ran(batches, step);
+                    }
+                }
             }
 
             Ok(())
@@ -224,6 +239,11 @@ impl World {
 
     /// Regroups `regroup`'s connected set, borrowing all its storages exclusively.
     fn run_regroup(&self, regroup: &RegroupStep) -> Result<(), error::RunWorkload> {
+        #[cfg(test)]
+        if let Some(hook) = &regroup.hook {
+            (hook.0)();
+        }
+
         let all_storages = self.all_storages.borrow().map_err(|borrow| {
             error::RunWorkload::Regroup(error::GetStorage::AllStoragesBorrow(borrow))
         })?;
@@ -239,22 +259,8 @@ impl World {
 /// A storage is pending after a system that borrows it exclusively ran,
 /// until a regroup of its connected set.
 #[derive(Default)]
-#[cfg_attr(
-    feature = "parallel",
-    expect(
-        dead_code,
-        reason = "the parallel path doesn't track pending storages yet"
-    )
-)]
 struct Pending(Vec<StorageId>);
 
-#[cfg_attr(
-    feature = "parallel",
-    expect(
-        dead_code,
-        reason = "the parallel path doesn't track pending storages yet"
-    )
-)]
 impl Pending {
     /// Returns `false` for a regroup with nothing to do.
     ///
