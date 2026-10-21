@@ -1,5 +1,6 @@
 mod analysis;
 mod churn;
+mod clone;
 mod declaration;
 mod discovery;
 mod guarded;
@@ -27,18 +28,19 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct A(u32);
 impl Component for A {
     type Tracking = track::Untracked;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct B(u32);
 impl Component for B {
     type Tracking = track::Untracked;
 }
 
+#[derive(Clone)]
 struct C;
 impl Component for C {
     type Tracking = track::Untracked;

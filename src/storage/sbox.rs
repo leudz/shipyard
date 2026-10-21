@@ -60,6 +60,17 @@ impl SBox {
             value, thread_id,
         ))))
     }
+
+    /// Returns the storage this box holds.
+    ///
+    /// The exclusive reference to the box makes runtime borrow checks unnecessary.
+    #[inline]
+    pub(crate) fn storage_mut(&mut self) -> &mut (dyn Storage + 'static) {
+        // SAFE: `self.0` comes from a `Box` this `SBox` owns, it lives as long as `self`.
+        // We borrow `self` mutably for as long as the reference lives, no other reference
+        // to this storage can exist.
+        unsafe { &mut *self.0 }.get_mut()
+    }
 }
 
 impl core::fmt::Debug for SBox {

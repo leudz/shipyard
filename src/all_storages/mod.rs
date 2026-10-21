@@ -47,6 +47,7 @@ use crate::views::EntitiesViewMut;
 use crate::{ShipHashMap, error};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
+use clone::adopt_groups;
 use core::any::type_name;
 use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
@@ -1870,7 +1871,7 @@ for (i, j) in &mut iter {
 
             let storage_borrow = storage.borrow().unwrap();
             if let Some(storage_builder) = Storage::try_clone(&*storage_borrow, other_current) {
-                let storage = {
+                let mut storage = {
                     #[cfg(not(feature = "thread_local"))]
                     {
                         storage_builder.build()
@@ -1898,6 +1899,17 @@ for (i, j) in &mut iter {
                         }
                     }
                 };
+
+                // The destination's groups stay, peers still list this storage as a member.
+                // Nothing here runs user code, user values were cloned already and the
+                // replaced storage is only dropped once the replacement is in place.
+                if let Some(destination) = other_storages.get_mut(storage_id) {
+                    adopt_groups(
+                        destination.storage_mut(),
+                        storage.storage_mut(),
+                        *storage_id,
+                    );
+                }
 
                 other_storages.insert(*storage_id, storage);
             }

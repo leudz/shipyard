@@ -3,11 +3,39 @@ use crate::all_storages::AllStorages;
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::{Component, Unique};
 use crate::sparse_set::SparseSet;
-use crate::storage::StorageId;
+use crate::storage::{Storage, StorageId};
 use crate::unique::UniqueStorage;
 
 pub trait TupleClone {
     fn register_clone(all_storages: &mut AllStorages);
+}
+
+/// Gives `replacement` the group definitions of `destination`, the storage it's about to replace.
+///
+/// Each definition gets an empty range, so every component of `replacement` starts unevaluated,
+/// like after a clear. The source's layout never comes along, cloned storages have no range.
+pub(crate) fn adopt_groups(
+    destination: &dyn Storage,
+    replacement: &mut dyn Storage,
+    storage_id: StorageId,
+) {
+    let Some(destination_groups) = destination.groups() else {
+        return;
+    };
+    if !destination_groups.has_ranges() {
+        return;
+    }
+
+    // Only sparse sets have groups, and a clone has the same type as its original.
+    let groups = replacement
+        .groups_mut()
+        .expect("a grouped storage's clone can be grouped");
+
+    // Attaching keeps the canonical definitions, peers find this storage's ranges by pointer.
+    // On a fresh storage, the first attach also turns every component unevaluated.
+    for range in &destination_groups.ranges {
+        groups.attach(range.group.clone(), storage_id);
+    }
 }
 
 impl TupleClone for () {

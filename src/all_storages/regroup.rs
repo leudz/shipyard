@@ -134,7 +134,7 @@ impl<'a> Selected<'a> {
     fn all(storages: &'a mut ShipHashMap<StorageId, SBox>) -> Selected<'a> {
         let mut selected: Vec<(StorageId, &'a mut (dyn Storage + 'static))> = storages
             .iter_mut()
-            .map(|(&storage_id, sbox)| (storage_id, storage_of(sbox)))
+            .map(|(&storage_id, sbox)| (storage_id, sbox.storage_mut()))
             .collect();
 
         // The map's iteration order can change between runs. Sorting keeps the layout,
@@ -207,14 +207,6 @@ impl<'a> Selected<'a> {
             .binary_search(&storage_id)
             .expect("regroup can only reach the storages it selected")
     }
-}
-
-/// Returns the storage `sbox` holds.
-fn storage_of(sbox: &mut SBox) -> &mut (dyn Storage + 'static) {
-    // SAFE: `sbox.0` comes from a `Box` that `sbox` owns, it lives as long as `sbox`.
-    // We borrow `sbox` mutably for as long as the reference lives, no other reference
-    // to this storage can exist.
-    unsafe { &mut *sbox.0 }.get_mut()
 }
 
 /// Returns the row `entity`'s component had when regroup started in the storage with the sparse
