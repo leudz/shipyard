@@ -4,20 +4,24 @@ mod graphics;
 use bunny_state::{
     add_bunnies, simulate_bunnies, update_bunnies_gpu, BunnyPosition, BunnyState, Vel,
 };
-use graphics::{init_graphics, render, reset_window, resize_window, FrameTime};
-use shipyard::{UniqueViewMut, World};
+use graphics::{init_graphics, render, resize_window, FrameTime, Graphics};
+use shipyard::borrow::NonSendSync;
+use shipyard::{UniqueView, UniqueViewMut, World};
+use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use winit::{
-    event::*,
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    application::ApplicationHandler,
+    event::{ElementState, KeyEvent, MouseButton, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    keyboard::{Key, NamedKey},
+    window::{Window, WindowId},
 };
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-pub async fn run() {
+pub fn run() {
     #[cfg(target_arch = "wasm32")]
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -28,154 +32,322 @@ pub async fn run() {
         env_logger::init();
     }
 
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let mut state = egui_winit::State::new(&event_loop);
-    let context = egui::Context::default();
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        // Winit prevents sizing with CSS, so we have to set
-        // the size manually when on web.
-        use winit::dpi::PhysicalSize;
-        use winit::platform::web::WindowExtWebSys;
-
-        web_sys::window()
-            .and_then(|win| {
-                let dpr = win.device_pixel_ratio();
-                let width = win.inner_width().unwrap().as_f64().unwrap() * dpr;
-                let height = win.inner_height().unwrap().as_f64().unwrap() * dpr;
-                window.set_inner_size(PhysicalSize::new(width, height));
-                state.set_pixels_per_point(dpr as f32);
-
-                win.document()
-            })
-            .and_then(|doc| {
-                let dst = doc.get_element_by_id("bunny_demo")?;
-                let canvas_element = web_sys::Element::from(window.canvas());
-                dst.append_child(&canvas_element).ok()?;
-                Some(())
-            })
-            .expect("Couldn't append canvas to document body.");
-    }
-
-    let world = World::builder()
-        .with_group::<(BunnyPosition, Vel)>()
-        .build();
-
-    world.add_unique(FrameTime(0.0));
-    world.add_unique(BunnyState {
-        bunnies_per_click: 1000,
-    });
-
-    init_graphics(&world, &window, context).await;
-    world.add_workload(|| simulate_bunnies);
-    world.run(add_bunnies);
+    // Browser graphics are initialized asynchronously, they come back to the event loop as a user event.
+    let event_loop = EventLoop::<Graphics>::with_user_event()
+        .build()
+        .expect("Couldn't create the event loop");
+    let app = App::new(&event_loop);
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut last_frame_inst = Instant::now();
+    {
+        let mut app = app;
+        event_loop
+            .run_app(&mut app)
+            .expect("The event loop stopped with an error");
+    }
     #[cfg(target_arch = "wasm32")]
-    let mut last_frame_inst = web_sys::window().unwrap().performance().unwrap().now();
-    let (mut frame_count, mut accum_time) = (0, 0.0);
+    {
+        use winit::platform::web::EventLoopExtWebSys;
 
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent {
-            ref event,
-            window_id,
-        } if window_id == window.id() => {
-            if world.run(|graphics: UniqueViewMut<graphics::Graphics>| {
-                state.on_event(&graphics.context, &event).consumed
-            }) {
-                return;
-            }
+        event_loop.spawn_app(app);
+    }
+}
 
-            match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Space),
-                            ..
-                        },
-                    ..
-                }
-                | WindowEvent::MouseInput {
-                    state: ElementState::Pressed,
-                    button: MouseButton::Left,
-                    ..
-                } => world.run(add_bunnies),
-                WindowEvent::Resized(physical_size) => {
-                    world.run_with_data(resize_window, (*physical_size, None));
-                }
-                WindowEvent::ScaleFactorChanged {
-                    new_inner_size,
-                    scale_factor,
-                } => {
-                    // new_inner_size is &&mut so we have to dereference it twice
-                    world.run_with_data(
-                        resize_window,
-                        (**new_inner_size, Some(*scale_factor as f32)),
-                    );
-                }
-                _ => {}
-            }
+struct App {
+    world: World,
+    egui_context: egui::Context,
+    /// Created on the first resume.
+    window: Option<AppWindow>,
+    /// Set once the `Graphics` unique is in the world.
+    graphics_ready: bool,
+    initial_bunnies_spawned: bool,
+    frame_timer: FrameTimer,
+    /// Brings the initialized graphics back to the event loop.
+    proxy: EventLoopProxy<Graphics>,
+}
+
+struct AppWindow {
+    window: Arc<Window>,
+    egui_state: egui_winit::State,
+}
+
+impl App {
+    fn new(event_loop: &EventLoop<Graphics>) -> App {
+        let world = World::builder()
+            .with_group::<(BunnyPosition, Vel)>()
+            .build();
+
+        world.add_unique(FrameTime(0.0));
+        world.add_unique(BunnyState {
+            bunnies_per_click: 1000,
+        });
+        world.add_workload(|| simulate_bunnies);
+
+        App {
+            world,
+            egui_context: egui::Context::default(),
+            window: None,
+            graphics_ready: false,
+            initial_bunnies_spawned: false,
+            frame_timer: FrameTimer::new(),
+            proxy: event_loop.create_proxy(),
         }
-        Event::RedrawRequested(window_id) if window_id == window.id() => {
-            frame_count += 1;
+    }
 
-            let input = state.take_egui_input(&window);
-            world.run(|mut graphics: UniqueViewMut<graphics::Graphics>| {
-                graphics.input = input;
-            });
+    /// Stores the initialized graphics and sizes the surface.
+    fn add_graphics(&mut self, graphics: Graphics) {
+        self.world.add_unique_non_send_sync(graphics);
+        self.graphics_ready = true;
 
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                accum_time += last_frame_inst.elapsed().as_secs_f64();
-                last_frame_inst = Instant::now();
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                let now = web_sys::window().unwrap().performance().unwrap().now();
-                accum_time += (now - last_frame_inst) / 1000.0;
-                last_frame_inst = now;
-            }
+        // Resizes that happened during initialization had no surface to apply to.
+        // We catch up with the latest size, which also configures the surface for the first time.
+        if let Some(app_window) = &self.window {
+            self.world
+                .run_with_data(resize_window, app_window.window.inner_size());
+        }
+    }
 
-            if frame_count == 10 {
-                world.run(|mut frame_time: UniqueViewMut<FrameTime>| {
-                    frame_time.0 = accum_time as f32 * 1000.0 / frame_count as f32;
+    /// Returns `true` once graphics are initialized and the surface has a size we can draw to.
+    fn can_draw(&self) -> bool {
+        self.graphics_ready
+            && self
+                .world
+                .run(|graphics: NonSendSync<UniqueView<Graphics>>| graphics.is_configured())
+    }
+
+    fn redraw(&mut self) {
+        if !self.can_draw() {
+            return;
+        }
+
+        let Some(app_window) = &mut self.window else {
+            return;
+        };
+
+        // Bunnies are placed relative to the window size, so we wait until we have one.
+        if !self.initial_bunnies_spawned {
+            self.world.run(add_bunnies);
+            self.initial_bunnies_spawned = true;
+        }
+
+        if let Some(frame_time) = self.frame_timer.tick() {
+            self.world
+                .run(|mut frame_time_view: UniqueViewMut<FrameTime>| {
+                    frame_time_view.0 = frame_time;
                 });
+        }
 
-                accum_time = 0.0;
-                frame_count = 0;
+        self.world
+            .run_default_workload()
+            .expect("Couldn't run the simulation workload");
+        self.world.run(update_bunnies_gpu);
+
+        let egui_input = app_window.egui_state.take_egui_input(&app_window.window);
+        if let Some(platform_output) = self.world.run_with_data(render, egui_input) {
+            app_window
+                .egui_state
+                .handle_platform_output(&app_window.window, platform_output);
+        }
+    }
+}
+
+impl ApplicationHandler<Graphics> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // Some platforms resume more than once, we only set things up the first time.
+        if self.window.is_some() {
+            return;
+        }
+
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes())
+                .expect("Couldn't create the window"),
+        );
+
+        #[cfg(target_arch = "wasm32")]
+        mount_canvas(&window);
+
+        let egui_state = egui_winit::State::new(
+            self.egui_context.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            Some(window.scale_factor() as f32),
+            None,
+            None,
+        );
+
+        self.window = Some(AppWindow {
+            window: window.clone(),
+            egui_state,
+        });
+
+        let graphics = init_graphics(
+            window,
+            event_loop.owned_display_handle(),
+            self.egui_context.clone(),
+        );
+
+        // Browsers can't block on the GPU futures, there initialization finishes later.
+        // Both paths hand the graphics back with a user event.
+        // Sending only fails once the event loop is gone, nothing is left to draw then.
+        let proxy = self.proxy.clone();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = proxy.send_event(pollster::block_on(graphics));
+
+        #[cfg(target_arch = "wasm32")]
+        wasm_bindgen_futures::spawn_local(async move {
+            let _ = proxy.send_event(graphics.await);
+        });
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, graphics: Graphics) {
+        self.add_graphics(graphics);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        let Some(app_window) = &mut self.window else {
+            return;
+        };
+
+        if window_id != app_window.window.id() {
+            return;
+        }
+
+        if app_window
+            .egui_state
+            .on_window_event(&app_window.window, &event)
+            .consumed
+        {
+            return;
+        }
+
+        match event {
+            WindowEvent::CloseRequested
+            | WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state: ElementState::Pressed,
+                        logical_key: Key::Named(NamedKey::Escape),
+                        ..
+                    },
+                ..
+            } => event_loop.exit(),
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state: ElementState::Pressed,
+                        logical_key: Key::Named(NamedKey::Space),
+                        ..
+                    },
+                ..
             }
-
-            world
-                .run_default_workload()
-                .expect("Couldn't run the simulation workload");
-            world.run(update_bunnies_gpu);
-
-            match world.run(render) {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost) => {
-                    world.run(reset_window);
+            | WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Left,
+                ..
+            } => {
+                if self.can_draw() {
+                    self.world.run(add_bunnies);
                 }
-                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                Err(err) => eprintln!("{err:?}"),
             }
+            WindowEvent::Resized(physical_size) => {
+                // Before graphics are ready, `add_graphics` picks up the latest size instead.
+                if self.graphics_ready {
+                    self.world.run_with_data(resize_window, physical_size);
+                }
+            }
+            WindowEvent::RedrawRequested => self.redraw(),
+            _ => {}
         }
-        Event::MainEventsCleared => {
-            window.request_redraw();
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(app_window) = &self.window {
+            app_window.window.request_redraw();
         }
-        _ => {}
-    });
+    }
+}
+
+/// Puts the canvas under `#bunny_demo` and sizes it to the browser window.
+#[cfg(target_arch = "wasm32")]
+fn mount_canvas(window: &Window) {
+    use winit::dpi::LogicalSize;
+    use winit::platform::web::WindowExtWebSys;
+
+    let browser_window = web_sys::window().expect("Couldn't get the browser window");
+
+    let canvas = window.canvas().expect("Couldn't get the canvas");
+    browser_window
+        .document()
+        .and_then(|document| document.get_element_by_id("bunny_demo"))
+        .and_then(|container| container.append_child(&canvas).ok())
+        .expect("Couldn't append canvas to document body.");
+
+    // The canvas has to be in the page before winit can size it.
+    let width = browser_window.inner_width().unwrap().as_f64().unwrap();
+    let height = browser_window.inner_height().unwrap().as_f64().unwrap();
+    let _ = window.request_inner_size(LogicalSize::new(width, height));
+}
+
+/// Averages frame times over 10 frames.
+struct FrameTimer {
+    #[cfg(not(target_arch = "wasm32"))]
+    last_frame: Instant,
+    /// In milliseconds, from `performance.now()`.
+    #[cfg(target_arch = "wasm32")]
+    last_frame: f64,
+    frame_count: u32,
+    /// In seconds.
+    accum_time: f64,
+}
+
+impl FrameTimer {
+    fn new() -> FrameTimer {
+        FrameTimer {
+            #[cfg(not(target_arch = "wasm32"))]
+            last_frame: Instant::now(),
+            #[cfg(target_arch = "wasm32")]
+            last_frame: performance_now(),
+            frame_count: 0,
+            accum_time: 0.0,
+        }
+    }
+
+    /// Records a frame and returns the average frame time in milliseconds every 10 frames.
+    fn tick(&mut self) -> Option<f32> {
+        self.frame_count += 1;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.accum_time += self.last_frame.elapsed().as_secs_f64();
+            self.last_frame = Instant::now();
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let now = performance_now();
+            self.accum_time += (now - self.last_frame) / 1000.0;
+            self.last_frame = now;
+        }
+
+        if self.frame_count < 10 {
+            return None;
+        }
+
+        let frame_time = self.accum_time as f32 * 1000.0 / self.frame_count as f32;
+        self.accum_time = 0.0;
+        self.frame_count = 0;
+
+        Some(frame_time)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn performance_now() -> f64 {
+    web_sys::window().unwrap().performance().unwrap().now()
 }

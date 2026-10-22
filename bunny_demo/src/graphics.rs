@@ -1,9 +1,12 @@
 use crate::bunny_state::{BunnyPosition, BunnyState};
-use egui::{ClippedPrimitive, Context};
-use egui_wgpu::renderer::ScreenDescriptor;
+use egui_wgpu::ScreenDescriptor;
 use image::GenericImageView;
-use shipyard::{Unique, UniqueView, UniqueViewMut, View, World};
-use wgpu::{include_wgsl, util::DeviceExt, CommandEncoderDescriptor};
+use shipyard::borrow::NonSendSync;
+use shipyard::{Unique, UniqueView, UniqueViewMut, View};
+use std::sync::Arc;
+use wgpu::{include_wgsl, util::DeviceExt};
+use winit::dpi::PhysicalSize;
+use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
 #[repr(C)]
@@ -28,73 +31,96 @@ impl Vertex {
     }
 }
 
+/// Everything we need to draw.
+///
+/// In the browser the wgpu types aren't `Send` nor `Sync`,
+/// it's stored with `add_unique_non_send_sync` and borrowed with [`NonSendSync`].
 #[derive(Unique)]
 pub(crate) struct Graphics {
-    pub(crate) surface: wgpu::Surface,
+    pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) config: wgpu::SurfaceConfiguration,
-    pub(crate) size: winit::dpi::PhysicalSize<u32>,
+    /// Last non zero window size, zero until the surface is configured.
+    pub(crate) size: PhysicalSize<u32>,
     pub(crate) render_pipeline: wgpu::RenderPipeline,
     pub(crate) vertex_buffer: wgpu::Buffer,
     pub(crate) vertex_count: u32,
     pub(crate) instance_buffer: wgpu::Buffer,
-    pub(crate) scale_factor: f32,
     pub(crate) screen_size_buffer: wgpu::Buffer,
     pub(crate) screen_size_bind_group: wgpu::BindGroup,
     pub(crate) bunny_diffuse_bind_group: wgpu::BindGroup,
     pub(crate) context: egui::Context,
-    pub(crate) input: egui::RawInput,
     pub(crate) egui_render_pass: egui_wgpu::Renderer,
 }
 
-pub(crate) async fn init_graphics(world: &World, window: &Window, context: Context) {
-    let size = window.inner_size();
+impl Graphics {
+    /// Returns `true` once the surface has a size, before that we can't draw.
+    pub(crate) fn is_configured(&self) -> bool {
+        // `resize_window` only stores non zero sizes, and configures the surface when it does.
+        self.size.width > 0 && self.size.height > 0
+    }
+}
+
+/// Creates the GPU resources for `window`.
+///
+/// The surface isn't configured yet, [`resize_window`] does it once the window has a size.
+pub(crate) async fn init_graphics(
+    window: Arc<Window>,
+    display: OwnedDisplayHandle,
+    context: egui::Context,
+) -> Graphics {
+    #[cfg(not(target_arch = "wasm32"))]
+    let backends = wgpu::Backends::all();
+    #[cfg(target_arch = "wasm32")]
+    let backends = wgpu::Backends::GL;
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
-        dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+        backends,
+        ..wgpu::InstanceDescriptor::new_with_display_handle(Box::new(display))
     });
-    let surface = unsafe { instance.create_surface(window).unwrap() };
+    let surface = instance
+        .create_surface(window)
+        .expect("Couldn't create the surface");
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
-        .unwrap();
+        .expect("Couldn't find a GPU adapter");
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                features: wgpu::Features::empty(),
-                #[cfg(target_arch = "wasm32")]
-                limits: wgpu::Limits::downlevel_webgl2_defaults(),
-                #[cfg(not(target_arch = "wasm32"))]
-                limits: wgpu::Limits::default(),
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            required_features: wgpu::Features::empty(),
+            #[cfg(target_arch = "wasm32")]
+            required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+            #[cfg(not(target_arch = "wasm32"))]
+            required_limits: wgpu::Limits::default(),
+            ..Default::default()
+        })
         .await
-        .unwrap();
+        .expect("Couldn't create the GPU device");
 
     let supported_format = surface.get_capabilities(&adapter).formats[0];
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: supported_format,
-        width: size.width,
-        height: size.height,
+        color_space: wgpu::SurfaceColorSpace::Auto,
+        width: 0,
+        height: 0,
         present_mode: wgpu::PresentMode::Fifo,
+        desired_maximum_frame_latency: 2,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: vec![],
     };
-    surface.configure(&device, &config);
 
     let screen_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Screen Size Buffer"),
-        contents: bytemuck::cast_slice(&[size.width as f32, size.height as f32, 0.0, 0.0]),
+        contents: bytemuck::cast_slice(&[0.0f32; 4]),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
@@ -145,17 +171,17 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
     });
 
     queue.write_texture(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             texture: &diffuse_texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
         },
         &diffuse_rgba,
-        wgpu::ImageDataLayout {
+        wgpu::TexelCopyBufferLayout {
             offset: 0,
-            bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-            rows_per_image: std::num::NonZeroU32::new(dimensions.1),
+            bytes_per_row: Some(4 * dimensions.0),
+            rows_per_image: Some(dimensions.1),
         },
         texture_size,
     );
@@ -167,7 +193,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         compare: None,
         ..Default::default()
     });
@@ -214,8 +240,11 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
 
     let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
-        bind_group_layouts: &[&screen_size_bind_group_layout, &texture_bind_group_layout],
-        push_constant_ranges: &[],
+        bind_group_layouts: &[
+            Some(&screen_size_bind_group_layout),
+            Some(&texture_bind_group_layout),
+        ],
+        immediate_size: 0,
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -223,12 +252,14 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         layout: Some(&render_pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: "vs_main",
-            buffers: &[Vertex::desc(), BunnyPosition::desc()],
+            entry_point: Some("vs_main"),
+            compilation_options: Default::default(),
+            buffers: &[Some(Vertex::desc()), Some(BunnyPosition::desc())],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
+            compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format: config.format,
                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),
@@ -250,7 +281,8 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        multiview: None,
+        multiview_mask: None,
+        cache: None,
     });
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -265,75 +297,123 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         ]),
         usage: wgpu::BufferUsages::VERTEX,
     });
+    // `update_bunnies_gpu` replaces it with a bigger one when bunnies are spawned.
     let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Instance Buffer"),
         contents: &[],
-        usage: wgpu::BufferUsages::VERTEX,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
 
-    context.set_pixels_per_point(window.scale_factor() as f32);
+    let egui_render_pass = egui_wgpu::Renderer::new(
+        &device,
+        supported_format,
+        egui_wgpu::RendererOptions::default(),
+    );
 
-    let egui_render_pass = egui_wgpu::Renderer::new(&device, supported_format, None, 1);
-
-    world.add_unique(Graphics {
+    Graphics {
         surface,
         device,
         queue,
         config,
-        size,
+        size: PhysicalSize::new(0, 0),
         render_pipeline,
         vertex_buffer,
         vertex_count: 0,
         instance_buffer,
-        scale_factor: window.scale_factor() as f32,
         screen_size_buffer,
         screen_size_bind_group,
         bunny_diffuse_bind_group,
         context,
-        input: egui::RawInput::default(),
         egui_render_pass,
-    });
+    }
 }
 
+/// Configures the surface for `new_size`.
+///
+/// Zero sizes are ignored, wgpu can't configure a surface with them.
+/// Minimized windows and canvases not laid out yet report one.
 pub(crate) fn resize_window(
-    (new_size, scale_factor): (winit::dpi::PhysicalSize<u32>, Option<f32>),
-    mut graphics: UniqueViewMut<Graphics>,
+    new_size: PhysicalSize<u32>,
+    mut graphics: NonSendSync<UniqueViewMut<Graphics>>,
 ) {
-    if new_size.width > 0 && new_size.height > 0 {
-        graphics.size = new_size;
-        graphics.config.width = new_size.width;
-        graphics.config.height = new_size.height;
-        graphics
-            .surface
-            .configure(&graphics.device, &graphics.config);
-        graphics.queue.write_buffer(
-            &graphics.screen_size_buffer,
-            0,
-            bytemuck::cast_slice(&[new_size.width as f32, new_size.height as f32, 0.0, 0.0]),
-        );
+    if new_size.width == 0 || new_size.height == 0 {
+        return;
     }
 
-    if let Some(scale_factor) = scale_factor {
-        graphics.scale_factor = scale_factor;
-    }
+    graphics.size = new_size;
+    graphics.config.width = new_size.width;
+    graphics.config.height = new_size.height;
+    graphics
+        .surface
+        .configure(&graphics.device, &graphics.config);
+    graphics.queue.write_buffer(
+        &graphics.screen_size_buffer,
+        0,
+        bytemuck::cast_slice(&[new_size.width as f32, new_size.height as f32, 0.0, 0.0]),
+    );
 }
 
-pub(crate) fn reset_window(graphics: UniqueViewMut<Graphics>) {
-    let size = graphics.size;
-    resize_window((size, None), graphics);
-}
-
+/// Draws the bunnies and the egui overlay.
+///
+/// Returns egui's platform output, to give back to `egui_winit`.\
+/// Returns `None` when the frame was skipped.
 pub(crate) fn render(
-    mut graphics: UniqueViewMut<Graphics>,
+    egui_input: egui::RawInput,
+    mut graphics: NonSendSync<UniqueViewMut<Graphics>>,
     mut bunny_state: UniqueViewMut<BunnyState>,
     position: View<BunnyPosition>,
     frame_time: UniqueView<FrameTime>,
-) -> Result<(), wgpu::SurfaceError> {
-    let output = graphics.surface.get_current_texture()?;
+) -> Option<egui::PlatformOutput> {
+    let graphics: &mut Graphics = &mut graphics;
+
+    let output = match graphics.surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(output)
+        | wgpu::CurrentSurfaceTexture::Suboptimal(output) => output,
+        wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+            graphics
+                .surface
+                .configure(&graphics.device, &graphics.config);
+            return None;
+        }
+        wgpu::CurrentSurfaceTexture::Timeout
+        | wgpu::CurrentSurfaceTexture::Occluded
+        | wgpu::CurrentSurfaceTexture::Validation => return None,
+    };
 
     let view = output
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
+
+    // egui frame
+    let mut egui_output = graphics.context.run_pass(egui_input, |context| {
+        show_bunny_info(
+            context,
+            position.len(),
+            frame_time.0,
+            &mut bunny_state.bunnies_per_click,
+        )
+    });
+    let pixels_per_point = egui_output.pixels_per_point;
+    let paint_jobs = graphics
+        .context
+        .tessellate(egui_output.shapes, pixels_per_point);
+    let screen_descriptor = ScreenDescriptor {
+        size_in_pixels: [graphics.config.width, graphics.config.height],
+        pixels_per_point,
+    };
+
+    // egui uploads, they're submitted with the frame below.
+    // We drain the deltas, egui asserts none are left unapplied when they're dropped.
+    for (id, image_deltas) in egui_output.textures_delta.set.drain() {
+        for image_delta in &image_deltas {
+            graphics.egui_render_pass.update_texture(
+                &graphics.device,
+                &graphics.queue,
+                id,
+                image_delta,
+            );
+        }
+    }
 
     let mut encoder = graphics
         .device
@@ -341,31 +421,40 @@ pub(crate) fn render(
             label: Some("Render Encoder"),
         });
 
-    let (paint_jobs, screen_descriptor) = update_egui_render_pass(
-        &mut graphics,
-        position.len(),
-        frame_time.0,
-        &mut bunny_state.bunnies_per_click,
+    let egui_command_buffers = graphics.egui_render_pass.update_buffers(
+        &graphics.device,
+        &graphics.queue,
+        &mut encoder,
+        &paint_jobs,
+        &screen_descriptor,
     );
 
+    // Bunnies then egui on top
     {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
-        });
+        let mut render_pass = encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            })
+            // egui needs a `'static` render pass.
+            .forget_lifetime();
 
         render_pass.set_pipeline(&graphics.render_pipeline);
         render_pass.set_bind_group(0, &graphics.screen_size_bind_group, &[]);
@@ -379,28 +468,32 @@ pub(crate) fn render(
             .render(&mut render_pass, &paint_jobs, &screen_descriptor);
     }
 
-    graphics.queue.submit(std::iter::once(encoder.finish()));
-    output.present();
+    graphics
+        .queue
+        .submit(egui_command_buffers.into_iter().chain([encoder.finish()]));
+    graphics.queue.present(output);
 
-    Ok(())
+    // The frame we just submitted might still use them, so we only free them now.
+    for id in egui_output.textures_delta.free.drain() {
+        graphics.egui_render_pass.free_texture(&id);
+    }
+
+    Some(egui_output.platform_output)
 }
 
 #[derive(Unique)]
 pub(crate) struct FrameTime(pub(crate) f32);
 
-fn update_egui_render_pass(
-    graphics: &mut Graphics,
+fn show_bunny_info(
+    context: &egui::Context,
     bunny_count: usize,
     frame_time: f32,
     bunnies_per_click: &mut u32,
-) -> (Vec<ClippedPrimitive>, ScreenDescriptor) {
-    let input = graphics.input.clone();
-    graphics.context.begin_frame(input);
-
-    egui::Area::new("Bynny Info")
+) {
+    egui::Area::new(egui::Id::unique("Bynny Info"))
         .fixed_pos(egui::pos2(0.0, 0.0))
         .movable(false)
-        .show(&graphics.context, |ui| {
+        .show(context, |ui| {
             ui.label(
                 egui::RichText::new(format!("Bunny count: {bunny_count}"))
                     .color(egui::Color32::BLACK)
@@ -425,39 +518,4 @@ fn update_egui_render_pass(
                 ui.add(egui::widgets::DragValue::new(bunnies_per_click).speed(200));
             });
         });
-
-    let egui_output = graphics.context.end_frame();
-    let paint_jobs = graphics.context.tessellate(egui_output.shapes);
-
-    let screen_descriptor = ScreenDescriptor {
-        pixels_per_point: graphics.scale_factor,
-        size_in_pixels: [graphics.size.width, graphics.size.height],
-    };
-    for (id, image_delta) in &egui_output.textures_delta.set {
-        graphics.egui_render_pass.update_texture(
-            &graphics.device,
-            &graphics.queue,
-            *id,
-            image_delta,
-        );
-    }
-    for id in &egui_output.textures_delta.free {
-        graphics.egui_render_pass.free_texture(id);
-    }
-
-    let mut command_encoder = graphics
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("egui"),
-        });
-
-    graphics.egui_render_pass.update_buffers(
-        &graphics.device,
-        &graphics.queue,
-        &mut command_encoder,
-        &paint_jobs,
-        &screen_descriptor,
-    );
-
-    (paint_jobs, screen_descriptor)
 }

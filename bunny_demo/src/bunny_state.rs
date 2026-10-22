@@ -1,6 +1,7 @@
 use crate::graphics::Graphics;
 use glam::Vec2;
 use nanorand::Rng;
+use shipyard::borrow::NonSendSync;
 use shipyard::{
     Component, EntitiesViewMut, IntoIter, Unique, UniqueView, UniqueViewMut, View, ViewMut,
 };
@@ -15,7 +16,6 @@ pub(crate) struct BunnyState {
 
 #[repr(transparent)]
 #[derive(Component, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-#[track(Insertion)]
 pub(crate) struct BunnyPosition(Vec2);
 
 impl BunnyPosition {
@@ -42,7 +42,7 @@ impl BunnyPosition {
 pub(crate) struct Vel(Vec2);
 
 pub(crate) fn add_bunnies(
-    graphics: UniqueView<Graphics>,
+    graphics: NonSendSync<UniqueView<Graphics>>,
     bunny_state: UniqueView<BunnyState>,
     mut entities: EntitiesViewMut,
     mut position: ViewMut<BunnyPosition>,
@@ -74,7 +74,7 @@ pub(crate) fn add_bunnies(
 }
 
 pub(crate) fn simulate_bunnies(
-    graphics: UniqueView<Graphics>,
+    graphics: NonSendSync<UniqueView<Graphics>>,
     mut position: ViewMut<BunnyPosition>,
     mut velocity: ViewMut<Vel>,
 ) {
@@ -113,27 +113,30 @@ pub(crate) fn simulate_bunnies(
         });
 }
 
+/// Uploads every bunny position to the instance buffer.
 pub(crate) fn update_bunnies_gpu(
-    mut graphics: UniqueViewMut<Graphics>,
+    mut graphics: NonSendSync<UniqueViewMut<Graphics>>,
     position: View<BunnyPosition>,
 ) {
-    if position.inserted().iter().next().is_some() {
+    let positions: &[u8] = bytemuck::cast_slice(position.as_slice());
+
+    // Spawning makes the positions outgrow the buffer, we replace it with one sized for all of them.
+    if positions.len() as u64 > graphics.instance_buffer.size() {
         let instance_buffer =
             graphics
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Instance Buffer"),
-                    contents: bytemuck::cast_slice(position.as_slice()),
+                    contents: positions,
                     usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 });
 
         graphics.instance_buffer = instance_buffer;
-        graphics.vertex_count = position.len() as u32;
     } else {
-        graphics.queue.write_buffer(
-            &graphics.instance_buffer,
-            0,
-            bytemuck::cast_slice(position.as_slice()),
-        );
+        graphics
+            .queue
+            .write_buffer(&graphics.instance_buffer, 0, positions);
     }
+
+    graphics.vertex_count = position.len() as u32;
 }

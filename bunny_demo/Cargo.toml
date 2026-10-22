@@ -14,9 +14,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
-egui = "0.21.0"
-egui-wgpu = "0.21.0"
-egui-winit = { version = "0.21.1", default-features = false }
+egui = { version = "0.37.0", features = ["default_fonts"] }
+# The defaults would turn on wgpu's `fragile-send-sync-non-atomic-wasm`,
+# we keep the browser GPU types `!Send` and store them as thread local uniques instead.
+egui-wgpu = { version = "0.37.0", default-features = false }
+egui-winit = { version = "0.37.0", default-features = false }
 env_logger = "0.11.11"
 glam = { version = "0.34.1", features = ["bytemuck"] }
 image = { version = "0.25.10", default-features = false, features = [
@@ -30,17 +32,21 @@ nanorand = { version = "0.8.0", default-features = false, features = [
 ] }
 pollster = "1.0.1"
 # No `parallel`: the demo runs a single system and rayon has no worker threads in the browser.
-shipyard = { path = "..", default-features = false, features = ["proc", "std"] }
-wgpu = "0.15.1"
-winit = "0.28.3"
+shipyard = { path = "..", default-features = false, features = [
+    "proc",
+    "std",
+    "thread_local",
+] }
+wgpu = "30.0.1"
+winit = "0.30.13"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
-wgpu = { version = "0.15.1", features = ["webgl"] }
+wgpu = { version = "30.0.1", features = ["webgl"] }
 wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4.79"
-web-sys = { version = "0.3.72", features = [
+web-sys = { version = "0.3.106", features = [
     "Document",
     "Window",
     "Element",
