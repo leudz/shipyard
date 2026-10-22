@@ -292,3 +292,124 @@ fn non_send_member() {
 
     assert!(evaluated::<A>(&world));
 }
+
+/// Adds a reader of `C` per index, counting its runs in `runs[index]` and its condition's
+/// evaluations in `evaluations[index]`. The condition skips the readers whose index is 2 modulo 3.
+///
+/// Every reader is its own closure: a workload keeps a single copy of a callable listed twice.
+macro_rules! counted_readers {
+    ($workload:expr, $runs:expr, $evaluations:expr; $($index:literal)*) => {
+        $workload$(
+            .with_system({
+                let runs = $runs.clone();
+                let evaluations = $evaluations.clone();
+
+                (move |_: View<'_, C>| {
+                    runs[$index].fetch_add(1, Ordering::SeqCst);
+                })
+                .run_if(move || {
+                    evaluations[$index].fetch_add(1, Ordering::SeqCst);
+                    $index % 3 != 2
+                })
+            })
+        )*
+    };
+}
+
+/// Runs before the counted readers and the skipped writer, they all wait for it.
+fn prime(_: View<'_, A>, _: ViewMut<'_, C>) {}
+
+/// Returns `count` counters at zero.
+fn counters(count: usize) -> Arc<Vec<AtomicUsize>> {
+    Arc::new((0..count).map(|_| AtomicUsize::new(0)).collect())
+}
+
+/// Returns the workload `prime`, eight counted readers, `write_a` skipped by its condition, the
+/// other counted readers up to `last`, then `read_a`. The writer sits in the middle of the batch,
+/// so its last slots hold readers.
+macro_rules! condition_workload {
+    ($runs:expr, $evaluations:expr; $($index:literal)*) => {
+        counted_readers!(
+            counted_readers!(
+                Workload::new("").with_system(prime), $runs, $evaluations;
+                0 1 2 3 4 5 6 7
+            )
+            .with_system(write_a.run_if(|| false)),
+            $runs, $evaluations; $($index)*
+        )
+        .with_system(read_a)
+    };
+}
+
+/// Runs a workload from `condition_workload!` with `readers` counted readers.
+///
+/// Asserts that the readers and the writer fill a single batch's parallel slots, that every
+/// condition was evaluated once, that each reader allowed to run ran once and the others didn't,
+/// and that the skipped writer left nothing for the regroup before `read_a`.
+fn check_condition_slots(
+    workload: Workload,
+    readers: usize,
+    runs: &[AtomicUsize],
+    evaluations: &[AtomicUsize],
+) {
+    let world = pending::world();
+    let mut workload = prepare(workload, &world);
+
+    // Systems are numbered in order: `prime` is 0, then the readers and the writer.
+    let slots: Vec<Step> = (1..=readers + 1).map(System).collect();
+    let batch = workload
+        .batches
+        .parallel
+        .iter()
+        .find(|batch| batch.1.contains(&System(1)))
+        .unwrap();
+    assert_eq!(batch, &(None, slots));
+
+    let pending_runs = Arc::new(AtomicUsize::new(0));
+    for index in 0..workload.batches.regroups.len() {
+        if workload.batches.regroups[index].trigger == RegroupTrigger::Pending {
+            let pending_runs = pending_runs.clone();
+            hook(&mut workload, index, move || {
+                pending_runs.fetch_add(1, Ordering::SeqCst);
+            });
+        }
+    }
+
+    run(&workload, &world).unwrap();
+
+    for index in 0..readers {
+        let evaluated = evaluations[index].load(Ordering::SeqCst);
+        assert_eq!(evaluated, 1, "condition {index}");
+        let expected = usize::from(index % 3 != 2);
+        assert_eq!(
+            runs[index].load(Ordering::SeqCst),
+            expected,
+            "reader {index}"
+        );
+    }
+    assert_eq!(pending_runs.load(Ordering::SeqCst), 0);
+}
+
+/// Asserts that a batch filling exactly the sixteen inline condition slots, with readers allowed
+/// and skipped by their conditions and a skipped writer, runs each allowed reader once and leaves
+/// nothing pending.
+#[test]
+fn sixteen_conditions() {
+    let runs = counters(15);
+    let evaluations = counters(15);
+    let workload = condition_workload!(runs, evaluations; 8 9 10 11 12 13 14);
+
+    check_condition_slots(workload, 15, &runs, &evaluations);
+}
+
+/// Asserts that a batch one slot past the sixteen inline condition slots keeps every condition
+/// with its system: each allowed reader runs once, including the one in the seventeenth slot,
+/// the others and the skipped writer don't, and nothing is left pending.
+#[test]
+fn seventeen_conditions() {
+    let runs = counters(16);
+    let evaluations = counters(16);
+    let workload = condition_workload!(runs, evaluations; 8 9 10 11 12 13 14 15);
+
+    check_condition_slots(workload, 16, &runs, &evaluations);
+}

@@ -19,6 +19,8 @@
 //!   at least one of the regroups left after the calling thread's step having work to do, see
 //!   `probe.rs`. A persistent world is damaged again before each run, outside the timer, each run
 //!   is timed on its own and checked after the timer stops.
+//! - `pending`: Criterion's normal loop times one run of a registered workload leaving twelve
+//!   grouped storages pending at once, see `pending.rs`.
 //!
 //! Every world is checked, and every workload run and checked, before any timing, whether or not
 //! its cases are filtered out.
@@ -32,6 +34,8 @@ mod fixtures;
 #[allow(dead_code)]
 #[path = "iteration/fixtures.rs"]
 mod iteration_fixtures;
+#[path = "workload_regroup/pending.rs"]
+mod pending;
 #[path = "workload_regroup/probe.rs"]
 mod probe;
 #[path = "workload_regroup/structural.rs"]
@@ -135,6 +139,19 @@ fn structural(c: &mut Criterion) {
     }
 }
 
+fn pending(c: &mut Criterion) {
+    let mut group = c.benchmark_group("pending");
+
+    let pending = pending::Pending::new();
+    pending.check();
+
+    group.bench_function("twelve", |bencher| {
+        bencher.iter(|| black_box(&pending).run())
+    });
+
+    pending.check();
+}
+
 fn probe(c: &mut Criterion) {
     let mut group = c.benchmark_group("probe");
 
@@ -202,6 +219,7 @@ fn main() {
     workload(&mut criterion);
     structural(&mut criterion);
     probe(&mut criterion);
+    pending(&mut criterion);
 
     criterion.final_summary();
 }

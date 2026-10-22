@@ -3,6 +3,9 @@ mod run_batches;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub(crate) use run_batches::Pending;
+
 pub use builder::WorldBuilder;
 
 use crate::all_storages::{

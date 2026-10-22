@@ -366,7 +366,7 @@ type Runs = ScratchVec<bool, 16>;
 /// Workloads only write a handful of grouped storages, so we keep them inline and look them up in
 /// order. Every item is `Some`, `None` only fills the unused inline slots.
 #[derive(Default)]
-struct Pending(ScratchVec<Option<StorageId>, 8>);
+pub(crate) struct Pending(ScratchVec<Option<StorageId>, 8>);
 
 impl Pending {
     /// Returns `false` for a regroup with nothing to do.
@@ -374,7 +374,7 @@ impl Pending {
     /// Entry regroups always run, for the changes made outside the workload.
     /// The others only run when a member of their set is pending.
     #[inline]
-    fn needs(&self, batches: &Batches, step: Step) -> bool {
+    pub(crate) fn needs(&self, batches: &Batches, step: Step) -> bool {
         let Step::Regroup(index) = step else {
             return true;
         };
@@ -385,7 +385,7 @@ impl Pending {
 
     /// Records the effects of `step`, that just ran successfully.
     #[inline]
-    fn ran(&mut self, batches: &Batches, step: Step) {
+    pub(crate) fn ran(&mut self, batches: &Batches, step: Step) {
         match step {
             Step::System(index) => {
                 // Workloads that didn't plan regroups don't have writes for their systems.
@@ -427,5 +427,17 @@ impl Pending {
         self.0.retain(|pending| {
             !pending.is_some_and(|storage_id| members.binary_search(&storage_id).is_ok())
         });
+    }
+
+    /// Returns the pending storages, in the order they became pending.
+    #[cfg(test)]
+    pub(crate) fn ids(&self) -> alloc::vec::Vec<StorageId> {
+        self.0.iter().map(|pending| pending.unwrap()).collect()
+    }
+
+    /// Returns `true` while the pending storages fit inline.
+    #[cfg(test)]
+    pub(crate) fn is_inline(&self) -> bool {
+        matches!(self.0, ScratchVec::Inline { .. })
     }
 }
