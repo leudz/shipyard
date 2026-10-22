@@ -43,7 +43,7 @@ winit = "0.30.13"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
-wgpu = { version = "30.0.1", features = ["webgl"] }
+wgpu = { version = "30.0.1", features = ["webgpu", "webgl"] }
 wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4.79"
 web-sys = { version = "0.3.106", features = [

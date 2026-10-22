@@ -71,14 +71,21 @@ pub(crate) async fn init_graphics(
     context: egui::Context,
 ) -> Graphics {
     #[cfg(not(target_arch = "wasm32"))]
-    let backends = wgpu::Backends::all();
-    #[cfg(target_arch = "wasm32")]
-    let backends = wgpu::Backends::GL;
-
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends,
+        backends: wgpu::Backends::all(),
         ..wgpu::InstanceDescriptor::new_with_display_handle(Box::new(display))
     });
+
+    // We prefer WebGPU, but some browsers expose `navigator.gpu` without being able to use it.
+    // The detection requests a WebGPU adapter and drops the backend when it doesn't get one,
+    // leaving WebGL2. It runs before the surface exists, so the canvas never gets a WebGPU context.
+    #[cfg(target_arch = "wasm32")]
+    let instance = wgpu::util::new_instance_with_webgpu_detection(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::BROWSER_WEBGPU | wgpu::Backends::GL,
+        ..wgpu::InstanceDescriptor::new_with_display_handle(Box::new(display))
+    })
+    .await;
+
     let surface = instance
         .create_surface(window)
         .expect("Couldn't create the surface");
@@ -96,6 +103,7 @@ pub(crate) async fn init_graphics(
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
             required_features: wgpu::Features::empty(),
+            // WebGPU supports at least WebGL2's limits, these work whichever backend we got.
             #[cfg(target_arch = "wasm32")]
             required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
             #[cfg(not(target_arch = "wasm32"))]
