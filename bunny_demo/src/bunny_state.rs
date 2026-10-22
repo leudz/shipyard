@@ -14,7 +14,7 @@ pub(crate) struct BunnyState {
 }
 
 #[repr(transparent)]
-#[derive(Component, Copy, Clone, Debug)]
+#[derive(Component, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[track(Insertion)]
 pub(crate) struct BunnyPosition(Vec2);
 
@@ -23,9 +23,6 @@ impl BunnyPosition {
         BunnyPosition(pos)
     }
 }
-
-unsafe impl bytemuck::Pod for BunnyPosition {}
-unsafe impl bytemuck::Zeroable for BunnyPosition {}
 
 impl BunnyPosition {
     const ATTRIBS: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![2 => Float32x2];

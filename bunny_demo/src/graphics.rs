@@ -7,14 +7,11 @@ use wgpu::{include_wgsl, util::DeviceExt, CommandEncoderDescriptor};
 use winit::window::Window;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Vertex {
     position: [f32; 2],
     tex_coords: [f32; 2],
 }
-
-unsafe impl bytemuck::Pod for Vertex {}
-unsafe impl bytemuck::Zeroable for Vertex {}
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] =
