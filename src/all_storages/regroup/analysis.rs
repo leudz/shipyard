@@ -109,7 +109,7 @@ impl<'a> Frozen<'a> {
         let mut memberships = Vec::new();
         let mut dense = Vec::new();
 
-        for &storage_id in selected.ids() {
+        for storage_id in selected.ids() {
             let storage = selected.get(storage_id);
             let Some(groups) = storage.groups().filter(|groups| groups.has_ranges()) else {
                 continue;
@@ -561,8 +561,8 @@ pub(super) fn analyze(selected: &mut Selected<'_>) -> Option<Plan> {
 /// hold fully trusted ranges of the same length, regroup then has nothing to do.
 ///
 /// It only reads metadata, it doesn't allocate.
-fn is_clean(selected: &Selected<'_>) -> bool {
-    for &storage_id in selected.ids() {
+pub(super) fn is_clean(selected: &Selected<'_>) -> bool {
+    for storage_id in selected.ids() {
         let storage = selected.get(storage_id);
         let Some(groups) = storage.groups().filter(|groups| groups.has_ranges()) else {
             continue;

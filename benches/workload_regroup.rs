@@ -15,6 +15,10 @@
 //!   workload for `registered`, happens outside the timer, dropping it after the timer stops.
 //!   `standalone` does the same work with standalone workloads: an explicit `regroup_set` for the
 //!   entry regroup, the writer, another `regroup_set` before the reader, then the reader.
+//! - `probe`: one run of a registered workload whose first batch shares two entry regroups, with
+//!   at least one of the regroups left after the calling thread's step having work to do, see
+//!   `probe.rs`. A persistent world is damaged again before each run, outside the timer, each run
+//!   is timed on its own and checked after the timer stops.
 //!
 //! Every world is checked, and every workload run and checked, before any timing, whether or not
 //! its cases are filtered out.
@@ -28,6 +32,8 @@ mod fixtures;
 #[allow(dead_code)]
 #[path = "iteration/fixtures.rs"]
 mod iteration_fixtures;
+#[path = "workload_regroup/probe.rs"]
+mod probe;
 #[path = "workload_regroup/structural.rs"]
 mod structural;
 
@@ -129,6 +135,41 @@ fn structural(c: &mut Criterion) {
     }
 }
 
+fn probe(c: &mut Criterion) {
+    let mut group = c.benchmark_group("probe");
+
+    for probe in probe::PROBES {
+        let mut prepared = probe::Prepared::new(probe);
+        for _ in 0..3 {
+            prepared.damage();
+            prepared.run();
+            prepared.check_run();
+        }
+        // Runs on different builds can compare these to make sure they repair the same layout.
+        eprintln!(
+            "probe/{}: damaged layout {:016x}",
+            probe.name(),
+            prepared.damaged_layout()
+        );
+
+        group.bench_function(probe.name(), |bencher| {
+            bencher.iter_custom(|iters| {
+                let mut total = Duration::ZERO;
+                for _ in 0..iters {
+                    prepared.damage();
+
+                    let start = Instant::now();
+                    prepared.run();
+                    total += start.elapsed();
+
+                    prepared.check_run();
+                }
+                total
+            })
+        });
+    }
+}
+
 /// Times `iters` runs of `routine` and returns their sum.
 ///
 /// Each run gets a world `setup` builds before the timer starts. The world is dropped after the
@@ -160,6 +201,7 @@ fn main() {
     clean(&mut criterion);
     workload(&mut criterion);
     structural(&mut criterion);
+    probe(&mut criterion);
 
     criterion.final_summary();
 }

@@ -74,6 +74,7 @@ mod public_transport;
 mod remove;
 /// Stores systems from all workloads and their scheduling.
 pub mod scheduler;
+mod scratch;
 mod seal;
 /// Default component storage.
 pub mod sparse_set;

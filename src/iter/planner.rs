@@ -21,13 +21,13 @@
 //! Both passes list walks the same way, see [`GroupedCandidate::walks`].
 //! Nothing here reads entities, estimates only use group metadata.
 pub(crate) mod regions;
-mod scratch;
 #[cfg(test)]
 mod tests;
 
 use crate::component::Component;
 use crate::iter::mixed::NON_CAPTAIN_FACTOR;
 use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
+use crate::scratch::ScratchVec;
 use crate::sparse_set::{Groups, Ring, SparseSet};
 use crate::storage::StorageId;
 use alloc::boxed::Box;
@@ -37,7 +37,6 @@ use core::cmp::Reverse;
 use core::fmt;
 use core::ops::Range;
 use core::ptr::NonNull;
-use scratch::ScratchVec;
 
 /// What a query node knows about grouping, reported by
 /// [`IntoShiperator::into_shiperator`](crate::iter::IntoShiperator::into_shiperator).

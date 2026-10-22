@@ -117,6 +117,85 @@ fn disjoint_regroups() {
     assert!(evaluated::<C>(&world));
 }
 
+/// Makes the regroup at `index` count its runs in `runs`, asserting it runs on the calling thread.
+fn on_calling_thread(scheduled: &mut ScheduledWorkload, index: usize, runs: &Arc<AtomicUsize>) {
+    let caller = std::thread::current().id();
+    let runs = runs.clone();
+    hook(scheduled, index, move || {
+        assert_eq!(std::thread::current().id(), caller, "ran on a worker");
+        runs.fetch_add(1, Ordering::SeqCst);
+    });
+}
+
+/// Asserts that the clean regroups of two disjoint sets sharing a batch both run on the calling
+/// thread, without waking a worker up for nothing to move.
+#[test]
+fn clean_regroups() {
+    let mut world = two_sets();
+    world.regroup();
+    let workload = Workload::new("").with_system(read_a).with_system(read_c);
+    let mut workload = prepare(workload, &world);
+    assert_eq!(
+        workload.batches.parallel[0],
+        (None, vec![Step::Regroup(0), Step::Regroup(1)])
+    );
+    let runs = Arc::new(AtomicUsize::new(0));
+    on_calling_thread(&mut workload, 0, &runs);
+    on_calling_thread(&mut workload, 1, &runs);
+
+    run(&workload, &world).unwrap();
+
+    assert_eq!(runs.load(Ordering::SeqCst), 2);
+}
+
+/// Asserts that a clean regroup sharing its batch with an unrelated system runs on the calling
+/// thread once the system ran there.
+#[test]
+fn clean_regroup_next_to_system() {
+    let mut world = two_sets();
+    world.regroup();
+    let workload = Workload::new("").with_system(read_a).with_system(|| {});
+    let mut workload = prepare(workload, &world);
+    assert_eq!(
+        workload.batches.parallel[0],
+        (None, vec![System(1), Step::Regroup(0)])
+    );
+    let runs = Arc::new(AtomicUsize::new(0));
+    on_calling_thread(&mut workload, 0, &runs);
+
+    run(&workload, &world).unwrap();
+
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+}
+
+/// Asserts that when a clean set and a set with work to do share a batch, both regroups run
+/// and the set with work to do ends up regrouped.
+#[test]
+fn clean_and_dirty_regroups() {
+    let mut world = two_sets();
+    world.regroup();
+    world.add_entity((C, D));
+    let workload = Workload::new("").with_system(read_a).with_system(read_c);
+    let mut workload = prepare(workload, &world);
+    assert_eq!(
+        workload.batches.parallel[0],
+        (None, vec![Step::Regroup(0), Step::Regroup(1)])
+    );
+    let runs = Arc::new(AtomicUsize::new(0));
+    for index in 0..2 {
+        let runs = runs.clone();
+        hook(&mut workload, index, move || {
+            runs.fetch_add(1, Ordering::SeqCst);
+        });
+    }
+
+    run(&workload, &world).unwrap();
+
+    assert_eq!(runs.load(Ordering::SeqCst), 2);
+    assert!(evaluated::<A>(&world));
+    assert!(evaluated::<C>(&world));
+}
+
 /// Asserts that systems writing different members of a set run together,
 /// and a single regroup takes care of both before they're read.
 #[test]

@@ -9,13 +9,13 @@
 //! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
 //! drives every segment through the single child leading to it, the rest of the query is looked up.
 
-use super::scratch::ScratchVec;
 use super::{Alternative, GroupedCandidate, Member, Route, Selection, Walk, mask_children};
 use crate::iter::plan::{
     Coverage, CoverageSpan, NodeKind, NodeState, Plan, SegmentDescriptor, SegmentEntry, SegmentRow,
     SegmentSchedule,
 };
 use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
+use crate::scratch::ScratchVec;
 use crate::sparse_set::Ring;
 use alloc::vec;
 use alloc::vec::Vec;

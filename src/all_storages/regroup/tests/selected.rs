@@ -12,7 +12,7 @@ fn all_sorted() {
 
     let selected = Selected::all(storages);
 
-    assert_eq!(selected.ids(), expected);
+    assert_eq!(selected.ids().collect::<Vec<_>>(), expected);
 }
 
 /// Asserts that reaching a storage that isn't selected panics instead of reaching it.
