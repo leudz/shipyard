@@ -41,6 +41,8 @@ pub(crate) struct Graphics {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) config: wgpu::SurfaceConfiguration,
+    /// Format we draw with, an sRGB view of the surface when its own format isn't.
+    pub(crate) render_format: wgpu::TextureFormat,
     /// Last non zero window size, zero until the surface is configured.
     pub(crate) size: PhysicalSize<u32>,
     pub(crate) render_pipeline: wgpu::RenderPipeline,
@@ -113,17 +115,38 @@ pub(crate) async fn init_graphics(
         .await
         .expect("Couldn't create the GPU device");
 
-    let supported_format = surface.get_capabilities(&adapter).formats[0];
+    // Sampling the sRGB sprite gives linear colors, the target has to encode them back to sRGB
+    // or the bunnies come out darker.
+    // Native and WebGL2 surfaces offer sRGB formats. WebGPU canvases don't,
+    // there we keep the canvas format and draw through an sRGB view of it.
+    let capabilities = surface.get_capabilities(&adapter);
+    let surface_format = capabilities
+        .formats
+        .iter()
+        .copied()
+        .find(|format| format.is_srgb())
+        .unwrap_or(capabilities.formats[0]);
+    let can_view_as_srgb = adapter
+        .get_downlevel_capabilities()
+        .flags
+        .contains(wgpu::DownlevelFlags::SURFACE_VIEW_FORMATS);
+    let view_formats = if !surface_format.is_srgb() && can_view_as_srgb {
+        vec![surface_format.add_srgb_suffix()]
+    } else {
+        vec![]
+    };
+    let render_format = view_formats.first().copied().unwrap_or(surface_format);
+
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: supported_format,
+        format: surface_format,
         color_space: wgpu::SurfaceColorSpace::Auto,
         width: 0,
         height: 0,
         present_mode: wgpu::PresentMode::Fifo,
         desired_maximum_frame_latency: 2,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
-        view_formats: vec![],
+        view_formats,
     };
 
     let screen_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -269,7 +292,7 @@ pub(crate) async fn init_graphics(
             entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
-                format: config.format,
+                format: render_format,
                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
@@ -314,7 +337,7 @@ pub(crate) async fn init_graphics(
 
     let egui_render_pass = egui_wgpu::Renderer::new(
         &device,
-        supported_format,
+        render_format,
         egui_wgpu::RendererOptions::default(),
     );
 
@@ -323,6 +346,7 @@ pub(crate) async fn init_graphics(
         device,
         queue,
         config,
+        render_format,
         size: PhysicalSize::new(0, 0),
         render_pipeline,
         vertex_buffer,
@@ -388,9 +412,10 @@ pub(crate) fn render(
         | wgpu::CurrentSurfaceTexture::Validation => return None,
     };
 
-    let view = output
-        .texture
-        .create_view(&wgpu::TextureViewDescriptor::default());
+    let view = output.texture.create_view(&wgpu::TextureViewDescriptor {
+        format: Some(graphics.render_format),
+        ..Default::default()
+    });
 
     // egui frame
     let mut egui_output = graphics.context.run_pass(egui_input, |context| {
