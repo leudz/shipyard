@@ -29,7 +29,8 @@ nanorand = { version = "0.7.0", default-features = false, features = [
     "tls",
 ] }
 pollster = "0.3.0"
-shipyard = "0.6.1"
+# No `parallel`: the demo runs a single system and rayon has no worker threads in the browser.
+shipyard = { path = "..", default-features = false, features = ["proc", "std"] }
 wgpu = "0.15.1"
 winit = "0.28.3"
 

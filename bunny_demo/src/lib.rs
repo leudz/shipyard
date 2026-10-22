@@ -1,7 +1,9 @@
 mod bunny_state;
 mod graphics;
 
-use bunny_state::{add_bunnies, simulate_bunnies, update_bunnies_gpu, BunnyState};
+use bunny_state::{
+    add_bunnies, simulate_bunnies, update_bunnies_gpu, BunnyPosition, BunnyState, Vel,
+};
 use graphics::{init_graphics, render, reset_window, resize_window, FrameTime};
 use shipyard::{UniqueViewMut, World};
 #[cfg(not(target_arch = "wasm32"))]
@@ -57,7 +59,9 @@ pub async fn run() {
             .expect("Couldn't append canvas to document body.");
     }
 
-    let world = World::new();
+    let world = World::builder()
+        .with_group::<(BunnyPosition, Vel)>()
+        .build();
 
     world.add_unique(FrameTime(0.0));
     world.add_unique(BunnyState {
@@ -65,6 +69,7 @@ pub async fn run() {
     });
 
     init_graphics(&world, &window, context).await;
+    world.add_workload(|| simulate_bunnies);
     world.run(add_bunnies);
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -154,7 +159,9 @@ pub async fn run() {
                 frame_count = 0;
             }
 
-            world.run(simulate_bunnies);
+            world
+                .run_default_workload()
+                .expect("Couldn't run the simulation workload");
             world.run(update_bunnies_gpu);
 
             match world.run(render) {
