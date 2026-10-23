@@ -369,7 +369,7 @@ impl AllStorages {
     /// ### Errors
     ///
     /// - `T` storage borrow failed.
-    /// - `T` storage did not exist.
+    /// - `T` storage did not exist, or was registered as a custom storage.
     ///
     /// ### Example
     ///
@@ -391,14 +391,9 @@ impl AllStorages {
         {
             let mut storages = self.storages.write();
 
-            // Uniques first, then a unique registered through a custom path.
-            let map = if storages.uniques.contains_key(&storage_id) {
-                &mut storages.uniques
-            } else {
-                &mut storages.components_and_custom
-            };
-
-            let storage = if let Entry::Occupied(entry) = map.entry(storage_id) {
+            // Only uniques can be removed. A unique registered through a custom path lives with the
+            // components and custom storages, whose entries are never removed, so it counts as missing.
+            let storage = if let Entry::Occupied(entry) = storages.uniques.entry(storage_id) {
                 // `.err()` to avoid borrowing `entry` in the `Ok` case
                 // SAFE: `entry` is in the registry and we hold its write lock, so the `SBox` points
                 // to a live boxed `AtomicRefCell`. The borrow guard is dropped right away.

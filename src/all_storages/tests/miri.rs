@@ -1813,8 +1813,8 @@ fn replace_custom_path_unique() {
     assert!(!registry.uniques.contains_key(&id));
 }
 
-/// Asserts that `remove_unique` removes a unique registered through a custom path and hands its
-/// value over, leaving no entry for its id.
+/// Asserts that `remove_unique` refuses a unique registered through a custom path with
+/// `MissingUnique`, leaving it in the component and custom map with its value, undropped.
 #[test]
 fn remove_custom_path_unique() {
     let counter = Arc::new(AtomicUsize::new(0));
@@ -1825,11 +1825,22 @@ fn remove_custom_path_unique() {
         .unwrap();
     let all_storages = world.all_storages().unwrap();
 
-    let unique = all_storages.remove_unique::<Counted>().unwrap();
+    let result = all_storages.remove_unique::<Counted>();
 
-    assert_eq!(unique.values, [0]);
+    assert!(matches!(result, Err(error::UniqueRemove::MissingUnique(_))));
     assert_eq!(drops(&counter), 0);
-    assert!(all_storages.storages.read().any(id).is_none());
+    assert!(
+        all_storages
+            .storages
+            .read()
+            .components_and_custom
+            .contains_key(&id)
+    );
+    drop(all_storages);
+    assert_eq!(
+        world.borrow::<UniqueView<'_, Counted>>().unwrap().values,
+        [0]
+    );
 }
 
 /// Asserts that replacing a foreign custom storage registered under a unique's id moves the id

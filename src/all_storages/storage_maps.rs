@@ -10,6 +10,10 @@ use crate::storage::{SBox, StorageId};
 /// - the unique APIs (`add_unique*` and the views that call them) insert in `uniques`
 /// - everything else, components and custom storages, goes in `components_and_custom`,
 ///   including a unique storage registered through a custom path
+///
+/// `remove_unique` only removes from `uniques`. An entry only leaves `components_and_custom` when
+/// a unique takes over its id: `add_unique` replacing a foreign storage, or `clone_storages_to`
+/// replacing it with a unique's clone. Both move the id to `uniques`.
 pub(crate) struct StorageMaps {
     pub(crate) components_and_custom: ShipHashMap<StorageId, SBox>,
     pub(crate) uniques: ShipHashMap<StorageId, SBox>,

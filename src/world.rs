@@ -315,7 +315,7 @@ impl World {
     ///
     /// - [`AllStorages`] borrow failed.
     /// - `Unique<T>` storage borrow failed.
-    /// - `Unique<T>` storage did not exist.
+    /// - `Unique<T>` storage did not exist, or was registered as a custom storage.
     ///
     /// ### Example
     ///
