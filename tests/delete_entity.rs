@@ -111,3 +111,28 @@ fn on_deletion() {
         EntityId::new_from_index_and_gen(0, 0).inner()
     );
 }
+
+/// Asserts that deleting an entity calls its component's removal callback once, with the entity and
+/// the component, and that deleting an entity without that component doesn't call it.
+#[test]
+fn on_removal() {
+    use std::sync::{Arc, Mutex};
+
+    let mut world = World::new();
+    let with = world.add_entity(U32(7));
+    let without = world.add_entity(());
+
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let callback_calls = calls.clone();
+    world
+        .borrow::<ViewMut<U32>>()
+        .unwrap()
+        .on_removal(move |entity, component| {
+            callback_calls.lock().unwrap().push((entity, component.0));
+        });
+
+    assert!(world.delete_entity(without));
+    assert!(world.delete_entity(with));
+
+    assert_eq!(*calls.lock().unwrap(), vec![(with, 7)]);
+}

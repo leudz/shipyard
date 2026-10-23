@@ -11,7 +11,7 @@ use core::ops::Range;
 impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
     #[inline]
     fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
-        self.dyn_delete(entity, current);
+        self.strip_delete(entity, current);
     }
     #[inline]
     fn clear(&mut self, current: TrackingTimestamp) {
@@ -135,7 +135,7 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
 impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
     #[inline]
     fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
-        self.dyn_delete(entity, current);
+        self.strip_delete(entity, current);
     }
     #[inline]
     fn clear(&mut self, current: TrackingTimestamp) {
@@ -258,7 +258,7 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
 impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
     #[inline]
     fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
-        self.dyn_delete(entity, current);
+        self.strip_delete(entity, current);
     }
     #[inline]
     fn clear(&mut self, current: TrackingTimestamp) {

@@ -366,7 +366,7 @@ impl<T: Component> SparseSet<T> {
     /// Same as `delete` but checks tracking at runtime.
     #[inline]
     pub(crate) fn dyn_delete(&mut self, entity: EntityId, current: TrackingTimestamp) -> bool {
-        if let Some(component) = self.actual_remove(entity) {
+        if let Some(component) = self.find_and_remove(entity) {
             if self.is_tracking_deletion() {
                 self.deletion_data.push((entity, current, component));
             }
@@ -380,7 +380,7 @@ impl<T: Component> SparseSet<T> {
     /// Same as `remove` but checks tracking at runtime.
     #[inline]
     pub(crate) fn dyn_remove(&mut self, entity: EntityId, current: TrackingTimestamp) -> Option<T> {
-        let component = self.actual_remove(entity);
+        let component = self.find_and_remove(entity);
 
         if component.is_some() && self.is_tracking_removal() {
             self.removal_data.push((entity, current));
@@ -389,52 +389,129 @@ impl<T: Component> SparseSet<T> {
         component
     }
 
+    /// Same as `dyn_delete`, for entity deletion through [`Storage::delete`].
+    ///
+    /// Entity deletion asks every storage, and most don't hold the entity. This function is small enough to
+    /// inline, so they answer without any call. Only removing a component calls out of line.
     #[inline]
-    pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
-        let sparse_entity = self.sparse.get(entity)?;
+    pub(crate) fn strip_delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
+        let Some(sparse_entity) = self.removable_entry(entity) else {
+            return;
+        };
 
-        if entity.generation() >= sparse_entity.generation() {
-            // In a grouped storage, the component first moves to the unevaluated region.
-            // The swap-remove below then only moves the storage's last component, which is unevaluated too.
-            // Its sparse entry is still live here, so the moves keep it up to date.
-            let index = self.extract_to_unevaluated(sparse_entity.uindex());
+        // SAFE: `removable_entry` read `sparse_entity` from `entity`'s sparse slot, so its page is allocated,
+        // and it only returns live entries.
+        unsafe { self.delete_found(entity, sparse_entity, current) };
+    }
 
-            // SAFE: `sparse.get` found an entry for `entity`, so its sparse page is allocated.
+    /// Finds `entity`'s component and removes it, without recording removal or deletion tracking.
+    ///
+    /// [`dyn_remove`](Self::dyn_remove) and [`dyn_delete`](Self::dyn_delete) add the tracking.
+    // Kept out of line, LLVM would otherwise inline it into `dyn_remove`, which measured slower
+    // for `World::remove`.
+    #[inline(never)]
+    pub(crate) fn find_and_remove(&mut self, entity: EntityId) -> Option<T> {
+        let Some(sparse_entity) = self.removable_entry(entity) else {
+            return None;
+        };
+
+        // SAFE: `removable_entry` read `sparse_entity` from `entity`'s sparse slot, so its page is allocated,
+        // and it only returns live entries.
+        unsafe { self.remove_found(entity, sparse_entity) }
+    }
+
+    /// Returns `entity`'s sparse entry if `entity` can remove the component it points to.
+    ///
+    /// The entry is live: it points to a component of this storage.
+    #[inline]
+    fn removable_entry(&self, entity: EntityId) -> Option<EntityId> {
+        let Some(sparse_entity) = self.sparse.get(entity) else {
+            return None;
+        };
+
+        // An older handle can't remove a newer entity's component.
+        // Dead slots hold `EntityId::dead()`, with the maximum generation, so they stop here too.
+        if entity.generation() < sparse_entity.generation() {
+            return None;
+        }
+
+        Some(sparse_entity)
+    }
+
+    /// Same as [`remove_found`](Self::remove_found), recording the deletion if this storage tracks them.
+    ///
+    /// ### Safety
+    ///
+    /// `entity`'s sparse page must be allocated, and `sparse_entity` must be the live entry its slot holds.
+    // Kept out of line for `strip_delete`. Otherwise LLVM inlines it, `strip_delete` becomes too big
+    // to inline in turn, and every storage pays a call again.
+    #[inline(never)]
+    unsafe fn delete_found(
+        &mut self,
+        entity: EntityId,
+        sparse_entity: EntityId,
+        current: TrackingTimestamp,
+    ) {
+        // SAFE: the caller upholds `remove_found`'s requirements, they're the same as ours.
+        let component = unsafe { self.remove_found(entity, sparse_entity) };
+
+        if let Some(component) = component
+            && self.is_tracking_deletion()
+        {
+            self.deletion_data.push((entity, current, component));
+        }
+    }
+
+    /// Swap-removes the component `sparse_entity` points to, `entity`'s sparse entry.
+    ///
+    /// `entity` should be at least as new as `sparse_entity`. With a newer generation, the stale component
+    /// is removed but not handed back, and the removal callback isn't called.
+    ///
+    /// ### Safety
+    ///
+    /// `entity`'s sparse page must be allocated, and `sparse_entity` must be the live entry its slot holds.
+    // Always inlined so `find_and_remove` and `delete_found` each hold the whole removal,
+    // removing or deleting a component then takes a single call.
+    #[inline(always)]
+    unsafe fn remove_found(&mut self, entity: EntityId, sparse_entity: EntityId) -> Option<T> {
+        // In a grouped storage, the component first moves to the unevaluated region.
+        // The swap-remove below then only moves the storage's last component, which is unevaluated too.
+        // Its sparse entry is still live here, so the moves keep it up to date.
+        let index = self.extract_to_unevaluated(sparse_entity.uindex());
+
+        // SAFE: the caller guarantees `entity`'s sparse page is allocated.
+        unsafe {
+            *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
+        }
+
+        self.dense.swap_remove(index);
+        if self.is_tracking_insertion() {
+            self.insertion_data.swap_remove(index);
+        }
+        if self.is_tracking_modification() {
+            self.modification_data.swap_remove(index);
+        }
+        let component = self.data.swap_remove(index);
+
+        // The SparseSet could now be empty or the removed component could have been the last one
+        if index < self.dense.len() {
+            // SAFE: `index` is in bounds, and `last` was read from `dense`
+            // so it owns a component and its sparse page is allocated.
             unsafe {
-                *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
+                let last = *self.dense.get_unchecked(index);
+                self.sparse.get_mut_unchecked(last).set_index(index as u64);
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        self.groups.assert_invariants(self.dense.len());
+
+        if entity.generation() == sparse_entity.generation() {
+            if let Some(on_remove) = &mut self.on_removal {
+                on_remove(entity, &component);
             }
 
-            self.dense.swap_remove(index);
-            if self.is_tracking_insertion() {
-                self.insertion_data.swap_remove(index);
-            }
-            if self.is_tracking_modification() {
-                self.modification_data.swap_remove(index);
-            }
-            let component = self.data.swap_remove(index);
-
-            // The SparseSet could now be empty or the removed component could have been the last one
-            if index < self.dense.len() {
-                // SAFE: `index` is in bounds, and `last` was read from `dense`
-                // so it owns a component and its sparse page is allocated.
-                unsafe {
-                    let last = *self.dense.get_unchecked(index);
-                    self.sparse.get_mut_unchecked(last).set_index(index as u64);
-                }
-            }
-
-            #[cfg(debug_assertions)]
-            self.groups.assert_invariants(self.dense.len());
-
-            if entity.generation() == sparse_entity.generation() {
-                if let Some(on_remove) = &mut self.on_removal {
-                    on_remove(entity, &component);
-                }
-
-                Some(component)
-            } else {
-                None
-            }
+            Some(component)
         } else {
             None
         }
@@ -1162,7 +1239,7 @@ impl<T: Clone + Component> SparseSet<T> {
 impl<T: Component + Send + Sync> Storage for SparseSet<T> {
     #[inline]
     fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
-        self.dyn_delete(entity, current);
+        self.strip_delete(entity, current);
     }
     #[inline]
     fn clear(&mut self, current: TrackingTimestamp) {

@@ -58,6 +58,10 @@ harness = false
 name = "workload_regroup"
 harness = false
 
+[[bench]]
+name = "entity_deletion"
+harness = false
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
