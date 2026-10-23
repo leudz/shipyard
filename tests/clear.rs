@@ -1,6 +1,7 @@
 use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
+use std::sync::{Arc, Mutex};
 
 #[allow(unused)]
 struct U32(u32);
@@ -123,4 +124,21 @@ fn inserted() {
     world.run_default_workload().unwrap();
     world.run_default_workload().unwrap();
     world.run_default_workload().unwrap();
+}
+
+/// Asserts that `clear` deletes every entity through the world's deletion callback.
+#[test]
+fn clear_on_deletion() {
+    let mut world = World::new();
+    let deleted = Arc::new(Mutex::new(Vec::new()));
+    let recorder = deleted.clone();
+    world.on_deletion(move |entity| recorder.lock().unwrap().push(entity));
+    let entity0 = world.add_entity(());
+    let entity1 = world.add_entity(());
+
+    world.borrow::<AllStoragesViewMut>().unwrap().clear();
+
+    let mut deleted = deleted.lock().unwrap().clone();
+    deleted.sort_unstable();
+    assert_eq!(deleted, [entity0, entity1]);
 }

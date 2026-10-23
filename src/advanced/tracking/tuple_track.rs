@@ -23,35 +23,35 @@ impl<T: Send + Sync + Component> TupleTrack for T {
     #[inline]
     fn track_insertion(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
             .track_insertion();
     }
 
     #[inline]
     fn track_modification(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
             .track_modification();
     }
 
     #[inline]
     fn track_deletion(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
             .track_deletion();
     }
 
     #[inline]
     fn track_removal(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
             .track_removal();
     }
 
     #[inline]
     fn track_all(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
             .track_all();
     }
 }
@@ -63,7 +63,7 @@ macro_rules! impl_track {
             fn track_insertion(all_storages: &mut AllStorages) {
                 $(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
+                        .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
                         .track_insertion();
                 )+
             }
@@ -71,7 +71,7 @@ macro_rules! impl_track {
             fn track_modification(all_storages: &mut AllStorages) {
                 $(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
+                        .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
                         .track_modification();
                 )+
             }
@@ -79,7 +79,7 @@ macro_rules! impl_track {
             fn track_deletion(all_storages: &mut AllStorages) {
                 $(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
+                        .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
                         .track_deletion();
                 )+
             }
@@ -87,7 +87,7 @@ macro_rules! impl_track {
             fn track_removal(all_storages: &mut AllStorages) {
                 $(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
+                        .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
                         .track_removal();
                 )+
             }
@@ -95,7 +95,7 @@ macro_rules! impl_track {
             fn track_all(all_storages: &mut AllStorages) {
                 $(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
+                        .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
                         .track_all();
                 )+
             }

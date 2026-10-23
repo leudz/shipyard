@@ -16,7 +16,7 @@ pub use non_send_sync::NonSendSync;
 pub use non_sync::NonSync;
 pub use world_borrow::WorldBorrow;
 
-use crate::all_storages::{AllStorages, CustomStorageAccess};
+use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, ARefMut, SharedBorrow};
 use crate::component::{Component, Unique};
 use crate::error;
@@ -179,7 +179,7 @@ where
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
+        let view = all_storages.component_storage_or_insert(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -203,7 +203,8 @@ where
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_or_insert_non_send(|| NonSend(SparseSet::new()))?;
+        let view =
+            all_storages.component_storage_or_insert_non_send(|| NonSend(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -229,7 +230,8 @@ where
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_or_insert_non_sync(|| NonSync(SparseSet::new()))?;
+        let view =
+            all_storages.component_storage_or_insert_non_sync(|| NonSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -256,7 +258,7 @@ where
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages
-            .custom_storage_or_insert_non_send_sync(|| NonSendSync(SparseSet::new()))?;
+            .component_storage_or_insert_non_send_sync(|| NonSendSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -281,7 +283,7 @@ where
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
+        let view = all_storages.component_storage_or_insert_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -315,7 +317,7 @@ where
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view =
-            all_storages.custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::new()))?;
+            all_storages.component_storage_or_insert_non_send_mut(|| NonSend(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -349,7 +351,7 @@ where
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view =
-            all_storages.custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::new()))?;
+            all_storages.component_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -383,7 +385,7 @@ where
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages
-            .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::new()))?;
+            .component_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -412,7 +414,7 @@ impl<T: Send + Sync + Unique> Borrow for UniqueView<'_, T> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage()?;
+        let view = all_storages.unique_storage()?;
 
         let (unique, borrow) = unsafe { ARef::destructure(view) };
 
@@ -438,7 +440,7 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
         let view = ARef::map(view, |storage| {
             storage
                 .as_any()
@@ -470,7 +472,7 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
         let view = ARef::map(view, |storage| {
             storage
                 .as_any()
@@ -502,7 +504,7 @@ impl<T: Unique> Borrow for NonSendSync<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
         let view = ARef::map(view, |storage| {
             storage
                 .as_any()
@@ -533,7 +535,7 @@ impl<T: Send + Sync + Unique> Borrow for UniqueViewMut<'_, T> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
+        let view = all_storages.unique_storage_mut::<UniqueStorage<T>>()?;
 
         let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -559,7 +561,7 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
         let view = ARefMut::map(view, |storage| {
             storage
                 .as_any_mut()
@@ -591,7 +593,7 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
         let view = ARefMut::map(view, |storage| {
             storage
                 .as_any_mut()
@@ -623,7 +625,7 @@ impl<T: Unique> Borrow for NonSendSync<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
         let view = ARefMut::map(view, |storage| {
             storage
                 .as_any_mut()

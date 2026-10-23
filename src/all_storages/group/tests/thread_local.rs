@@ -62,9 +62,9 @@ fn builder_wrappers() {
     drop((b, c, d));
 
     let storages = world.all_storages.get_mut().storages.get_mut();
-    assert!(!storages.contains_key(&id::<B>()));
-    assert!(!storages.contains_key(&id::<C>()));
-    assert!(!storages.contains_key(&id::<D>()));
+    assert!(storages.any(id::<B>()).is_none());
+    assert!(storages.any(id::<C>()).is_none());
+    assert!(storages.any(id::<D>()).is_none());
 }
 
 /// Asserts that each thread-local view tells the scheduler the id of the storage it borrows,

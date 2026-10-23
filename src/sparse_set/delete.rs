@@ -18,7 +18,7 @@ impl<T: Send + Sync + Component> TupleDelete for T {
         let current = all_storages.get_current();
 
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
             .dyn_delete(entity, current)
     }
 }
@@ -31,7 +31,7 @@ macro_rules! impl_delete_component {
 
                 $(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
+                        .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
                         .dyn_delete(entity, current)
                 )||+
             }

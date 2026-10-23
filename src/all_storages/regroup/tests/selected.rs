@@ -6,7 +6,7 @@ fn all_sorted() {
     let mut world = World::builder_for_test().with_group::<(A, B)>().build();
     world.add_entity(C);
     let mut all_storages = world.all_storages_mut().unwrap();
-    let storages = all_storages.storages.get_mut();
+    let storages = &mut all_storages.storages.get_mut().components_and_custom;
     let mut expected: Vec<StorageId> = storages.keys().copied().collect();
     expected.sort_unstable();
 
@@ -21,7 +21,7 @@ fn all_sorted() {
 fn unselected() {
     let world = World::builder_for_test().with_group::<(A, B)>().build();
     let mut all_storages = world.all_storages_mut().unwrap();
-    let selected = Selected::all(all_storages.storages.get_mut());
+    let selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
 
     selected.get(id::<C>());
 }

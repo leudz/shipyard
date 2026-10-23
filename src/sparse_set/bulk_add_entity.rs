@@ -1,6 +1,5 @@
-use crate::all_storages::{AllStorages, CustomStorageAccess};
+use crate::all_storages::{AllStorages, component_storage_or_insert_mut_in};
 use crate::component::Component;
-use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
@@ -44,7 +43,7 @@ impl BulkInsert for () {
         let iter = iter.into_iter();
         let len = iter.size_hint().0;
 
-        let entities = all_storages.exclusive_storage_mut::<Entities>().unwrap();
+        let entities = all_storages.entities.get_mut();
         let entities_len = entities.data.len();
 
         entities.bulk_generate(len);
@@ -65,10 +64,12 @@ impl<T: Send + Sync + Component> BulkInsert for T {
     ) -> BulkEntityIter<'_> {
         let iter = iter.into_iter();
         let current = all_storages.get_current();
-        let mut entities = all_storages.entities_mut().unwrap();
-        let mut sparse_set = all_storages
-            .custom_storage_or_insert_mut(SparseSet::<T>::new)
-            .unwrap();
+        // We borrow the fields separately, so the entities don't need a runtime borrow next to
+        // the sparse set's.
+        let entities = all_storages.entities.get_mut();
+        let mut sparse_set =
+            component_storage_or_insert_mut_in(&all_storages.storages, SparseSet::<T>::new)
+                .unwrap();
 
         // add components to the storage
         sparse_set.data.extend(iter);
@@ -115,10 +116,6 @@ impl<T: Send + Sync + Component> BulkInsert for T {
             }
         }
 
-        drop((entities, sparse_set));
-
-        let entities = all_storages.exclusive_storage_mut::<Entities>().unwrap();
-
         BulkEntityIter {
             iter: entities.data[entities_len..].iter().copied(),
             slice: &entities.data[entities_len..],
@@ -143,10 +140,12 @@ macro_rules! impl_bulk_insert {
                 let iter = iter.into_iter();
                 let size_hint = iter.size_hint().0;
                 let current = all_storages.get_current();
-                let mut entities = all_storages.entities_mut().unwrap();
-                let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1>::new).unwrap();
+                // We borrow the fields separately, so the entities don't need a runtime borrow next
+                // to the sparse sets'.
+                let entities = all_storages.entities.get_mut();
+                let mut $sparse_set1 = component_storage_or_insert_mut_in(&all_storages.storages, SparseSet::<$type1>::new).unwrap();
                 $(
-                    let mut $sparse_set = all_storages.custom_storage_or_insert_mut(SparseSet::<$type>::new).unwrap();
+                    let mut $sparse_set = component_storage_or_insert_mut_in(&all_storages.storages, SparseSet::<$type>::new).unwrap();
                 )*
 
                 $sparse_set1.reserve(size_hint);
@@ -222,10 +221,6 @@ macro_rules! impl_bulk_insert {
                         }
                     }
                 )*
-
-                drop((entities, $sparse_set1, $($sparse_set),*));
-
-                let entities = all_storages.exclusive_storage_mut::<Entities>().unwrap();
 
                 BulkEntityIter {
                     iter: entities.data[entities_len..].iter().copied(),

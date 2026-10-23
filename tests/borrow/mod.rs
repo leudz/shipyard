@@ -144,6 +144,34 @@ fn all_storages_double_borrow() {
     all_storages.borrow::<ViewMut<U32>>().unwrap();
 }
 
+/// Asserts that an alive `EntitiesView` still blocks borrowing all storages exclusively.
+#[test]
+fn entities_block_all_storages() {
+    let world = World::new();
+
+    let entities = world.borrow::<EntitiesView>().unwrap();
+
+    assert_eq!(
+        world.borrow::<AllStoragesViewMut>().err(),
+        Some(error::GetStorage::AllStoragesBorrow(error::Borrow::Unique))
+    );
+    drop(entities);
+}
+
+/// Asserts that an alive `AllStoragesViewMut` still blocks borrowing `EntitiesView` from the world.
+#[test]
+fn all_storages_block_entities() {
+    let world = World::new();
+
+    let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+
+    assert_eq!(
+        world.borrow::<EntitiesView>().err(),
+        Some(error::GetStorage::AllStoragesBorrow(error::Borrow::Shared))
+    );
+    drop(all_storages);
+}
+
 #[test]
 fn all_storages_option_borrow() {
     let world = World::new();

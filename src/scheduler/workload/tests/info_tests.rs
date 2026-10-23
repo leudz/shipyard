@@ -7,6 +7,7 @@ use crate::scheduler::info::{
 };
 use crate::scheduler::system_modificator::SystemModificator;
 use crate::sparse_set::SparseSet;
+use crate::storage::StorageId;
 use crate::views::{View, ViewMut};
 use crate::world::World;
 use alloc::format;

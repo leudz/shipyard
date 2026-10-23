@@ -54,7 +54,7 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
         other_current: TrackingTimestamp,
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
-            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_send_mut(
+            let other_sparse_set = other_all_storages.exclusive_component_or_insert_non_send_mut(
                 StorageId::of::<NonSend<SparseSet<T>>>(),
                 || NonSend(SparseSet::<T>::new()),
             );
@@ -100,7 +100,7 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
         if let Some(clone) = &self.clone
             && let Some(component) = self.private_get(from)
         {
-            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_send_mut(
+            let other_sparse_set = other_all_storages.exclusive_component_or_insert_non_send_mut(
                 StorageId::of::<NonSend<SparseSet<T>>>(),
                 || NonSend(SparseSet::<T>::new()),
             );
@@ -177,7 +177,7 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
         other_current: TrackingTimestamp,
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
-            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_sync_mut(
+            let other_sparse_set = other_all_storages.exclusive_component_or_insert_non_sync_mut(
                 StorageId::of::<NonSync<SparseSet<T>>>(),
                 || NonSync(SparseSet::<T>::new()),
             );
@@ -223,7 +223,7 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
         if let Some(clone) = &self.clone
             && let Some(component) = self.private_get(from)
         {
-            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_sync_mut(
+            let other_sparse_set = other_all_storages.exclusive_component_or_insert_non_sync_mut(
                 StorageId::of::<NonSync<SparseSet<T>>>(),
                 || NonSync(SparseSet::<T>::new()),
             );
@@ -301,7 +301,7 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
             let other_sparse_set = other_all_storages
-                .exclusive_storage_or_insert_non_send_sync_mut(
+                .exclusive_component_or_insert_non_send_sync_mut(
                     StorageId::of::<NonSendSync<SparseSet<T>>>(),
                     || NonSendSync(SparseSet::<T>::new()),
                 );
@@ -349,7 +349,7 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
             && let Some(component) = self.private_get(from)
         {
             let other_sparse_set = other_all_storages
-                .exclusive_storage_or_insert_non_send_sync_mut(
+                .exclusive_component_or_insert_non_send_sync_mut(
                     StorageId::of::<NonSendSync<SparseSet<T>>>(),
                     || NonSendSync(SparseSet::<T>::new()),
                 );

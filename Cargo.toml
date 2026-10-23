@@ -62,6 +62,10 @@ harness = false
 name = "entity_deletion"
 harness = false
 
+[[bench]]
+name = "storage_access"
+harness = false
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

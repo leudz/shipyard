@@ -8,18 +8,24 @@ use crate::all_storages::CustomStorageAccess;
 #[cfg(all(feature = "std", feature = "thread_local"))]
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::{Component, Unique};
+use crate::entities::Entities;
 use crate::entity_id::EntityId;
-#[cfg(feature = "std")]
 use crate::error;
 use crate::get::Get;
+#[cfg(feature = "std")]
+use crate::public_transport::ShipyardRwLock;
+use crate::scheduler::Workload;
 use crate::sparse_set::SparseSet;
-use crate::storage::{Storage, StorageId};
+use crate::storage::{SBoxBuilder, Storage, StorageId};
 use crate::track;
+use crate::tracking::TrackingTimestamp;
 use crate::unique::UniqueStorage;
 #[cfg(feature = "std")]
 use crate::views::UniqueViewMut;
-use crate::views::{UniqueView, View};
+use crate::views::{EntitiesView, EntitiesViewMut, UniqueView, View};
 use crate::world::World;
+#[cfg(feature = "std")]
+use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use alloc::format;
 #[cfg(feature = "std")]
@@ -32,6 +38,8 @@ use core::any::type_name;
 #[cfg(feature = "std")]
 use core::panic::AssertUnwindSafe;
 use core::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(feature = "std")]
+use lock_api::RawRwLock as _;
 
 /// Heap-owning value that counts how many times it's dropped, clones included.
 ///
@@ -110,16 +118,64 @@ fn registry_growth() {
         let first = all_storages
             .custom_storage_or_insert_by_id(StorageId::Custom(0), || Counted::new(&drops))
             .unwrap();
-        let capacity = all_storages.storages.read().capacity();
+        let capacity = all_storages
+            .storages
+            .read()
+            .components_and_custom
+            .capacity();
 
         for id in 1..=8 {
             let _ = all_storages
                 .custom_storage_or_insert_by_id(StorageId::Custom(id), || Counted::new(&drops))
                 .unwrap();
         }
-        assert!(all_storages.storages.read().capacity() > capacity);
+        assert!(
+            all_storages
+                .storages
+                .read()
+                .components_and_custom
+                .capacity()
+                > capacity
+        );
 
         assert_eq!(first.values, [1, 2]);
+    }
+
+    drop(world);
+    assert_eq!(drops.load(Ordering::Relaxed), 9);
+}
+
+/// A unique type per `N`, so a world can hold many uniques.
+struct Numbered<const N: usize>(Counted);
+
+impl<const N: usize> Unique for Numbered<N> {}
+
+/// Asserts that a unique borrowed through its view stays valid while adding more uniques makes
+/// the unique map reallocate. Every unique is dropped exactly once with the world.
+#[test]
+fn unique_registry_growth() {
+    let drops = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+
+    {
+        let all_storages = world.all_storages().unwrap();
+        all_storages.add_unique(Numbered::<0>(Counted::new(&drops)));
+        let first = all_storages
+            .borrow::<UniqueView<'_, Numbered<0>>>()
+            .unwrap();
+        let capacity = all_storages.storages.read().uniques.capacity();
+
+        all_storages.add_unique(Numbered::<1>(Counted::new(&drops)));
+        all_storages.add_unique(Numbered::<2>(Counted::new(&drops)));
+        all_storages.add_unique(Numbered::<3>(Counted::new(&drops)));
+        all_storages.add_unique(Numbered::<4>(Counted::new(&drops)));
+        all_storages.add_unique(Numbered::<5>(Counted::new(&drops)));
+        all_storages.add_unique(Numbered::<6>(Counted::new(&drops)));
+        all_storages.add_unique(Numbered::<7>(Counted::new(&drops)));
+        all_storages.add_unique(Numbered::<8>(Counted::new(&drops)));
+        assert!(all_storages.storages.read().uniques.capacity() > capacity);
+
+        assert_eq!(first.0.values, [1, 2]);
     }
 
     drop(world);
@@ -1422,4 +1478,558 @@ fn replace_foreign_wrapped() {
 
     drop(world);
     assert_eq!(drops(&counter), 6);
+}
+
+#[cfg(feature = "std")]
+std::thread_local! {
+    /// How many times this thread acquired a `CountingLock`, in either mode.
+    static ACQUISITIONS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+}
+
+/// A parking_lot lock that counts how many times each thread acquires it.
+///
+/// Every test runs on its own thread, so a test only sees the acquisitions of its own world.
+#[cfg(feature = "std")]
+struct CountingLock(parking_lot::RawRwLock);
+
+#[cfg(feature = "std")]
+impl ShipyardRwLock for CountingLock {
+    fn new() -> Box<dyn ShipyardRwLock + Send + Sync> {
+        Box::new(CountingLock(parking_lot::RawRwLock::INIT))
+    }
+
+    fn lock_shared(&self) {
+        ACQUISITIONS.with(|acquisitions| acquisitions.set(acquisitions.get() + 1));
+        ShipyardRwLock::lock_shared(&self.0);
+    }
+
+    unsafe fn unlock_shared(&self) {
+        // SAFE: we forward to the inner lock our caller locked through `lock_shared`, so the
+        // shared lock it holds on us is a shared lock on the inner lock.
+        unsafe { ShipyardRwLock::unlock_shared(&self.0) }
+    }
+
+    fn lock_exclusive(&self) {
+        ACQUISITIONS.with(|acquisitions| acquisitions.set(acquisitions.get() + 1));
+        ShipyardRwLock::lock_exclusive(&self.0);
+    }
+
+    unsafe fn unlock_exclusive(&self) {
+        // SAFE: we forward to the inner lock our caller locked through `lock_exclusive`, so the
+        // exclusive lock it holds on us is an exclusive lock on the inner lock.
+        unsafe { ShipyardRwLock::unlock_exclusive(&self.0) }
+    }
+}
+
+/// Returns a world whose storage registry is guarded by a `CountingLock`.
+#[cfg(feature = "std")]
+fn counting_world() -> World {
+    World::builder().with_custom_lock::<CountingLock>().build()
+}
+
+/// Returns how many times `f` acquired a `CountingLock` from this thread.
+#[cfg(feature = "std")]
+fn registry_acquisitions(f: impl FnOnce()) -> usize {
+    let before = ACQUISITIONS.with(|acquisitions| acquisitions.get());
+    f();
+
+    ACQUISITIONS.with(|acquisitions| acquisitions.get()) - before
+}
+
+/// Asserts that `CountingLock` counts registry accesses, so a test seeing no acquisition means
+/// there wasn't any.
+#[cfg(feature = "std")]
+#[test]
+fn counting_lock() {
+    let world = counting_world();
+
+    let acquisitions = registry_acquisitions(|| drop(world.borrow::<View<'_, Heap>>().unwrap()));
+
+    assert!(acquisitions > 0);
+}
+
+/// Asserts that borrowing the entities through `EntitiesView` and `EntitiesViewMut` never takes
+/// the registry lock.
+#[cfg(feature = "std")]
+#[test]
+fn entities_views_skip_registry() {
+    let world = counting_world();
+
+    let acquisitions = registry_acquisitions(|| {
+        drop(world.borrow::<EntitiesView<'_>>().unwrap());
+        drop(world.borrow::<EntitiesViewMut<'_>>().unwrap());
+    });
+
+    assert_eq!(acquisitions, 0);
+}
+
+/// Asserts that the generic API reaches the entities under their canonical id without taking the
+/// registry lock, by type and by id, shared and exclusive.
+#[cfg(feature = "std")]
+#[test]
+fn generic_entities_skip_registry() {
+    let world = counting_world();
+    let all_storages = world.all_storages().unwrap();
+    let id = StorageId::of::<Entities>();
+
+    let acquisitions = registry_acquisitions(|| {
+        drop(all_storages.custom_storage::<Entities>().unwrap());
+        drop(all_storages.custom_storage_mut::<Entities>().unwrap());
+        drop(all_storages.custom_storage_by_id(id).unwrap());
+        drop(all_storages.custom_storage_mut_by_id(id).unwrap());
+    });
+
+    assert_eq!(acquisitions, 0);
+}
+
+/// Asserts that inserting through the generic API under the canonical entities id also skips the
+/// registry lock, the entities always exist.
+#[cfg(feature = "std")]
+#[test]
+fn generic_insert_entities_skips_registry() {
+    let world = counting_world();
+    let all_storages = world.all_storages().unwrap();
+    let id = StorageId::of::<Entities>();
+
+    let acquisitions = registry_acquisitions(|| {
+        drop(
+            all_storages
+                .custom_storage_or_insert_by_id(id, Entities::new)
+                .unwrap(),
+        );
+        drop(
+            all_storages
+                .custom_storage_or_insert_mut_by_id(id, Entities::new)
+                .unwrap(),
+        );
+    });
+
+    assert_eq!(acquisitions, 0);
+}
+
+/// Asserts that a generic exclusive borrow of the entities blocks `EntitiesView`: both use the
+/// same borrow state. The view reports its usual entities error.
+#[test]
+fn generic_entities_block_view() {
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+
+    let generic = all_storages
+        .custom_storage_mut_by_id(StorageId::of::<Entities>())
+        .unwrap();
+    assert!(matches!(
+        all_storages.borrow::<EntitiesView<'_>>(),
+        Err(error::GetStorage::Entities(error::Borrow::Shared))
+    ));
+
+    drop(generic);
+    assert!(all_storages.borrow::<EntitiesView<'_>>().is_ok());
+}
+
+/// Asserts that `EntitiesViewMut` blocks a generic borrow of the entities, which reports the
+/// generic error for its id.
+#[test]
+fn view_blocks_generic_entities() {
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    let id = StorageId::of::<Entities>();
+
+    let view = all_storages.borrow::<EntitiesViewMut<'_>>().unwrap();
+    assert_eq!(
+        all_storages.custom_storage_by_id(id).err(),
+        Some(error::GetStorage::StorageBorrow {
+            name: None,
+            id,
+            borrow: error::Borrow::Shared,
+        })
+    );
+
+    drop(view);
+    assert!(all_storages.custom_storage_by_id(id).is_ok());
+}
+
+/// Asserts that inserting through the generic API under the canonical entities id returns the
+/// world's entities without running the factory, and leaves no entities entry in the registry.
+#[test]
+fn generic_insert_entities() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity(());
+    let all_storages = world.all_storages().unwrap();
+
+    let entities = all_storages
+        .custom_storage_or_insert_by_id(StorageId::of::<Entities>(), || -> Entities {
+            panic!("the entities already exist")
+        })
+        .unwrap();
+    assert!(entities.is_alive(entity));
+    drop(entities);
+
+    let registry = all_storages.storages.read();
+    assert!(registry.any(StorageId::of::<Entities>()).is_none());
+}
+
+/// Asserts that `iter_storages` and `iter_storages_mut` yield the entities exactly once, next to
+/// the registered storages.
+#[test]
+fn iter_storages_entities() {
+    let mut world = World::new_for_test();
+    world.add_entity(Heap(vec![0]));
+    let all_storages = world.all_storages().unwrap();
+
+    let storages = all_storages.iter_storages();
+    assert_eq!(storages.len(), 2);
+    assert_eq!(
+        storages
+            .iter()
+            .filter(|storage| storage.any().is::<Entities>())
+            .count(),
+        1
+    );
+    drop(storages);
+
+    let storages = all_storages.iter_storages_mut();
+    assert_eq!(storages.len(), 2);
+    assert_eq!(
+        storages
+            .iter()
+            .filter(|storage| storage.any().is::<Entities>())
+            .count(),
+        1
+    );
+}
+
+/// Asserts that `iter_storages` skips the entities while they're borrowed exclusively, like any
+/// storage it can't borrow, and still yields the others.
+#[test]
+fn iter_storages_borrowed_entities() {
+    let mut world = World::new_for_test();
+    world.add_entity(Heap(vec![0]));
+    let all_storages = world.all_storages().unwrap();
+
+    let view = all_storages.borrow::<EntitiesViewMut<'_>>().unwrap();
+    let storages = all_storages.iter_storages();
+
+    assert_eq!(storages.len(), 1);
+    assert!(storages[0].any().is::<SparseSet<Heap>>());
+    drop((storages, view));
+}
+
+/// Asserts that `AllStorages`' debug output counts the entities as a storage and lists them.
+#[cfg(feature = "std")]
+#[test]
+fn debug_entities() {
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+
+    let debug = format!("{:?}", *all_storages);
+
+    assert!(debug.contains("storage_count: 1"), "{debug}");
+    assert!(debug.contains(type_name::<Entities>()), "{debug}");
+}
+
+/// Asserts that the memory usage report includes the entities, and counts them as a storage it
+/// couldn't borrow while they're borrowed exclusively.
+#[cfg(feature = "std")]
+#[test]
+fn memory_usage_entities() {
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+
+    let report = format!("{:?}", all_storages.memory_usage());
+    assert!(report.contains(type_name::<Entities>()), "{report}");
+
+    let view = all_storages.borrow::<EntitiesViewMut<'_>>().unwrap();
+    let report = format!("{:?}", all_storages.memory_usage());
+    assert!(
+        report.contains("1 storages could not be borrored"),
+        "{report}"
+    );
+    drop(view);
+}
+
+/// Returns a unique storage holding `counted(value)`, to register through a custom path.
+fn custom_path_unique(value: u32, counter: &Arc<AtomicUsize>) -> UniqueStorage<Counted> {
+    UniqueStorage::new(counted(value, counter), TrackingTimestamp::origin())
+}
+
+/// Asserts that `add_unique` registers a new unique in the unique map only.
+#[test]
+fn add_unique_map() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+
+    world.add_unique(counted(0, &counter));
+
+    let all_storages = world.all_storages().unwrap();
+    let registry = all_storages.storages.read();
+    assert!(registry.uniques.contains_key(&id));
+    assert!(!registry.components_and_custom.contains_key(&id));
+}
+
+/// Asserts that a unique registered through a custom path stays in the component and custom map,
+/// and unique views still find it.
+#[test]
+fn custom_path_unique_view() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+
+    world
+        .add_custom_storage(id, custom_path_unique(0, &counter))
+        .unwrap();
+
+    assert_eq!(
+        world.borrow::<UniqueView<'_, Counted>>().unwrap().values,
+        [0]
+    );
+    let all_storages = world.all_storages().unwrap();
+    let registry = all_storages.storages.read();
+    assert!(registry.components_and_custom.contains_key(&id));
+    assert!(!registry.uniques.contains_key(&id));
+}
+
+/// Asserts that `add_unique` replaces the value of a unique registered through a custom path in
+/// place: the storage stays in the component and custom map and the old value is dropped once.
+#[test]
+fn replace_custom_path_unique() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    world
+        .add_custom_storage(id, custom_path_unique(0, &counter))
+        .unwrap();
+
+    world.add_unique(counted(1, &counter));
+
+    assert_eq!(drops(&counter), 1);
+    let view = world.borrow::<UniqueView<'_, Counted>>().unwrap();
+    assert_eq!(view.values, [1]);
+    assert!(view.is_modified());
+    drop(view);
+    let all_storages = world.all_storages().unwrap();
+    let registry = all_storages.storages.read();
+    assert!(registry.components_and_custom.contains_key(&id));
+    assert!(!registry.uniques.contains_key(&id));
+}
+
+/// Asserts that `remove_unique` removes a unique registered through a custom path and hands its
+/// value over, leaving no entry for its id.
+#[test]
+fn remove_custom_path_unique() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    world
+        .add_custom_storage(id, custom_path_unique(0, &counter))
+        .unwrap();
+    let all_storages = world.all_storages().unwrap();
+
+    let unique = all_storages.remove_unique::<Counted>().unwrap();
+
+    assert_eq!(unique.values, [0]);
+    assert_eq!(drops(&counter), 0);
+    assert!(all_storages.storages.read().any(id).is_none());
+}
+
+/// Asserts that replacing a foreign custom storage registered under a unique's id moves the id
+/// to the unique map: the new unique is there and the custom map no longer has the id.
+#[test]
+fn replace_foreign_map() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    world.add_custom_storage(id, counted(0, &counter)).unwrap();
+
+    world.add_unique(counted(1, &counter));
+
+    assert_eq!(drops(&counter), 1);
+    let all_storages = world.all_storages().unwrap();
+    let registry = all_storages.storages.read();
+    assert!(registry.uniques.contains_key(&id));
+    assert!(!registry.components_and_custom.contains_key(&id));
+}
+
+/// Asserts that generic insertion under a unique's id returns the unique without running the
+/// factory, and doesn't add a second entry for the id.
+#[test]
+fn generic_insert_existing_unique() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    world.add_unique(counted(0, &counter));
+    let all_storages = world.all_storages().unwrap();
+
+    let storage = all_storages
+        .custom_storage_or_insert_by_id(id, || -> UniqueStorage<Counted> {
+            panic!("the unique already exists")
+        })
+        .unwrap();
+    assert_eq!(storage.value.values, [0]);
+    drop(storage);
+
+    let registry = all_storages.storages.read();
+    assert!(registry.uniques.contains_key(&id));
+    assert!(!registry.components_and_custom.contains_key(&id));
+}
+
+/// Asserts that generic insertion under a component's id returns the component storage without
+/// running the factory.
+#[test]
+fn generic_insert_existing_component() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity(Heap(vec![0]));
+    let all_storages = world.all_storages().unwrap();
+
+    let storage = all_storages
+        .custom_storage_or_insert(|| -> SparseSet<Heap> { panic!("the storage already exists") })
+        .unwrap();
+
+    assert_eq!(storage.private_get(entity).unwrap().0, [0]);
+}
+
+/// Asserts that `iter_storages` skips a unique borrowed exclusively and still yields the
+/// entities and the component storages.
+#[test]
+fn iter_storages_borrowed_unique() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::new_for_test();
+    world.add_entity(Heap(vec![0]));
+    world.add_unique(counted(0, &counter));
+    let all_storages = world.all_storages().unwrap();
+
+    let unique = all_storages.borrow::<UniqueViewMut<'_, Counted>>().unwrap();
+    let storages = all_storages.iter_storages();
+
+    assert_eq!(storages.len(), 2);
+    assert!(
+        storages
+            .iter()
+            .all(|storage| !storage.any().is::<UniqueStorage<Counted>>())
+    );
+    drop((storages, unique));
+}
+
+/// Custom storage that copies itself into the worlds its world is cloned to.
+#[derive(Clone)]
+struct Cloneable(Counted);
+
+impl Storage for Cloneable {
+    fn try_clone(&self, _other_current: TrackingTimestamp) -> Option<SBoxBuilder> {
+        Some(SBoxBuilder::new(self.clone()))
+    }
+}
+
+/// Asserts that cloning a unique into a world holding a custom storage under the same id
+/// replaces it: the id ends up in the unique map only and the custom storage is dropped once.
+#[test]
+fn clone_unique_over_custom() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut source = World::new_for_test();
+    source.add_unique(counted(0, &counter));
+    source.register_clone::<UniqueStorage<Counted>>();
+    let mut destination = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    destination
+        .add_custom_storage(id, Cloneable(counted(1, &counter)))
+        .unwrap();
+
+    let source_storages = source.all_storages().unwrap();
+    source_storages.clone_storages_to(destination.all_storages.get_mut());
+    drop(source_storages);
+
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(
+        destination
+            .borrow::<UniqueView<'_, Counted>>()
+            .unwrap()
+            .values,
+        [0]
+    );
+    let registry = destination.all_storages.get_mut().storages.get_mut();
+    assert!(registry.uniques.contains_key(&id));
+    assert!(!registry.components_and_custom.contains_key(&id));
+}
+
+/// Asserts that cloning a custom storage into a world holding a unique under the same id
+/// replaces it: the id ends up in the component and custom map only and the unique is dropped
+/// once.
+#[test]
+fn clone_custom_over_unique() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let source = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    source
+        .add_custom_storage(id, Cloneable(counted(0, &counter)))
+        .unwrap();
+    let mut destination = World::new_for_test();
+    destination.add_unique(counted(1, &counter));
+
+    let source_storages = source.all_storages().unwrap();
+    source_storages.clone_storages_to(destination.all_storages.get_mut());
+    drop(source_storages);
+
+    assert_eq!(drops(&counter), 1);
+    let all_storages = destination.all_storages().unwrap();
+    let clone = all_storages.custom_storage_by_id(id).unwrap();
+    assert_eq!(
+        clone.any().downcast_ref::<Cloneable>().unwrap().0.values,
+        [0]
+    );
+    drop(clone);
+    let registry = all_storages.storages.read();
+    assert!(registry.components_and_custom.contains_key(&id));
+    assert!(!registry.uniques.contains_key(&id));
+}
+
+/// Asserts that a workload using a unique registered through a custom path finds it present.
+#[test]
+fn workload_custom_path_unique() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    world
+        .add_custom_storage(
+            StorageId::of::<UniqueStorage<Counted>>(),
+            custom_path_unique(0, &counter),
+        )
+        .unwrap();
+
+    let presence = Workload::new("")
+        .with_system(|_: UniqueView<'_, Counted>| {})
+        .are_all_uniques_present_in_world(&world);
+
+    assert!(presence.is_ok());
+}
+
+/// Asserts that two threads inserting the same missing storage at the same time insert it once:
+/// the factory runs once and both threads borrow the inserted storage.
+#[cfg(feature = "std")]
+#[test]
+fn concurrent_insertion() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let calls = AtomicUsize::new(0);
+    let world = World::new_for_test();
+    let barrier = std::sync::Barrier::new(2);
+
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            scope.spawn(|| {
+                let all_storages = world.all_storages().unwrap();
+                barrier.wait();
+
+                let storage = all_storages
+                    .custom_storage_or_insert_by_id(StorageId::Custom(0), || {
+                        calls.fetch_add(1, Ordering::Relaxed);
+                        Counted::new(&counter)
+                    })
+                    .unwrap();
+
+                assert_eq!(storage.values, [1, 2]);
+            });
+        }
+    });
+
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    let all_storages = world.all_storages().unwrap();
+    assert_eq!(all_storages.storages.read().len(), 1);
 }

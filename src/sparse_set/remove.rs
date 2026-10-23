@@ -22,7 +22,7 @@ impl<T: Send + Sync + Component> TupleRemove for T {
         let current = all_storages.get_current();
 
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
             .dyn_remove(entity, current)
     }
 }
@@ -37,7 +37,7 @@ macro_rules! impl_remove_component {
 
                 ($(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::new)
+                        .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::new)
                         .dyn_remove(entity, current),
                 )+)
             }

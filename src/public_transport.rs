@@ -29,6 +29,7 @@ pub(crate) enum ReadGuard<'a, T> {
 impl<'a, T> Deref for ReadGuard<'a, T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         match self {
             Self::Custom { value, .. } => value,
@@ -39,6 +40,7 @@ impl<'a, T> Deref for ReadGuard<'a, T> {
 }
 
 impl<T> Drop for ReadGuard<'_, T> {
+    #[inline]
     fn drop(&mut self) {
         match self {
             Self::Custom { lock, .. } => unsafe {
@@ -65,6 +67,7 @@ pub(crate) enum WriteGuard<'a, T> {
 impl<'a, T> Deref for WriteGuard<'a, T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         match self {
             Self::Custom { value, .. } => value,
@@ -75,6 +78,7 @@ impl<'a, T> Deref for WriteGuard<'a, T> {
 }
 
 impl<'a, T> DerefMut for WriteGuard<'a, T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             Self::Custom { value, .. } => value,
@@ -85,6 +89,7 @@ impl<'a, T> DerefMut for WriteGuard<'a, T> {
 }
 
 impl<T> Drop for WriteGuard<'_, T> {
+    #[inline]
     fn drop(&mut self) {
         match self {
             Self::Custom { lock, .. } => unsafe {
@@ -109,6 +114,7 @@ impl<T> RwLock<T> {
             lock: std::sync::RwLock::new(value),
         }
     }
+    #[inline]
     pub(crate) fn read(&self) -> ReadGuard<'_, T> {
         match self {
             RwLock::Custom { lock, value } => {
@@ -126,6 +132,7 @@ impl<T> RwLock<T> {
             },
         }
     }
+    #[inline]
     pub(crate) fn write(&self) -> WriteGuard<'_, T> {
         match self {
             RwLock::Custom { lock, value } => {
@@ -143,6 +150,7 @@ impl<T> RwLock<T> {
             },
         }
     }
+    #[inline]
     pub(crate) fn get_mut(&mut self) -> &mut T {
         match self {
             RwLock::Custom { value, .. } => value.get_mut(),

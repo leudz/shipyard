@@ -80,7 +80,8 @@ fn logical(storage: &dyn Storage, group: &Arc<[StorageId]>) -> Vec<EntityId> {
 /// and every group's members hold identical, fully trusted ranges.
 fn assert_regrouped(world: &World) {
     let all_storages = world.all_storages().unwrap();
-    let storages = all_storages.storages.read();
+    let registry = all_storages.storages.read();
+    let storages = &registry.components_and_custom;
 
     for sbox in storages.values() {
         // SAFE: `sbox.0` comes from a `Box` that lives as long as `all_storages`,
@@ -128,7 +129,8 @@ fn assert_regrouped(world: &World) {
 /// Every grouped storage has to be fully evaluated, see [`assert_regrouped`].
 fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
     let all_storages = world.all_storages().unwrap();
-    let storages = all_storages.storages.read();
+    let registry = all_storages.storages.read();
+    let storages = &registry.components_and_custom;
     // SAFE: `sbox.0` comes from a `Box` that lives as long as `all_storages`,
     // and `borrow` checks no one borrows the storage exclusively.
     let storage = |storage_id: &StorageId| unsafe { &*storages[storage_id].0 }.borrow().unwrap();
@@ -214,7 +216,9 @@ fn expected_union(
 fn analyze_world(world: &World) -> Option<Plan> {
     let mut all_storages = world.all_storages_mut().unwrap();
 
-    analyze(&mut Selected::all(all_storages.storages.get_mut()))
+    analyze(&mut Selected::all(
+        &mut all_storages.storages.get_mut().components_and_custom,
+    ))
 }
 
 /// Analyzes `world` and returns the plan, panicking unless:
@@ -229,7 +233,7 @@ fn analyze_world(world: &World) -> Option<Plan> {
 /// see [`expected_union`].
 fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
     let mut all_storages = world.all_storages_mut().unwrap();
-    let mut selected = Selected::all(all_storages.storages.get_mut());
+    let mut selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
 
     let frozen = Frozen::new(&selected);
     let existing: Vec<Arc<[StorageId]>> = frozen
@@ -358,7 +362,7 @@ fn attach_ids(world: &World, ids: &[StorageId]) -> Arc<[StorageId]> {
     let group: Arc<[StorageId]> = Arc::from(ids);
 
     let mut all_storages = world.all_storages_mut().unwrap();
-    let mut selected = Selected::all(all_storages.storages.get_mut());
+    let mut selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
     for &member_id in group.iter() {
         selected
             .get_mut(member_id)

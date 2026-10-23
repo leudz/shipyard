@@ -3,7 +3,7 @@ use super::*;
 /// Returns the storages `entity` has to be grouped in, starting from its component in `storage_id`.
 fn discover(world: &World, storage_id: StorageId, entity: EntityId) -> Option<Vec<StorageId>> {
     let mut all_storages = world.all_storages_mut().unwrap();
-    let selected = Selected::all(all_storages.storages.get_mut());
+    let selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
     let frozen = Frozen::new(&selected);
 
     Discovery::default()

@@ -1,4 +1,4 @@
-use crate::all_storages::{AllStorages, CustomStorageAccess};
+use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, ARefMut};
 use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 #[cfg(feature = "thread_local")]
@@ -137,7 +137,7 @@ impl<T: Component + Send + Sync> GetComponent for &'_ T {
         _current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
+        let view = all_storages.component_storage_or_insert(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -165,7 +165,8 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ T> {
         _current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_send(|| NonSend(SparseSet::new()))?;
+        let view =
+            all_storages.component_storage_or_insert_non_send(|| NonSend(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -193,7 +194,8 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ T> {
         _current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_sync(|| NonSync(SparseSet::new()))?;
+        let view =
+            all_storages.component_storage_or_insert_non_sync(|| NonSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -222,7 +224,7 @@ impl<T: Component> GetComponent for NonSendSync<&'_ T> {
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages
-            .custom_storage_or_insert_non_send_sync(|| NonSendSync(SparseSet::new()))?;
+            .component_storage_or_insert_non_send_sync(|| NonSendSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -249,7 +251,7 @@ impl<T: Component + Send + Sync> GetComponent for &'_ mut T {
         current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
+        let view = all_storages.component_storage_or_insert_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -290,7 +292,7 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view =
-            all_storages.custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::new()))?;
+            all_storages.component_storage_or_insert_non_send_mut(|| NonSend(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -331,7 +333,7 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view =
-            all_storages.custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::new()))?;
+            all_storages.component_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -372,7 +374,7 @@ impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages
-            .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::new()))?;
+            .component_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 

@@ -45,7 +45,7 @@ impl TupleClone for () {
 impl<T: Component + Clone + Send + Sync> TupleClone for SparseSet<T> {
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
+            .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::<T>::new)
             .register_clone();
     }
 }
@@ -54,7 +54,7 @@ impl<T: Component + Clone + Send + Sync> TupleClone for SparseSet<T> {
 impl<T: Component + Clone + Send + Sync> TupleClone for NonSend<SparseSet<T>> {
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<NonSend<SparseSet<T>>>(), || {
+            .exclusive_component_or_insert_mut(StorageId::of::<NonSend<SparseSet<T>>>(), || {
                 NonSend(SparseSet::<T>::new())
             })
             .register_clone();
@@ -65,7 +65,7 @@ impl<T: Component + Clone + Send + Sync> TupleClone for NonSend<SparseSet<T>> {
 impl<T: Component + Clone + Send + Sync> TupleClone for NonSync<SparseSet<T>> {
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<NonSync<SparseSet<T>>>(), || {
+            .exclusive_component_or_insert_mut(StorageId::of::<NonSync<SparseSet<T>>>(), || {
                 NonSync(SparseSet::<T>::new())
             })
             .register_clone();
@@ -76,7 +76,7 @@ impl<T: Component + Clone + Send + Sync> TupleClone for NonSync<SparseSet<T>> {
 impl<T: Component + Clone + Send + Sync> TupleClone for NonSendSync<SparseSet<T>> {
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<NonSendSync<SparseSet<T>>>(), || {
+            .exclusive_component_or_insert_mut(StorageId::of::<NonSendSync<SparseSet<T>>>(), || {
                 NonSendSync(SparseSet::<T>::new())
             })
             .register_clone();
@@ -87,7 +87,7 @@ impl<T: Unique + Clone + Send + Sync> TupleClone for UniqueStorage<T> {
     #[track_caller]
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_mut::<UniqueStorage<T>>()
+            .exclusive_unique_mut_by_id::<UniqueStorage<T>>(StorageId::of::<UniqueStorage<T>>())
             .unwrap()
             .register_clone();
     }
@@ -98,7 +98,7 @@ impl<T: Unique + Clone + Sync> TupleClone for NonSend<UniqueStorage<T>> {
     #[track_caller]
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_mut_by_id::<NonSend<UniqueStorage<T>>>(StorageId::of::<
+            .exclusive_unique_mut_by_id::<NonSend<UniqueStorage<T>>>(StorageId::of::<
                 UniqueStorage<T>,
             >())
             .unwrap()
@@ -111,7 +111,7 @@ impl<T: Unique + Clone + Send> TupleClone for NonSync<UniqueStorage<T>> {
     #[track_caller]
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_mut_by_id::<NonSync<UniqueStorage<T>>>(StorageId::of::<
+            .exclusive_unique_mut_by_id::<NonSync<UniqueStorage<T>>>(StorageId::of::<
                 UniqueStorage<T>,
             >())
             .unwrap()
@@ -124,7 +124,7 @@ impl<T: Unique + Clone> TupleClone for NonSendSync<UniqueStorage<T>> {
     #[track_caller]
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_storage_mut_by_id::<NonSendSync<UniqueStorage<T>>>(StorageId::of::<
+            .exclusive_unique_mut_by_id::<NonSendSync<UniqueStorage<T>>>(StorageId::of::<
                 UniqueStorage<T>,
             >())
             .unwrap()

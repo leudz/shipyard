@@ -5,10 +5,12 @@ mod delete_any;
 mod group;
 mod regroup;
 mod retain;
+mod storage_maps;
 #[cfg(test)]
 mod tests;
 
 pub use custom_storage::CustomStorageAccess;
+pub(crate) use custom_storage::component_storage_or_insert_mut_in;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
 pub use group::GroupMember;
 #[doc(hidden)]
@@ -18,6 +20,7 @@ pub use retain::TupleRetainStorage;
 pub(crate) use builder::AllStoragesBuilder;
 pub(crate) use clone::TupleClone;
 pub(crate) use group::{ConnectedSet, Grouping};
+pub(crate) use storage_maps::StorageMaps;
 
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;
@@ -62,10 +65,11 @@ pub struct MissingThreadId;
 pub struct ThreadIdPresent;
 
 /// Contains all storages present in the [`World`](crate::world::World).
-// The registry lock is held very briefly:
+// The registry is two maps under one lock, see `StorageMaps`: the components and custom storages,
+// and the uniques. The lock is held very briefly:
 // - shared: when looking up a storage
 // - exclusive: when adding or removing a storage
-// Storages are boxed, so they don't move when the HashMap reallocates.
+// Storages are boxed, so they don't move when a map reallocates.
 //
 // Once we find a storage, we borrow it *before* releasing the lock. From then on, the runtime
 // borrow is what keeps the storage valid, not the lock:
@@ -73,8 +77,13 @@ pub struct ThreadIdPresent;
 //   replaced (`add_unique*`) after borrowing it exclusively, which fails while any guard is alive
 // - everything else that drops storages takes `&mut AllStorages`, which can't coexist with a guard
 // So a storage guard stays valid for as long as it's alive, even without the lock.
+//
+// `Entities` isn't in the registry, it has its own field. Every world has exactly one and it's never
+// removed, so entity access doesn't need a lookup or the lock. Generic access finds it under its
+// canonical id, `StorageId::of::<Entities>()`, which the registry never contains.
 pub struct AllStorages {
-    pub(crate) storages: RwLock<ShipHashMap<StorageId, SBox>>,
+    pub(crate) entities: AtomicRefCell<Entities>,
+    pub(crate) storages: RwLock<StorageMaps>,
     #[cfg(feature = "thread_local")]
     main_thread_id: u64,
     #[cfg(feature = "thread_local")]
@@ -92,12 +101,9 @@ unsafe impl Sync for AllStorages {}
 impl AllStorages {
     #[cfg(feature = "std")]
     pub(crate) fn new(counter: Arc<AtomicU64>) -> Self {
-        let mut storages = ShipHashMap::new();
-
-        storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
-
         AllStorages {
-            storages: RwLock::new_std(storages),
+            entities: AtomicRefCell::new(Entities::new()),
+            storages: RwLock::new_std(StorageMaps::new()),
             #[cfg(feature = "thread_local")]
             main_thread_id: (std_thread_id_generator)(),
             #[cfg(feature = "thread_local")]
@@ -163,8 +169,9 @@ impl AllStorages {
         let current = self.get_tracking_timestamp();
         let mut storages = self.storages.write();
 
-        let Some(sbox) = storages.get(&storage_id) else {
-            storages.insert(
+        // A unique registered through a custom path is found too, its value is replaced in place.
+        let Some(sbox) = storages.unique(storage_id) else {
+            storages.uniques.insert(
                 storage_id,
                 new_storage(UniqueStorage::new(component, current)),
             );
@@ -187,11 +194,7 @@ impl AllStorages {
 
                 panic!(
                     "{:?}",
-                    error::GetStorage::StorageBorrow {
-                        name: Some(type_name::<UniqueStorage<T>>()),
-                        id: storage_id,
-                        borrow: err,
-                    }
+                    error::GetStorage::storage_borrow::<UniqueStorage<T>>(err)
                 )
             }
         };
@@ -204,8 +207,14 @@ impl AllStorages {
             // storage id. We hold the only borrow of it, so we can take it out and insert a fresh
             // unique storage in its place. Its destructor might be user code, we run it once the
             // registry is unlocked.
+            // The fresh storage goes with the uniques, it was registered through the unique API.
+            // The foreign one leaves whichever map it was in, so the id stays in a single map.
             drop(storage);
-            let foreign = storages.insert(
+            let foreign = storages
+                .uniques
+                .remove(&storage_id)
+                .or_else(|| storages.components_and_custom.remove(&storage_id));
+            storages.uniques.insert(
                 storage_id,
                 new_storage(UniqueStorage::new(component, current)),
             );
@@ -382,8 +391,17 @@ impl AllStorages {
         {
             let mut storages = self.storages.write();
 
-            let storage = if let Entry::Occupied(entry) = storages.entry(storage_id) {
+            // Uniques first, then a unique registered through a custom path.
+            let map = if storages.uniques.contains_key(&storage_id) {
+                &mut storages.uniques
+            } else {
+                &mut storages.components_and_custom
+            };
+
+            let storage = if let Entry::Occupied(entry) = map.entry(storage_id) {
                 // `.err()` to avoid borrowing `entry` in the `Ok` case
+                // SAFE: `entry` is in the registry and we hold its write lock, so the `SBox` points
+                // to a live boxed `AtomicRefCell`. The borrow guard is dropped right away.
                 if let Some(err) = unsafe { &*entry.get().0 }.borrow_mut().err() {
                     return Err(error::UniqueRemove::StorageBorrow((type_name::<T>(), err)));
                 } else {
@@ -459,10 +477,7 @@ impl AllStorages {
     /// });
     /// ```
     pub fn delete_entity(&mut self, entity: EntityId) -> bool {
-        // no need to lock here since we have a unique access
-        let entities = self.exclusive_storage_mut::<Entities>().unwrap();
-
-        if entities.delete_unchecked(entity) {
+        if self.entities.get_mut().delete_unchecked(entity) {
             self.strip(entity);
 
             true
@@ -494,7 +509,9 @@ impl AllStorages {
     pub fn strip(&mut self, entity: EntityId) {
         let current = self.get_current();
 
-        for storage in self.storages.get_mut().values_mut() {
+        // Uniques don't hold per entity data, we only visit components and custom storages.
+        for storage in self.storages.get_mut().components_and_custom.values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }.get_mut().delete(entity, current);
         }
     }
@@ -536,7 +553,12 @@ impl AllStorages {
             iter: &I,
             current: TrackingTimestamp,
         ) {
-            for storage in all_storages.storages.get_mut().values_mut() {
+            // Uniques don't hold per entity data, we only visit components and custom storages.
+            let storages = &mut all_storages.storages.get_mut().components_and_custom;
+
+            for storage in storages.values_mut() {
+                // SAFE: `storage` is in the registry and we hold `&mut AllStorages`, nobody
+                // else can reach it.
                 let storage = unsafe { &mut *storage.0 }.get_mut();
 
                 for entity_id in iter.clone() {
@@ -591,17 +613,18 @@ impl AllStorages {
         ) {
             use rayon::prelude::*;
 
-            all_storages
-                .storages
-                .get_mut()
-                .par_iter_mut()
-                .for_each(|(_, storage)| {
-                    let storage = unsafe { &mut *storage.0 }.get_mut();
+            // Uniques don't hold per entity data, we only visit components and custom storages.
+            let storages = &mut all_storages.storages.get_mut().components_and_custom;
 
-                    for entity_id in iter.clone() {
-                        storage.delete(entity_id, current);
-                    }
-                });
+            storages.par_iter_mut().for_each(|(_, storage)| {
+                // SAFE: `storage` is in the registry and we hold `&mut AllStorages`, each task
+                // gets a different storage.
+                let storage = unsafe { &mut *storage.0 }.get_mut();
+
+                for entity_id in iter.clone() {
+                    storage.delete(entity_id, current);
+                }
+            });
         }
 
         let current = self.get_current();
@@ -642,8 +665,12 @@ impl AllStorages {
     pub fn retain_storage_by_id(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         let current = self.get_current();
 
-        for (storage_id, storage) in self.storages.get_mut().iter_mut() {
+        // Uniques don't hold per entity data, we only visit components and custom storages.
+        let storages = &mut self.storages.get_mut().components_and_custom;
+
+        for (storage_id, storage) in storages.iter_mut() {
             if !excluded_storage.contains(storage_id) {
+                // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
                 unsafe { &mut *storage.0 }.get_mut().delete(entity, current);
             }
         }
@@ -664,14 +691,21 @@ impl AllStorages {
     pub fn clear(&mut self) {
         let current = self.get_current();
 
-        for storage in self.storages.get_mut().values_mut() {
+        // The entities aren't in the registry, we clear them on their own.
+        self.entities.get_mut().clear(current);
+
+        // Uniques can't be cleared, we only visit components and custom storages.
+        for storage in self.storages.get_mut().components_and_custom.values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }.get_mut().clear(current);
         }
     }
     /// Clear all deletion and removal tracking data.
     #[track_caller]
     pub fn clear_all_removed_and_deleted(&mut self) {
-        for storage in self.storages.get_mut().values_mut() {
+        // Uniques can't be deleted or removed, we only visit components and custom storages.
+        for storage in self.storages.get_mut().components_and_custom.values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }
                 .get_mut()
                 .clear_all_removed_and_deleted();
@@ -683,7 +717,9 @@ impl AllStorages {
         &mut self,
         timestamp: TrackingTimestamp,
     ) {
-        for storage in self.storages.get_mut().values_mut() {
+        // Uniques can't be deleted or removed, we only visit components and custom storages.
+        for storage in self.storages.get_mut().components_and_custom.values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }
                 .get_mut()
                 .clear_all_removed_and_deleted_older_than_timestamp(timestamp);
@@ -695,7 +731,9 @@ impl AllStorages {
     pub fn clear_all_inserted(&mut self) {
         let now = self.get_tracking_timestamp();
 
+        // Uniques track insertion too, we visit both maps.
         for storage in self.storages.get_mut().values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }.get_mut().clear_all_inserted(now);
         }
     }
@@ -705,7 +743,9 @@ impl AllStorages {
     pub fn clear_all_modified(&mut self) {
         let now = self.get_tracking_timestamp();
 
+        // Uniques track modification too, we visit both maps.
         for storage in self.storages.get_mut().values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }.get_mut().clear_all_modified(now);
         }
     }
@@ -715,7 +755,9 @@ impl AllStorages {
     pub fn clear_all_inserted_and_modified(&mut self) {
         let now = self.get_tracking_timestamp();
 
+        // Uniques track insertion and modification too, we visit both maps.
         for storage in self.storages.get_mut().values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }.get_mut().clear_all_inserted(now);
             unsafe { &mut *storage.0 }.get_mut().clear_all_modified(now);
         }
@@ -730,7 +772,7 @@ impl AllStorages {
     pub fn retain<T: Component + Send + Sync>(&mut self, f: impl FnMut(EntityId, &T) -> bool) {
         let current = self.get_current();
 
-        self.exclusive_storage_mut::<SparseSet<T>>()
+        self.exclusive_component_mut::<SparseSet<T>>()
             .unwrap()
             .private_retain(current, f);
     }
@@ -747,7 +789,7 @@ impl AllStorages {
     ) {
         let current = self.get_current();
 
-        self.exclusive_storage_mut::<SparseSet<T>>()
+        self.exclusive_component_mut::<SparseSet<T>>()
             .unwrap()
             .private_retain_mut(current, f);
     }
@@ -776,7 +818,7 @@ impl AllStorages {
     pub fn add_entity<T: TupleAddComponent>(&mut self, component: T) -> EntityId {
         let current = self.get_current();
 
-        let entity = self.exclusive_storage_mut::<Entities>().unwrap().generate();
+        let entity = self.entities.get_mut().generate();
         component.add_component(self, entity, current);
 
         entity
@@ -838,11 +880,7 @@ impl AllStorages {
     pub fn add_component<T: TupleAddComponent>(&mut self, entity: EntityId, component: T) {
         let current = self.get_current();
 
-        if self
-            .exclusive_storage_mut::<Entities>()
-            .unwrap()
-            .is_alive(entity)
-        {
+        if self.entities.get_mut().is_alive(entity) {
             component.add_component(self, entity, current);
         } else {
             panic!("{:?}", error::AddComponent::EntityIsNotAlive);
@@ -1267,60 +1305,61 @@ let i = all_storages.run(sys1);
     pub fn delete_any<T: TupleDeleteAny>(&mut self) {
         T::delete_any(self);
     }
+    #[inline]
     pub(crate) fn entities(&self) -> Result<ARef<'_, &'_ Entities>, error::GetStorage> {
-        let storage_id = StorageId::of::<Entities>();
-
-        let storages = self.storages.read();
-        let storage = storages.get(&storage_id).unwrap();
-        let storage = unsafe { &*storage.0 }.borrow();
-        drop(storages);
-        match storage {
-            Ok(storage) => Ok(ARef::map(storage, |storage| {
-                storage.as_any().downcast_ref().unwrap()
-            })),
-            Err(err) => Err(error::GetStorage::Entities(err)),
-        }
+        self.entities.borrow().map_err(error::GetStorage::Entities)
     }
     #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
+    #[inline]
     pub(crate) fn entities_mut(&self) -> Result<ARefMut<'_, &'_ mut Entities>, error::GetStorage> {
-        let storage_id = StorageId::of::<Entities>();
-
-        let storages = self.storages.read();
-        let storage = storages.get(&storage_id).unwrap();
-        let storage = unsafe { &*storage.0 }.borrow_mut();
-        drop(storages);
-        match storage {
-            Ok(storage) => Ok(ARefMut::map(storage, |storage| {
-                storage.as_any_mut().downcast_mut().unwrap()
-            })),
-            Err(err) => Err(error::GetStorage::Entities(err)),
-        }
+        self.entities
+            .borrow_mut()
+            .map_err(error::GetStorage::Entities)
     }
-    pub(crate) fn exclusive_storage_mut<T: 'static>(
+
+    /// Returns the `T` component storage.
+    #[inline]
+    pub(crate) fn exclusive_component_mut<T: 'static>(
         &mut self,
     ) -> Result<&mut T, error::GetStorage> {
-        self.exclusive_storage_mut_by_id(StorageId::of::<T>())
+        let Some(sbox) = self.storages.get_mut().component(StorageId::of::<T>()) else {
+            return Err(error::GetStorage::MissingStorage {
+                name: Some(type_name::<T>()),
+                id: StorageId::of::<T>(),
+            });
+        };
+
+        // SAFE: `sbox` is in the registry and we hold `&mut self` for as long as the returned
+        // reference lives, so nobody can remove the storage or borrow it in the meantime.
+        let storage = unsafe { &mut *sbox.0 }.get_mut();
+
+        Ok(storage.as_any_mut().downcast_mut().unwrap())
     }
+
+    /// Returns the unique storage registered under `storage_id`, as a `T`.
     #[track_caller]
-    pub(crate) fn exclusive_storage_mut_by_id<T: 'static>(
+    pub(crate) fn exclusive_unique_mut_by_id<T: 'static>(
         &mut self,
         storage_id: StorageId,
     ) -> Result<&mut T, error::GetStorage> {
-        if let Some(storage) = self.storages.get_mut().get_mut(&storage_id) {
-            let storage = unsafe { &mut *storage.0 }
-                .get_mut()
-                .as_any_mut()
-                .downcast_mut()
-                .unwrap();
-            Ok(storage)
-        } else {
-            Err(error::GetStorage::MissingStorage {
+        let Some(sbox) = self.storages.get_mut().unique(storage_id) else {
+            return Err(error::GetStorage::MissingStorage {
                 name: Some(type_name::<T>()),
                 id: StorageId::of::<T>(),
-            })
-        }
+            });
+        };
+
+        // SAFE: `sbox` is in the registry and we hold `&mut self` for as long as the returned
+        // reference lives, so nobody can remove the storage or borrow it in the meantime.
+        let storage = unsafe { &mut *sbox.0 }.get_mut();
+
+        Ok(storage.as_any_mut().downcast_mut().unwrap())
     }
-    pub(crate) fn exclusive_storage_or_insert_mut<T, F>(
+
+    /// Returns the `T` component or custom storage registered under `storage_id`,
+    /// inserting `f()` if it doesn't exist.
+    #[inline]
+    pub(crate) fn exclusive_component_or_insert_mut<T, F>(
         &mut self,
         storage_id: StorageId,
         f: F,
@@ -1329,22 +1368,19 @@ let i = all_storages.run(sys1);
         T: 'static + Storage + Send + Sync,
         F: FnOnce() -> T,
     {
-        let storages = self.storages.get_mut();
-
-        unsafe {
-            &mut *storages
-                .entry(storage_id)
-                .or_insert_with(|| SBox::new(f()))
-                .0
-        }
-        .get_mut()
-        .as_any_mut()
-        .downcast_mut()
-        .unwrap()
+        component_or_insert_with(
+            &mut self.storages.get_mut().components_and_custom,
+            storage_id,
+            || SBox::new(f()),
+        )
     }
+
+    /// Returns the `!Send` `T` component storage registered under `storage_id`,
+    /// inserting `f()` if it doesn't exist.
     #[cfg(feature = "thread_local")]
     #[track_caller]
-    pub(crate) fn exclusive_storage_or_insert_non_send_mut<T, F>(
+    #[inline]
+    pub(crate) fn exclusive_component_or_insert_non_send_mut<T, F>(
         &mut self,
         storage_id: StorageId,
         f: F,
@@ -1353,21 +1389,18 @@ let i = all_storages.run(sys1);
         T: 'static + Storage + Sync,
         F: FnOnce() -> T,
     {
-        let storages = self.storages.get_mut();
-
-        unsafe {
-            &mut *storages
-                .entry(storage_id)
-                .or_insert_with(|| SBox::new_non_send(f(), self.thread_id_generator.clone()))
-                .0
-        }
-        .get_mut()
-        .as_any_mut()
-        .downcast_mut()
-        .unwrap()
+        component_or_insert_with(
+            &mut self.storages.get_mut().components_and_custom,
+            storage_id,
+            || SBox::new_non_send(f(), self.thread_id_generator.clone()),
+        )
     }
+
+    /// Returns the `!Sync` `T` component storage registered under `storage_id`,
+    /// inserting `f()` if it doesn't exist.
     #[cfg(feature = "thread_local")]
-    pub(crate) fn exclusive_storage_or_insert_non_sync_mut<T, F>(
+    #[inline]
+    pub(crate) fn exclusive_component_or_insert_non_sync_mut<T, F>(
         &mut self,
         storage_id: StorageId,
         f: F,
@@ -1376,22 +1409,19 @@ let i = all_storages.run(sys1);
         T: 'static + Storage + Send,
         F: FnOnce() -> T,
     {
-        let storages = self.storages.get_mut();
-
-        unsafe {
-            &mut *storages
-                .entry(storage_id)
-                .or_insert_with(|| SBox::new_non_sync(f()))
-                .0
-        }
-        .get_mut()
-        .as_any_mut()
-        .downcast_mut()
-        .unwrap()
+        component_or_insert_with(
+            &mut self.storages.get_mut().components_and_custom,
+            storage_id,
+            || SBox::new_non_sync(f()),
+        )
     }
+
+    /// Returns the `!Send + !Sync` `T` component storage registered under `storage_id`,
+    /// inserting `f()` if it doesn't exist.
     #[cfg(feature = "thread_local")]
     #[track_caller]
-    pub(crate) fn exclusive_storage_or_insert_non_send_sync_mut<T, F>(
+    #[inline]
+    pub(crate) fn exclusive_component_or_insert_non_send_sync_mut<T, F>(
         &mut self,
         storage_id: StorageId,
         f: F,
@@ -1400,27 +1430,19 @@ let i = all_storages.run(sys1);
         T: 'static + Storage,
         F: FnOnce() -> T,
     {
-        let storages = self.storages.get_mut();
-
-        unsafe {
-            &mut *storages
-                .entry(storage_id)
-                .or_insert_with(|| SBox::new_non_send_sync(f(), self.thread_id_generator.clone()))
-                .0
-        }
-        .get_mut()
-        .as_any_mut()
-        .downcast_mut()
-        .unwrap()
+        component_or_insert_with(
+            &mut self.storages.get_mut().components_and_custom,
+            storage_id,
+            || SBox::new_non_send_sync(f(), self.thread_id_generator.clone()),
+        )
     }
+
     /// Make the given entity alive.  
     /// Does nothing if an entity with a greater generation is already at this index.  
     /// Returns `true` if the entity is successfully spawned.
     #[inline]
     pub fn spawn(&mut self, entity: EntityId) -> bool {
-        self.exclusive_storage_mut::<Entities>()
-            .unwrap()
-            .spawn(entity)
+        self.entities.get_mut().spawn(entity)
     }
     /// Displays storages memory information.
     pub fn memory_usage(&self) -> AllStoragesMemoryUsage<'_> {
@@ -1693,10 +1715,9 @@ for (i, j) in &mut iter {
     }
 
     /// Returns true if entity matches a living entity.
+    #[inline]
     pub fn is_entity_alive(&mut self, entity: EntityId) -> bool {
-        self.exclusive_storage_mut::<Entities>()
-            .unwrap()
-            .is_alive(entity)
+        self.entities.get_mut().is_alive(entity)
     }
 
     /// Moves an entity from a `World` to another.
@@ -1729,11 +1750,7 @@ for (i, j) in &mut iter {
         let current = self.get_current();
         let other_current = other.get_current();
 
-        if !self
-            .exclusive_storage_mut::<Entities>()
-            .unwrap()
-            .delete_unchecked(entity)
-        {
+        if !self.entities.get_mut().delete_unchecked(entity) {
             panic!(
                 "Entity {:?} has to be alive to move it to another World.",
                 entity
@@ -1741,15 +1758,14 @@ for (i, j) in &mut iter {
         };
 
         assert!(
-            other
-                .exclusive_storage_mut::<Entities>()
-                .unwrap()
-                .spawn(entity),
+            other.entities.get_mut().spawn(entity),
             "Other World already has an entity at {:?}'s index.",
             entity
         );
 
-        for storage in self.storages.get_mut().values_mut() {
+        // Uniques don't hold per entity data, we only visit components and custom storages.
+        for storage in self.storages.get_mut().components_and_custom.values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }.get_mut().move_component_from(
                 other,
                 entity,
@@ -1792,29 +1808,23 @@ for (i, j) in &mut iter {
         let current = self.get_current();
         let other_current = other.get_current();
 
-        if !self
-            .exclusive_storage_mut::<Entities>()
-            .unwrap()
-            .is_alive(from)
-        {
+        if !self.entities.get_mut().is_alive(from) {
             panic!(
                 "Entity {:?} has to be alive to move its components to another World.",
                 from
             );
         };
 
-        if !other
-            .exclusive_storage_mut::<Entities>()
-            .unwrap()
-            .is_alive(to)
-        {
+        if !other.entities.get_mut().is_alive(to) {
             panic!(
                 "Entity {:?} has to be alive to receive components from another World.",
                 to
             );
         };
 
-        for storage in self.storages.get_mut().values_mut() {
+        // Uniques don't hold per entity data, we only visit components and custom storages.
+        for storage in self.storages.get_mut().components_and_custom.values_mut() {
+            // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
             unsafe { &mut *storage.0 }.get_mut().move_component_from(
                 other,
                 from,
@@ -1838,9 +1848,24 @@ for (i, j) in &mut iter {
     #[track_caller]
     pub fn clone_storages_to(&self, other: &mut AllStorages) {
         let other_current = other.get_current();
+
+        // The entities aren't in the registry, their clone replaces `other`'s like any other storage.
+        // It doesn't come with the deletion callback, `other`'s is dropped with the entities it replaces.
+        *other.entities.get_mut() = self.entities.borrow().unwrap().clone_without_on_deletion();
+
         let other_storages = other.storages.get_mut();
 
-        for (storage_id, storage) in self.storages.read().iter() {
+        // We need to know which map each storage comes from, its clone goes in the same one.
+        let source = self.storages.read();
+        let source_storages = source
+            .components_and_custom
+            .iter()
+            .map(|entry| (entry, false))
+            .chain(source.uniques.iter().map(|entry| (entry, true)));
+
+        for ((storage_id, storage), is_unique) in source_storages {
+            // SAFE: `storage` is in our registry and we hold its lock for the whole loop, so it
+            // points to a live boxed `AtomicRefCell`. We only borrow it through its runtime checks.
             let storage = unsafe { &*storage.0 };
             #[cfg(feature = "thread_local")]
             let other_thread_id_generator = other.thread_id_generator.clone();
@@ -1878,6 +1903,8 @@ for (i, j) in &mut iter {
                     #[cfg(feature = "thread_local")]
                     {
                         let storage_type_id = storage_borrow.any().type_id();
+                        // SAFE: `storage_builder` owns the clone's box and keeps it alive, nobody
+                        // else can reach it yet and we only borrow it through its runtime checks.
                         let storage_clone_type_id = unsafe { &*storage_builder.sbox.0 }
                             .borrow()
                             .unwrap()
@@ -1899,10 +1926,27 @@ for (i, j) in &mut iter {
                     }
                 };
 
+                // The clone keeps the original's registration, a unique stays with the uniques
+                // and everything else with the components and custom storages, whatever the
+                // clone's type. An id is only ever in one map, so a storage under the same id in
+                // `other`'s other map is replaced too.
+                let (target, opposite) = if is_unique {
+                    (
+                        &mut other_storages.uniques,
+                        &mut other_storages.components_and_custom,
+                    )
+                } else {
+                    (
+                        &mut other_storages.components_and_custom,
+                        &mut other_storages.uniques,
+                    )
+                };
+                let mut displaced = opposite.remove(storage_id);
+
                 // The destination's groups stay, peers still list this storage as a member.
                 // Nothing here runs user code, user values were cloned already and the
                 // replaced storage is only dropped once the replacement is in place.
-                if let Some(destination) = other_storages.get_mut(storage_id) {
+                if let Some(destination) = target.get_mut(storage_id).or(displaced.as_mut()) {
                     adopt_groups(
                         destination.storage_mut(),
                         storage.storage_mut(),
@@ -1910,7 +1954,8 @@ for (i, j) in &mut iter {
                     );
                 }
 
-                other_storages.insert(*storage_id, storage);
+                target.insert(*storage_id, storage);
+                drop(displaced);
             }
         }
     }
@@ -1928,19 +1973,22 @@ for (i, j) in &mut iter {
         };
 
         assert!(
-            other_all_storages
-                .exclusive_storage_mut::<Entities>()
-                .unwrap()
-                .spawn(entity),
+            other_all_storages.entities.get_mut().spawn(entity),
             "Other World already has an entity at {:?}'s index.",
             entity
         );
 
-        for storage in self.storages.read().values() {
-            unsafe { &mut *storage.0 }
-                .borrow()
-                .unwrap()
-                .clone_component_to(other_all_storages, entity, entity, other_current);
+        // Uniques don't hold per entity data, we only visit components and custom storages.
+        // A borrowed unique doesn't get in the way.
+        let storages = self.storages.read();
+        for storage in storages.components_and_custom.values() {
+            // SAFE: `storage` is in the registry and `storages` is still locked.
+            unsafe { &*storage.0 }.borrow().unwrap().clone_component_to(
+                other_all_storages,
+                entity,
+                entity,
+                other_current,
+            );
         }
     }
 
@@ -1962,22 +2010,24 @@ for (i, j) in &mut iter {
             );
         };
 
-        if !other_all_storages
-            .exclusive_storage_mut::<Entities>()
-            .unwrap()
-            .is_alive(to)
-        {
+        if !other_all_storages.entities.get_mut().is_alive(to) {
             panic!(
                 "Entity {:?} has to be alive to receive components from another World.",
                 to
             );
         };
 
-        for storage in self.storages.read().values() {
-            unsafe { &mut *storage.0 }
-                .borrow()
-                .unwrap()
-                .clone_component_to(other_all_storages, from, to, other_current);
+        // Uniques don't hold per entity data, we only visit components and custom storages.
+        // A borrowed unique doesn't get in the way.
+        let storages = self.storages.read();
+        for storage in storages.components_and_custom.values() {
+            // SAFE: `storage` is in the registry and `storages` is still locked.
+            unsafe { &*storage.0 }.borrow().unwrap().clone_component_to(
+                other_all_storages,
+                from,
+                to,
+                other_current,
+            );
         }
     }
 }
@@ -1997,6 +2047,33 @@ unsafe fn take_storage<S>(sbox: SBox) -> S {
     let cell = unsafe { Box::from_raw(ptr) };
 
     cell.into_inner()
+}
+
+/// Returns the `T` component or custom storage registered under `storage_id` in
+/// `components_and_custom`, inserting `new_storage()` if it doesn't exist.
+///
+/// Takes the map instead of `&mut AllStorages` so callers can build `new_storage` from other
+/// `AllStorages` fields.
+#[inline]
+fn component_or_insert_with<T: 'static>(
+    storages: &mut ShipHashMap<StorageId, SBox>,
+    storage_id: StorageId,
+    new_storage: impl FnOnce() -> SBox,
+) -> &mut T {
+    // We only keep the pointer out of the lookup, so the miss branch can insert.
+    let storage = match storages.get(&storage_id) {
+        Some(sbox) => sbox.0,
+        None => storages.entry(storage_id).or_insert_with(new_storage).0,
+    };
+
+    // SAFE: `storage` comes from an `SBox` in the registry, found or just inserted, so it points
+    // to a live boxed `AtomicRefCell`. We hold the registry exclusively for as long as the returned
+    // reference lives, so nobody can remove the storage or borrow it in the meantime.
+    unsafe { &mut *storage }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut()
+        .unwrap()
 }
 
 /// Returns `T`'s unique storage, looking through the thread-local wrapper it might be stored in.
@@ -2057,10 +2134,39 @@ impl core::fmt::Debug for AllStorages {
 
         let storages = self.storages.read();
 
-        debug_struct.field("storage_count", &storages.len());
-        debug_struct.field("storages", &storages.values());
+        // The entities aren't in the registry, they count as one more storage.
+        debug_struct.field("storage_count", &(storages.len() + 1));
+        debug_struct.field(
+            "storages",
+            &StorageNames {
+                entities: &self.entities,
+                registry: &storages,
+            },
+        );
 
         debug_struct.finish()
+    }
+}
+
+/// Lists the name of every storage, the entities first.
+///
+/// Each storage is shown like `SBox` shows it: its name, or a note when it's borrowed exclusively.
+struct StorageNames<'a> {
+    entities: &'a AtomicRefCell<Entities>,
+    registry: &'a StorageMaps,
+}
+
+impl core::fmt::Debug for StorageNames<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let entities = match self.entities.borrow() {
+            Ok(entities) => entities.name(),
+            Err(_) => "Could not borrow storage".into(),
+        };
+
+        f.debug_list()
+            .entry(&format_args!("{entities}"))
+            .entries(self.registry.values())
+            .finish()
     }
 }
 
@@ -2070,9 +2176,18 @@ impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
 
         let mut debug_struct = f.debug_list();
 
+        // The entities aren't in the registry, we report them first.
+        match self.0.entities.borrow() {
+            Ok(entities) => {
+                debug_struct.entries(entities.memory_usage());
+            }
+            Err(_) => borrowed_storages += 1,
+        }
+
         let storages = self.0.storages.read();
 
         debug_struct.entries(storages.values().filter_map(|storage| {
+            // SAFE: `storage` is in the registry and `storages` is still locked.
             match unsafe { &*(storage.0) }.borrow() {
                 Ok(storage) => storage.memory_usage(),
                 Err(_) => {

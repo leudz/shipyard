@@ -3,7 +3,7 @@ mod prepare;
 #[cfg(test)]
 mod tests;
 
-use crate::all_storages::AllStorages;
+use crate::all_storages::{AllStorages, StorageMaps};
 use crate::component::{Component, Unique};
 use crate::scheduler::info::{DedupedLabels, TypeInfo, WorkloadInfo};
 use crate::scheduler::label::WorkloadLabel;
@@ -12,7 +12,6 @@ use crate::scheduler::{
     AsLabel, Batches, IntoWorkload, IntoWorkloadSystem, IntoWorkloadTrySystem, Label, Scheduler,
     WorkloadSystem,
 };
-use crate::storage::StorageId;
 use crate::unique::UniqueStorage;
 use crate::world::World;
 use crate::{ShipHashMap, error};
@@ -584,14 +583,15 @@ impl Workload {
 fn check_uniques_in_systems(
     system: &WorkloadSystem,
     unique_name: &str,
-    storages: &ShipHashMap<StorageId, crate::storage::SBox>,
+    storages: &StorageMaps,
 ) -> Option<Result<(), error::UniquePresence>> {
     let WorkloadSystem {
         borrow_constraints, ..
     } = system;
 
     for type_info in borrow_constraints {
-        if type_info.name.starts_with(unique_name) && !storages.contains_key(&type_info.storage_id)
+        if type_info.name.starts_with(unique_name)
+            && storages.unique(type_info.storage_id).is_none()
         {
             return Some(Err(error::UniquePresence::Unique(type_info.clone())));
         }

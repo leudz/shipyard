@@ -65,7 +65,7 @@ fn custom_storage() {
     world
         .all_storages
         .get_mut()
-        .exclusive_storage_or_insert_mut(StorageId::of::<Custom>(), || Custom(7));
+        .exclusive_component_or_insert_mut(StorageId::of::<Custom>(), || Custom(7));
 
     world.regroup();
 
@@ -73,7 +73,7 @@ fn custom_storage() {
     let custom = world
         .all_storages
         .get_mut()
-        .exclusive_storage_or_insert_mut(StorageId::of::<Custom>(), || Custom(0));
+        .exclusive_component_or_insert_mut(StorageId::of::<Custom>(), || Custom(0));
     assert_eq!(custom.0, 7);
 }
 

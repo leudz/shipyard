@@ -7,6 +7,7 @@ use crate::storage::StorageId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::type_name;
 use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
 use std::error::Error;
@@ -87,10 +88,20 @@ impl GetStorage {
     pub fn from_custom<E: Into<Box<dyn Error + Send + Sync>>>(error: E) -> GetStorage {
         GetStorage::Custom(error.into())
     }
+
     #[cfg(not(feature = "std"))]
     #[allow(missing_docs)]
     pub fn from_custom<E: core::any::Any + Send>(error: E) -> GetStorage {
         GetStorage::Custom(Box::new(error))
+    }
+
+    /// The error for a failed borrow of the `S` storage.
+    pub(crate) fn storage_borrow<S: 'static>(borrow: Borrow) -> GetStorage {
+        GetStorage::StorageBorrow {
+            name: Some(type_name::<S>()),
+            id: StorageId::of::<S>(),
+            borrow,
+        }
     }
 }
 

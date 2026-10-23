@@ -388,6 +388,15 @@ impl Entities {
     pub fn take_on_deletion(&mut self) -> Option<Box<dyn FnMut(EntityId) + Send + Sync + 'static>> {
         self.on_deletion.take()
     }
+
+    /// Clones the entities and their recycling state, without the deletion callback.
+    pub(crate) fn clone_without_on_deletion(&self) -> Entities {
+        Entities {
+            data: self.data.clone(),
+            list: self.list,
+            on_deletion: None,
+        }
+    }
 }
 
 impl Storage for Entities {
@@ -461,11 +470,7 @@ impl Storage for Entities {
 
     #[inline]
     fn try_clone(&self, _other_current: TrackingTimestamp) -> Option<SBoxBuilder> {
-        Some(SBoxBuilder::new(Entities {
-            data: self.data.clone(),
-            list: self.list,
-            on_deletion: None,
-        }))
+        Some(SBoxBuilder::new(self.clone_without_on_deletion()))
     }
 
     #[inline]

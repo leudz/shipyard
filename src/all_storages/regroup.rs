@@ -20,7 +20,7 @@ mod layout;
 mod tests;
 
 use crate::ShipHashMap;
-use crate::all_storages::{AllStorages, ConnectedSet, CustomStorageAccess, GroupMember};
+use crate::all_storages::{AllStorages, ConnectedSet, GroupMember};
 use crate::atomic_refcell::ARefMut;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -38,7 +38,9 @@ impl AllStorages {
     /// Workloads added to the world regroup storages they use automatically.\
     /// This is for the rest, like iterating in [`AllStorages::run`].
     pub fn regroup(&mut self) {
-        regroup_selected(&mut Selected::all(self.storages.get_mut()));
+        regroup_selected(&mut Selected::all(
+            &mut self.storages.get_mut().components_and_custom,
+        ));
     }
 
     /// Regroups the [connected set] holding `T`'s storage, leaving the rest of the world alone.
@@ -108,7 +110,7 @@ impl AllStorages {
         // Dropping `guards` on an early return releases the borrows already taken.
         let mut guards = Vec::with_capacity(set.members.len());
         for &storage_id in &set.members {
-            match self.custom_storage_mut_by_id(storage_id) {
+            match self.component_storage_mut_by_id(storage_id) {
                 Ok(guard) => guards.push(guard),
                 Err(mut error) => {
                     // Borrowing by id doesn't know the storage's type, so we take its name

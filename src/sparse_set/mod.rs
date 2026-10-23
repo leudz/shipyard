@@ -1281,7 +1281,7 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
         other_current: TrackingTimestamp,
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
-            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_mut(
+            let other_sparse_set = other_all_storages.exclusive_component_or_insert_mut(
                 StorageId::of::<SparseSet<T>>(),
                 SparseSet::<T>::new,
             );
@@ -1323,7 +1323,7 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
         if let Some(clone) = &self.clone
             && let Some(component) = self.private_get(from)
         {
-            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_mut(
+            let other_sparse_set = other_all_storages.exclusive_component_or_insert_mut(
                 StorageId::of::<SparseSet<T>>(),
                 SparseSet::<T>::new,
             );

@@ -14,7 +14,6 @@ use crate::all_storages::{
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
 use crate::component::{Component, Unique};
-use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::get_component::GetComponent;
@@ -1684,11 +1683,12 @@ for (i, j) in &mut iter {
     }
 
     /// Returns true if entity matches a living entity.
+    #[inline]
     pub fn is_entity_alive(&mut self, entity: EntityId) -> bool {
         self.all_storages
             .get_mut()
-            .exclusive_storage_mut::<Entities>()
-            .unwrap()
+            .entities
+            .get_mut()
             .is_alive(entity)
     }
 

@@ -66,7 +66,7 @@ impl<T: Component + Send + Sync> GroupMember for T {
 
     #[inline]
     fn get_or_insert(all_storages: &mut AllStorages) {
-        all_storages.exclusive_storage_or_insert_mut(Self::storage_id(), SparseSet::<T>::new);
+        all_storages.exclusive_component_or_insert_mut(Self::storage_id(), SparseSet::<T>::new);
     }
 }
 
@@ -89,7 +89,7 @@ impl<T: Component + Sync> GroupMember for NonSend<T> {
 
     #[inline]
     fn get_or_insert(all_storages: &mut AllStorages) {
-        all_storages.exclusive_storage_or_insert_non_send_mut(Self::storage_id(), || {
+        all_storages.exclusive_component_or_insert_non_send_mut(Self::storage_id(), || {
             NonSend(SparseSet::<T>::new())
         });
     }
@@ -114,7 +114,7 @@ impl<T: Component + Send> GroupMember for NonSync<T> {
 
     #[inline]
     fn get_or_insert(all_storages: &mut AllStorages) {
-        all_storages.exclusive_storage_or_insert_non_sync_mut(Self::storage_id(), || {
+        all_storages.exclusive_component_or_insert_non_sync_mut(Self::storage_id(), || {
             NonSync(SparseSet::<T>::new())
         });
     }
@@ -139,7 +139,7 @@ impl<T: Component> GroupMember for NonSendSync<T> {
 
     #[inline]
     fn get_or_insert(all_storages: &mut AllStorages) {
-        all_storages.exclusive_storage_or_insert_non_send_sync_mut(Self::storage_id(), || {
+        all_storages.exclusive_component_or_insert_non_send_sync_mut(Self::storage_id(), || {
             NonSendSync(SparseSet::<T>::new())
         });
     }
@@ -315,7 +315,7 @@ impl Grouping {
             (member.create)(all_storages);
         }
 
-        let storages = all_storages.storages.get_mut();
+        let storages = &mut all_storages.storages.get_mut().components_and_custom;
         for group in &self.groups {
             for &storage_id in group.iter() {
                 member_groups(storages, storage_id).attach(group.clone(), storage_id);

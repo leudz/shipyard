@@ -29,7 +29,7 @@ fn sorted_values(mut values: Vec<(EntityId, u32)>) -> Vec<(EntityId, u32)> {
 /// Returns the number of rows whose id changed in each grouped storage.
 fn two_phases(world: &World) -> BTreeMap<StorageId, usize> {
     let mut all_storages = world.all_storages_mut().unwrap();
-    let mut selected = Selected::all(all_storages.storages.get_mut());
+    let mut selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
 
     let frozen = Frozen::new(&selected);
     let entry: Vec<Vec<EntityId>> = frozen.dense.iter().map(|dense| dense.to_vec()).collect();
