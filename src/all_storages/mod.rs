@@ -460,11 +460,9 @@ impl AllStorages {
     /// ```
     pub fn delete_entity(&mut self, entity: EntityId) -> bool {
         // no need to lock here since we have a unique access
-        let mut entities = self.entities_mut().unwrap();
+        let entities = self.exclusive_storage_mut::<Entities>().unwrap();
 
         if entities.delete_unchecked(entity) {
-            drop(entities);
-
             self.strip(entity);
 
             true
