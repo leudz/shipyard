@@ -5,8 +5,8 @@ use crate::world::World;
 use alloc::sync::Arc;
 use core::sync::atomic::AtomicU64;
 
-/// Builder for [`World`] when one wants custom lock, custom thread pool
-/// or custom thread id provider function.
+/// Builder for [`World`] to declare [groups](WorldBuilder::with_group)
+/// or configure a custom lock, thread pool or thread id provider function.
 pub struct WorldBuilder<Lock, ThreadId> {
     all_storages_builder: AllStoragesBuilder<Lock, ThreadId>,
     #[cfg(feature = "parallel")]
@@ -14,8 +14,8 @@ pub struct WorldBuilder<Lock, ThreadId> {
 }
 
 impl World {
-    /// Returns a builder for [`World`] when one wants custom lock, custom thread pool
-    /// or custom thread id provider function.
+    /// Returns a builder for [`World`] to declare [groups](WorldBuilder::with_group)
+    /// or configure a custom lock, thread pool or thread id provider function.
     #[cfg(feature = "std")]
     pub fn builder() -> WorldBuilder<LockPresent, ThreadIdPresent> {
         WorldBuilder {
@@ -25,8 +25,8 @@ impl World {
         }
     }
 
-    /// Returns a builder for [`World`] when one wants custom lock, custom thread pool
-    /// or custom thread id provider function.
+    /// Returns a builder for [`World`] to declare [groups](WorldBuilder::with_group)
+    /// or configure a custom lock, thread pool or thread id provider function.
     #[cfg(all(not(feature = "std"), not(feature = "thread_local")))]
     pub fn builder() -> WorldBuilder<crate::all_storages::MissingLock, ThreadIdPresent> {
         WorldBuilder {
@@ -39,8 +39,8 @@ impl World {
         }
     }
 
-    /// Returns a builder for [`World`] when one wants custom lock, custom thread pool
-    /// or custom thread id provider function.
+    /// Returns a builder for [`World`] to declare [groups](WorldBuilder::with_group)
+    /// or configure a custom lock, thread pool or thread id provider function.
     #[cfg(all(not(feature = "std"), feature = "thread_local"))]
     pub fn builder()
     -> WorldBuilder<crate::all_storages::MissingLock, crate::all_storages::MissingThreadId> {
