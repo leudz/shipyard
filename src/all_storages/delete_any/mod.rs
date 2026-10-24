@@ -22,7 +22,7 @@ impl<T: 'static + Storage + CustomDeleteAny> TupleDeleteAny for T {
         let current = all_storages.get_current();
         let storages = &mut all_storages.storages.get_mut().components_and_custom;
 
-        if let Some(storage) = storages.get_mut(&StorageId::of::<T>()) {
+        if let Some(storage) = storages.get_mut(StorageId::of::<T>()) {
             unsafe { &mut *storage.0 }
                 .get_mut()
                 .as_any_mut()
@@ -47,7 +47,7 @@ macro_rules! impl_delete_any {
                 let storages = &mut all_storages.storages.get_mut().components_and_custom;
 
                 $(
-                    if let Some(storage) = storages.get_mut(&StorageId::of::<$storage>()) {
+                    if let Some(storage) = storages.get_mut(StorageId::of::<$storage>()) {
                         unsafe { &mut *storage.0 }.get_mut().as_any_mut().downcast_mut::<$storage>().unwrap().delete_any(&mut ids, current);
                     }
                 )+

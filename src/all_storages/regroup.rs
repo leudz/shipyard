@@ -19,13 +19,12 @@ mod layout;
 #[cfg(test)]
 mod tests;
 
-use crate::ShipHashMap;
-use crate::all_storages::{AllStorages, ConnectedSet, GroupMember};
+use crate::all_storages::{AllStorages, ComponentsAndCustom, ConnectedSet, GroupMember};
 use crate::atomic_refcell::ARefMut;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::sparse_set::SparseArray;
-use crate::storage::{SBox, Storage, StorageId};
+use crate::storage::{Storage, StorageId};
 use alloc::vec::Vec;
 
 impl AllStorages {
@@ -165,13 +164,10 @@ pub(super) struct Selected<'a> {
 
 impl<'a> Selected<'a> {
     /// Selects every storage of `storages`.
-    fn all(storages: &'a mut ShipHashMap<StorageId, SBox>) -> Selected<'a> {
-        let mut storages: Vec<(StorageId, &'a mut (dyn Storage + 'static))> = storages
-            .iter_mut()
-            .map(|(&storage_id, sbox)| (storage_id, sbox.storage_mut()))
-            .collect();
+    fn all(storages: &'a mut ComponentsAndCustom) -> Selected<'a> {
+        let mut storages = storages.collect_storages_mut();
 
-        // The map's iteration order can change between runs. Sorting keeps the layout,
+        // Slot order depends on registration and takeovers. Sorting keeps the layout,
         // and therefore grouped iteration order, reproducible within a build.
         // Storage ids don't promise the same order across compiler builds.
         storages.sort_unstable_by_key(|&(storage_id, _)| storage_id);

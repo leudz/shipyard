@@ -110,7 +110,9 @@ fn assert_regrouped(world: &World) {
 
             for member_id in range.group.iter() {
                 // SAFE: same as above.
-                let member = unsafe { &*storages[member_id].0 }.borrow().unwrap();
+                let member = unsafe { &*storages.get(*member_id).unwrap().0 }
+                    .borrow()
+                    .unwrap();
 
                 assert_eq!(
                     logical(&*member, &range.group),
@@ -133,7 +135,11 @@ fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
     let storages = &registry.components_and_custom;
     // SAFE: `sbox.0` comes from a `Box` that lives as long as `all_storages`,
     // and `borrow` checks no one borrows the storage exclusively.
-    let storage = |storage_id: &StorageId| unsafe { &*storages[storage_id].0 }.borrow().unwrap();
+    let storage = |storage_id: &StorageId| {
+        unsafe { &*storages.get(*storage_id).unwrap().0 }
+            .borrow()
+            .unwrap()
+    };
 
     for (storage_id, sbox) in storages.iter() {
         // SAFE: same as above.
@@ -143,7 +149,7 @@ fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
         };
 
         for (index, &entity) in grouped.dense().unwrap().iter().enumerate() {
-            let expected = expected_union(declared, *storage_id, |member_id| {
+            let expected = expected_union(declared, storage_id, |member_id| {
                 storage(member_id).sparse_array().unwrap().contains(entity)
             });
 

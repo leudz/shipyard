@@ -20,7 +20,7 @@ pub use retain::TupleRetainStorage;
 pub(crate) use builder::AllStoragesBuilder;
 pub(crate) use clone::TupleClone;
 pub(crate) use group::{ConnectedSet, Grouping};
-pub(crate) use storage_maps::StorageMaps;
+pub(crate) use storage_maps::{ComponentsAndCustom, StorageMaps};
 
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;
@@ -29,6 +29,7 @@ use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::{Component, Unique};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::get_component::GetComponent;
 use crate::get_unique::GetUnique;
 use crate::iter::Shiperator;
@@ -47,7 +48,6 @@ use crate::system::AllSystem;
 use crate::tracking::{TrackingTimestamp, TupleTrack};
 use crate::unique::UniqueStorage;
 use crate::views::EntitiesViewMut;
-use crate::{ShipHashMap, error};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use clone::adopt_groups;
@@ -65,11 +65,14 @@ pub struct MissingThreadId;
 pub struct ThreadIdPresent;
 
 /// Contains all storages present in the [`World`](crate::world::World).
-// The registry is two maps under one lock, see `StorageMaps`: the components and custom storages,
-// and the uniques. The lock is held very briefly:
+// The registry is two collections under one lock, see `StorageMaps`: the components and custom
+// storages, a dense vector found through an index map, and the uniques, a map. The lock is held
+// very briefly:
 // - shared: when looking up a storage
 // - exclusive: when adding or removing a storage
-// Storages are boxed, so they don't move when a map reallocates.
+// Storages are boxed. The registry only moves pointers to them: when the index map, the vector or
+// the unique map reallocates, or when a removal moves the last vector slot into the hole. The
+// storages themselves never move.
 //
 // Once we find a storage, we borrow it *before* releasing the lock. From then on, the runtime
 // borrow is what keeps the storage valid, not the lock:
@@ -213,7 +216,7 @@ impl AllStorages {
             let foreign = storages
                 .uniques
                 .remove(&storage_id)
-                .or_else(|| storages.components_and_custom.remove(&storage_id));
+                .or_else(|| storages.components_and_custom.remove(storage_id));
             storages.uniques.insert(
                 storage_id,
                 new_storage(UniqueStorage::new(component, current)),
@@ -611,7 +614,7 @@ impl AllStorages {
             // Uniques don't hold per entity data, we only visit components and custom storages.
             let storages = &mut all_storages.storages.get_mut().components_and_custom;
 
-            storages.par_iter_mut().for_each(|(_, storage)| {
+            storages.par_values_mut().for_each(|storage| {
                 // SAFE: `storage` is in the registry and we hold `&mut AllStorages`, each task
                 // gets a different storage.
                 let storage = unsafe { &mut *storage.0 }.get_mut();
@@ -663,12 +666,12 @@ impl AllStorages {
         // Uniques don't hold per entity data, we only visit components and custom storages.
         let storages = &mut self.storages.get_mut().components_and_custom;
 
-        for (storage_id, storage) in storages.iter_mut() {
-            if !excluded_storage.contains(storage_id) {
+        storages.for_each_mut(|storage_id, storage| {
+            if !excluded_storage.contains(&storage_id) {
                 // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
                 unsafe { &mut *storage.0 }.get_mut().delete(entity, current);
             }
-        }
+        });
     }
     /// Deletes all entities and components in the `World`.
     ///
@@ -1856,7 +1859,12 @@ for (i, j) in &mut iter {
             .components_and_custom
             .iter()
             .map(|entry| (entry, false))
-            .chain(source.uniques.iter().map(|entry| (entry, true)));
+            .chain(
+                source
+                    .uniques
+                    .iter()
+                    .map(|(&storage_id, storage)| ((storage_id, storage), true)),
+            );
 
         for ((storage_id, storage), is_unique) in source_storages {
             // SAFE: `storage` is in our registry and we hold its lock for the whole loop, so it
@@ -1924,32 +1932,33 @@ for (i, j) in &mut iter {
                 // The clone keeps the original's registration, a unique stays with the uniques
                 // and everything else with the components and custom storages, whatever the
                 // clone's type. An id is only ever in one map, so a storage under the same id in
-                // `other`'s other map is replaced too.
-                let (target, opposite) = if is_unique {
-                    (
-                        &mut other_storages.uniques,
-                        &mut other_storages.components_and_custom,
-                    )
+                // `other`'s other map is taken out and replaced too.
+                let mut displaced = if is_unique {
+                    other_storages.components_and_custom.remove(storage_id)
                 } else {
-                    (
-                        &mut other_storages.components_and_custom,
-                        &mut other_storages.uniques,
-                    )
+                    other_storages.uniques.remove(&storage_id)
                 };
-                let mut displaced = opposite.remove(storage_id);
 
                 // The destination's groups stay, peers still list this storage as a member.
                 // Nothing here runs user code, user values were cloned already and the
                 // replaced storage is only dropped once the replacement is in place.
-                if let Some(destination) = target.get_mut(storage_id).or(displaced.as_mut()) {
-                    adopt_groups(
-                        destination.storage_mut(),
-                        storage.storage_mut(),
-                        *storage_id,
-                    );
+                let destination = if is_unique {
+                    other_storages.uniques.get_mut(&storage_id)
+                } else {
+                    other_storages.components_and_custom.get_mut(storage_id)
+                };
+                if let Some(destination) = destination.or(displaced.as_mut()) {
+                    adopt_groups(destination.storage_mut(), storage.storage_mut(), storage_id);
                 }
 
-                target.insert(*storage_id, storage);
+                let replaced = if is_unique {
+                    other_storages.uniques.insert(storage_id, storage)
+                } else {
+                    other_storages
+                        .components_and_custom
+                        .insert(storage_id, storage)
+                };
+                drop(replaced);
                 drop(displaced);
             }
         }
@@ -2047,19 +2056,15 @@ unsafe fn take_storage<S>(sbox: SBox) -> S {
 /// Returns the `T` component or custom storage registered under `storage_id` in
 /// `components_and_custom`, inserting `new_storage()` if it doesn't exist.
 ///
-/// Takes the map instead of `&mut AllStorages` so callers can build `new_storage` from other
+/// Takes the registry instead of `&mut AllStorages` so callers can build `new_storage` from other
 /// `AllStorages` fields.
 #[inline]
 fn component_or_insert_with<T: 'static>(
-    storages: &mut ShipHashMap<StorageId, SBox>,
+    storages: &mut ComponentsAndCustom,
     storage_id: StorageId,
     new_storage: impl FnOnce() -> SBox,
 ) -> &mut T {
-    // We only keep the pointer out of the lookup, so the miss branch can insert.
-    let storage = match storages.get(&storage_id) {
-        Some(sbox) => sbox.0,
-        None => storages.entry(storage_id).or_insert_with(new_storage).0,
-    };
+    let storage = storages.get_or_insert_with(storage_id, new_storage).0;
 
     // SAFE: `storage` comes from an `SBox` in the registry, found or just inserted, so it points
     // to a live boxed `AtomicRefCell`. We hold the registry exclusively for as long as the returned
@@ -2106,12 +2111,9 @@ fn unique_storage_mut<T: Unique>(storage: &mut dyn Storage) -> Option<&mut Uniqu
 /// - The storage doesn't exist.
 /// - The storage doesn't support grouping.
 #[track_caller]
-fn member_groups(
-    storages: &mut ShipHashMap<StorageId, SBox>,
-    storage_id: StorageId,
-) -> &mut Groups {
+fn member_groups(storages: &mut ComponentsAndCustom, storage_id: StorageId) -> &mut Groups {
     let sbox = storages
-        .get_mut(&storage_id)
+        .get_mut(storage_id)
         .expect("group members are created before being grouped");
 
     // SAFE: `sbox.0` comes from a `Box` that lives as long as its entry in the map,

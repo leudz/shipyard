@@ -913,8 +913,7 @@ impl AllStorages {
                         None => {
                             storages
                                 .components_and_custom
-                                .entry(storage_id)
-                                .or_insert_with(new_storage)
+                                .get_or_insert_with(storage_id, new_storage)
                                 .0
                         }
                     };
@@ -972,8 +971,7 @@ impl AllStorages {
                         None => {
                             storages
                                 .components_and_custom
-                                .entry(storage_id)
-                                .or_insert_with(new_storage)
+                                .get_or_insert_with(storage_id, new_storage)
                                 .0
                         }
                     };
@@ -1019,7 +1017,7 @@ impl AllStorages {
             None => {
                 let mut storages = self.storages.write();
                 let components = &mut storages.components_and_custom;
-                let cell = components.entry(storage_id).or_insert_with(new_storage).0;
+                let cell = components.get_or_insert_with(storage_id, new_storage).0;
                 // SAFE: `cell` comes from an `SBox` in the registry and `storages` is still locked.
                 let storage = unsafe { &*cell }.borrow();
                 drop(storages);
@@ -1062,7 +1060,7 @@ impl AllStorages {
             None => {
                 let mut storages = self.storages.write();
                 let components = &mut storages.components_and_custom;
-                let cell = components.entry(storage_id).or_insert_with(new_storage).0;
+                let cell = components.get_or_insert_with(storage_id, new_storage).0;
                 // SAFE: `cell` comes from an `SBox` in the registry and `storages` is still locked.
                 let storage = unsafe { &*cell }.borrow_mut();
                 drop(storages);
@@ -1122,8 +1120,7 @@ where
             let mut storages = registry.write();
             let components = &mut storages.components_and_custom;
             let cell = components
-                .entry(storage_id)
-                .or_insert_with(|| SBox::new(f()))
+                .get_or_insert_with(storage_id, || SBox::new(f()))
                 .0;
             // SAFE: `cell` comes from an `SBox` in the registry and `storages` is still locked.
             let storage = unsafe { &*cell }.borrow_mut();

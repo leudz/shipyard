@@ -4,7 +4,7 @@
 //! while others are borrowed, so these tests keep borrows alive across insertions and check
 //! every erased storage is reached with the right type and dropped exactly once.
 
-use crate::all_storages::CustomStorageAccess;
+use crate::all_storages::{AllStorages, CustomStorageAccess};
 #[cfg(all(feature = "std", feature = "thread_local"))]
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::{Component, Unique};
@@ -105,42 +105,50 @@ fn counted(value: u32, drops: &Arc<AtomicUsize>) -> Counted {
 }
 
 /// Asserts that a custom storage borrowed through the shared registry API stays valid while
-/// inserting more storages makes the registry reallocate. The registry only holds pointers to
-/// boxed storages, so the borrowed one mustn't move. Every storage is dropped exactly once with
-/// the world.
+/// inserting more storages makes both the index map and the vector reallocate. The registry only
+/// holds pointers to boxed storages, so the borrowed one mustn't move. Once the guard is released,
+/// the storage can be borrowed mutably and written. Every storage is dropped exactly once with the
+/// world.
 #[test]
 fn registry_growth() {
     let drops = Arc::new(AtomicUsize::new(0));
     let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
 
-    {
-        let all_storages = world.all_storages().unwrap();
-        let first = all_storages
-            .custom_storage_or_insert_by_id(StorageId::Custom(0), || Counted::new(&drops))
+    let first = all_storages
+        .custom_storage_or_insert_by_id(StorageId::Custom(0), || Counted::new(&drops))
+        .unwrap();
+    let (indices, storages) = all_storages
+        .storages
+        .read()
+        .components_and_custom
+        .capacities();
+
+    for id in 1..=8 {
+        let _ = all_storages
+            .custom_storage_or_insert_by_id(StorageId::Custom(id), || Counted::new(&drops))
             .unwrap();
-        let capacity = all_storages
-            .storages
-            .read()
-            .components_and_custom
-            .capacity();
-
-        for id in 1..=8 {
-            let _ = all_storages
-                .custom_storage_or_insert_by_id(StorageId::Custom(id), || Counted::new(&drops))
-                .unwrap();
-        }
-        assert!(
-            all_storages
-                .storages
-                .read()
-                .components_and_custom
-                .capacity()
-                > capacity
-        );
-
-        assert_eq!(first.values, [1, 2]);
     }
+    let (grown_indices, grown_storages) = all_storages
+        .storages
+        .read()
+        .components_and_custom
+        .capacities();
+    assert!(grown_indices > indices);
+    assert!(grown_storages > storages);
 
+    assert_eq!(first.values, [1, 2]);
+    drop(first);
+
+    let mut storage = all_storages
+        .custom_storage_mut_by_id(StorageId::Custom(0))
+        .unwrap();
+    let first = storage.any_mut().downcast_mut::<Counted>().unwrap();
+    first.values.push(3);
+    assert_eq!(first.values, [1, 2, 3]);
+
+    drop(storage);
+    drop(all_storages);
     drop(world);
     assert_eq!(drops.load(Ordering::Relaxed), 9);
 }
@@ -1764,7 +1772,7 @@ fn add_unique_map() {
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains_key(&id));
+    assert!(!registry.components_and_custom.contains(id));
 }
 
 /// Asserts that a unique registered through a custom path stays in the component and custom map,
@@ -1785,7 +1793,7 @@ fn custom_path_unique_view() {
     );
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
-    assert!(registry.components_and_custom.contains_key(&id));
+    assert!(registry.components_and_custom.contains(id));
     assert!(!registry.uniques.contains_key(&id));
 }
 
@@ -1809,7 +1817,7 @@ fn replace_custom_path_unique() {
     drop(view);
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
-    assert!(registry.components_and_custom.contains_key(&id));
+    assert!(registry.components_and_custom.contains(id));
     assert!(!registry.uniques.contains_key(&id));
 }
 
@@ -1834,7 +1842,7 @@ fn remove_custom_path_unique() {
             .storages
             .read()
             .components_and_custom
-            .contains_key(&id)
+            .contains(id)
     );
     drop(all_storages);
     assert_eq!(
@@ -1858,7 +1866,7 @@ fn replace_foreign_map() {
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains_key(&id));
+    assert!(!registry.components_and_custom.contains(id));
 }
 
 /// Asserts that generic insertion under a unique's id returns the unique without running the
@@ -1881,7 +1889,7 @@ fn generic_insert_existing_unique() {
 
     let registry = all_storages.storages.read();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains_key(&id));
+    assert!(!registry.components_and_custom.contains(id));
 }
 
 /// Asserts that generic insertion under a component's id returns the component storage without
@@ -1959,7 +1967,7 @@ fn clone_unique_over_custom() {
     );
     let registry = destination.all_storages.get_mut().storages.get_mut();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains_key(&id));
+    assert!(!registry.components_and_custom.contains(id));
 }
 
 /// Asserts that cloning a custom storage into a world holding a unique under the same id
@@ -1989,7 +1997,7 @@ fn clone_custom_over_unique() {
     );
     drop(clone);
     let registry = all_storages.storages.read();
-    assert!(registry.components_and_custom.contains_key(&id));
+    assert!(registry.components_and_custom.contains(id));
     assert!(!registry.uniques.contains_key(&id));
 }
 
@@ -2042,5 +2050,369 @@ fn concurrent_insertion() {
 
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     let all_storages = world.all_storages().unwrap();
-    assert_eq!(all_storages.storages.read().len(), 1);
+    let registry = all_storages.storages.read();
+    assert_eq!(registry.len(), 1);
+    assert_eq!(registry.components_and_custom.len(), 1);
+    registry.components_and_custom.assert_consistent();
+}
+
+/// Registers a `Counted` holding `[id]` under `StorageId::Custom(id)` for every id of `ids`.
+///
+/// 20 storages make the index map and the vector reallocate several times.
+fn add_counted(world: &World, ids: core::ops::Range<u64>, counter: &Arc<AtomicUsize>) {
+    for id in ids {
+        world
+            .add_custom_storage(StorageId::Custom(id), counted(id as u32, counter))
+            .unwrap();
+    }
+}
+
+/// Asserts that the `Counted` under `StorageId::Custom(id)` holds `[id]` for every id of `ids`.
+fn assert_counted(all_storages: &AllStorages, ids: core::ops::Range<u64>) {
+    for id in ids {
+        let storage = all_storages
+            .custom_storage_by_id(StorageId::Custom(id))
+            .unwrap();
+        let counted = storage.any().downcast_ref::<Counted>().unwrap();
+        assert_eq!(counted.values, [id as u32], "Custom({id})");
+    }
+}
+
+/// Asserts that registering an id a second time returns the storage registered the first time,
+/// without running the new factory or adding a slot.
+#[test]
+fn duplicate_registration() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+
+    let first = all_storages
+        .custom_storage_or_insert_by_id(StorageId::Custom(0), || counted(0, &counter))
+        .unwrap();
+    let first: *const Counted = &*first;
+
+    let again = all_storages
+        .custom_storage_or_insert_by_id(StorageId::Custom(0), || -> Counted {
+            panic!("the factory of an existing storage ran")
+        })
+        .unwrap();
+
+    assert!(core::ptr::eq(&*again, first));
+    drop(again);
+    let registry = all_storages.storages.read();
+    assert_eq!(registry.components_and_custom.len(), 1);
+    registry.components_and_custom.assert_consistent();
+}
+
+/// Asserts that a factory panicking while registering a new storage leaves the registry as it
+/// was: no slot or id for the new storage, the existing one untouched, and the id can still be
+/// registered afterwards. Every registered storage is dropped exactly once with the world.
+#[cfg(feature = "std")]
+#[test]
+fn panicking_factory() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    // The factory runs under the registry's write lock. The default std lock is poisoned by the
+    // panic, which makes every later access panic, so we use a custom lock that isn't.
+    let world = counting_world();
+    add_counted(&world, 0..1, &counter);
+    let all_storages = world.all_storages().unwrap();
+
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let _ = all_storages.custom_storage_or_insert_by_id(StorageId::Custom(1), || -> Counted {
+            panic!("factory")
+        });
+    }));
+
+    assert!(result.is_err());
+    {
+        let registry = all_storages.storages.read();
+        assert_eq!(registry.components_and_custom.len(), 1);
+        assert!(
+            !registry
+                .components_and_custom
+                .contains(StorageId::Custom(1))
+        );
+        registry.components_and_custom.assert_consistent();
+    }
+    assert_counted(&all_storages, 0..1);
+
+    let _ = all_storages
+        .custom_storage_or_insert_by_id(StorageId::Custom(1), || counted(1, &counter))
+        .unwrap();
+    assert_counted(&all_storages, 0..2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 2);
+}
+
+/// Asserts that lookup by id, typed lookup and iteration agree once the registry has grown past
+/// several reallocations, with custom ids and component storages mixed.
+#[test]
+fn lookups_agree() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::new_for_test();
+    add_counted(&world, 0..10, &counter);
+    let entity = world.add_entity((Heap(vec![7]), Marker));
+    add_counted(&world, 10..20, &counter);
+
+    let heaps = world.borrow::<View<'_, Heap>>().unwrap();
+    assert_eq!((&heaps).get(entity).unwrap().0, [7]);
+    drop(heaps);
+    let markers = world.borrow::<View<'_, Marker>>().unwrap();
+    assert!((&markers).get(entity).is_ok());
+    drop(markers);
+
+    let all_storages = world.all_storages().unwrap();
+    assert_counted(&all_storages, 0..20);
+
+    let registry = all_storages.storages.read();
+    let storages = &registry.components_and_custom;
+    storages.assert_consistent();
+    assert_eq!(storages.len(), 22);
+    assert_eq!(storages.values().count(), 22);
+
+    let mut ids: Vec<StorageId> = storages.iter().map(|(storage_id, _)| storage_id).collect();
+    ids.sort_unstable();
+    let mut expected: Vec<StorageId> = (0..20).map(StorageId::Custom).collect();
+    expected.push(StorageId::of::<SparseSet<Heap>>());
+    expected.push(StorageId::of::<SparseSet<Marker>>());
+    expected.sort_unstable();
+    assert_eq!(ids, expected);
+
+    for (storage_id, sbox) in storages.iter() {
+        assert_eq!(storages.get(storage_id).unwrap().0, sbox.0);
+    }
+}
+
+/// Asserts that `!Send + !Sync` custom storages registered among regular ones are found by id
+/// with the right values once the registry has grown past several reallocations.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn lookups_agree_thread_local() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    add_counted(&world, 0..10, &counter);
+    {
+        let all_storages = world.all_storages().unwrap();
+        for id in 10..20 {
+            let _ = all_storages
+                .custom_storage_or_insert_non_send_sync_by_id(StorageId::Custom(id), || {
+                    local(id as u32, &counter)
+                })
+                .unwrap();
+        }
+    }
+
+    let all_storages = world.all_storages().unwrap();
+    assert_counted(&all_storages, 0..10);
+    for id in 10..20 {
+        let storage = all_storages
+            .custom_storage_by_id(StorageId::Custom(id))
+            .unwrap();
+        let local = storage.any().downcast_ref::<Local>().unwrap();
+        assert_eq!(local.values, [id as u32]);
+    }
+
+    let registry = all_storages.storages.read();
+    registry.components_and_custom.assert_consistent();
+    assert_eq!(registry.components_and_custom.len(), 20);
+}
+
+/// Custom storage counting the deletion and clear callbacks it receives.
+#[derive(Default)]
+struct Probe {
+    deletes: usize,
+    clears: usize,
+}
+
+impl Storage for Probe {
+    fn delete(&mut self, _entity: EntityId, _current: TrackingTimestamp) {
+        self.deletes += 1;
+    }
+
+    fn clear(&mut self, _current: TrackingTimestamp) {
+        self.clears += 1;
+    }
+}
+
+/// Registers 20 `Probe`s, under `StorageId::Custom(0)` to `StorageId::Custom(19)`.
+fn add_probes(world: &World) {
+    for id in 0..20 {
+        world
+            .add_custom_storage(StorageId::Custom(id), Probe::default())
+            .unwrap();
+    }
+}
+
+/// Returns the `(deletes, clears)` of every probe, in id order.
+fn probe_counts(world: &World) -> Vec<(usize, usize)> {
+    let all_storages = world.all_storages().unwrap();
+
+    (0..20)
+        .map(|id| {
+            let storage = all_storages
+                .custom_storage_by_id(StorageId::Custom(id))
+                .unwrap();
+            let probe = storage.any().downcast_ref::<Probe>().unwrap();
+            (probe.deletes, probe.clears)
+        })
+        .collect()
+}
+
+/// Asserts that deleting an entity calls `delete` exactly once on every custom storage.
+#[test]
+fn delete_callbacks() {
+    let mut world = World::new_for_test();
+    add_probes(&world);
+    let entity = world.add_entity(());
+
+    assert!(world.delete_entity(entity));
+
+    assert_eq!(probe_counts(&world), vec![(1, 0); 20]);
+}
+
+/// Asserts that clearing the world calls `clear` exactly once on every custom storage.
+#[test]
+fn clear_callbacks() {
+    let mut world = World::new_for_test();
+    add_probes(&world);
+
+    world.clear();
+
+    assert_eq!(probe_counts(&world), vec![(0, 1); 20]);
+}
+
+/// Asserts that `retain_storage_by_id` calls `delete` exactly once on every custom storage
+/// except the excluded ones.
+#[test]
+fn retain_callbacks() {
+    let mut world = World::new_for_test();
+    add_probes(&world);
+    let entity = world.add_entity(());
+
+    world.retain_storage_by_id(entity, &[StorageId::Custom(3), StorageId::Custom(17)]);
+
+    let mut expected = vec![(1, 0); 20];
+    expected[3] = (0, 0);
+    expected[17] = (0, 0);
+    assert_eq!(probe_counts(&world), expected);
+}
+
+/// Asserts that `clone_storages_to` gives the destination a clone of every cloneable custom
+/// storage under its own id, with its values, and that each storage is dropped exactly once.
+#[test]
+fn clone_storages_ids() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let source = World::new_for_test();
+    for id in 0..20 {
+        source
+            .add_custom_storage(
+                StorageId::Custom(id),
+                Cloneable(counted(id as u32, &counter)),
+            )
+            .unwrap();
+    }
+    let mut destination = World::new_for_test();
+
+    let source_storages = source.all_storages().unwrap();
+    source_storages.clone_storages_to(destination.all_storages.get_mut());
+    drop(source_storages);
+
+    let all_storages = destination.all_storages().unwrap();
+    for id in 0..20 {
+        let storage = all_storages
+            .custom_storage_by_id(StorageId::Custom(id))
+            .unwrap();
+        let clone = storage.any().downcast_ref::<Cloneable>().unwrap();
+        assert_eq!(clone.0.values, [id as u32]);
+    }
+    all_storages
+        .storages
+        .read()
+        .components_and_custom
+        .assert_consistent();
+    drop(all_storages);
+
+    drop(source);
+    drop(destination);
+    assert_eq!(drops(&counter), 40);
+}
+
+/// Asserts that `add_unique` taking over a foreign custom storage registered among others, not
+/// in the last slot, keeps every other storage reachable under its own id. The removal moves the
+/// last storage into the freed slot. The foreign storage is dropped once, and everything else
+/// once with the world.
+#[test]
+fn unique_takeover_moves_slot() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    add_counted(&world, 0..5, &counter);
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    world.add_custom_storage(id, counted(99, &counter)).unwrap();
+    add_counted(&world, 5..20, &counter);
+
+    world.add_unique(counted(100, &counter));
+
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(
+        world.borrow::<UniqueView<'_, Counted>>().unwrap().values,
+        [100]
+    );
+    let all_storages = world.all_storages().unwrap();
+    assert_counted(&all_storages, 0..20);
+    {
+        let registry = all_storages.storages.read();
+        registry.components_and_custom.assert_consistent();
+        assert_eq!(registry.components_and_custom.len(), 20);
+        assert!(!registry.components_and_custom.contains(id));
+    }
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 22);
+}
+
+/// Asserts that `clone_storages_to` replacing a custom storage registered among others, not in
+/// the last slot, with a unique's clone keeps every other destination storage reachable under its
+/// own id. The replaced storage is dropped once, and everything else once with the worlds.
+#[test]
+fn clone_takeover_moves_slot() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut source = World::new_for_test();
+    source.add_unique(counted(100, &counter));
+    source.register_clone::<UniqueStorage<Counted>>();
+    let mut destination = World::new_for_test();
+    add_counted(&destination, 0..5, &counter);
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    destination
+        .add_custom_storage(id, Cloneable(counted(99, &counter)))
+        .unwrap();
+    add_counted(&destination, 5..20, &counter);
+
+    let source_storages = source.all_storages().unwrap();
+    source_storages.clone_storages_to(destination.all_storages.get_mut());
+    drop(source_storages);
+
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(
+        destination
+            .borrow::<UniqueView<'_, Counted>>()
+            .unwrap()
+            .values,
+        [100]
+    );
+    let all_storages = destination.all_storages().unwrap();
+    assert_counted(&all_storages, 0..20);
+    {
+        let registry = all_storages.storages.read();
+        registry.components_and_custom.assert_consistent();
+        assert_eq!(registry.components_and_custom.len(), 20);
+        assert!(!registry.components_and_custom.contains(id));
+    }
+
+    drop(all_storages);
+    drop(source);
+    drop(destination);
+    assert_eq!(drops(&counter), 23);
 }
