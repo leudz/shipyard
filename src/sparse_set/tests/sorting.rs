@@ -378,7 +378,7 @@ fn sort_unstable_ord() {
 fn pages() {
     let mut sparse_set = SparseSet::new();
     for row in 0..6u64 {
-        let index = (5 - row) * BUCKET_SIZE as u64 + row;
+        let index = (5 - row) * PAGE_LEN as u64 + row;
         let generation = u16::try_from(row).unwrap() + 1;
 
         sparse_set

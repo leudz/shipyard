@@ -162,16 +162,17 @@ impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
 
     #[inline]
     fn sparse_index(&self, entity: EntityId) -> Option<EntityId> {
-        if entity.bucket() < self.sparse_len {
+        if entity.page_index() < self.sparse_len {
             // SAFE: `sparse` points to the `sparse_len` pages of the storage we borrow and
-            // `bucket` is below that length. A page is an `Option<Box<Page>>`,
+            // `entity.page_index()` is below that length. A page is an `Option<Box<Page>>`,
             // which is a nullable pointer to the page.
-            let bucket = unsafe { ptr::read(self.sparse.add(entity.bucket())) };
+            let page = unsafe { ptr::read(self.sparse.add(entity.page_index())) };
 
-            if !bucket.is_null() {
-                // SAFE: `bucket` points to an allocated page, `Page` is `repr(C)` around its
-                // `BUCKET_SIZE` entities and `bucket_index` is a remainder of `BUCKET_SIZE`.
-                Some(unsafe { ptr::read(bucket.add(entity.bucket_index())) })
+            if !page.is_null() {
+                // SAFE: `page` is non-null so it points to an allocated page. `Page` is `repr(C)` around
+                // its `PAGE_LEN` entities and `entity.page_offset()` is below `PAGE_LEN` because it is
+                // the remainder modulo `PAGE_LEN`.
+                Some(unsafe { ptr::read(page.add(entity.page_offset())) })
             } else {
                 None
             }
@@ -405,16 +406,17 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
 
     #[inline]
     fn sparse_index(&self, entity: EntityId) -> Option<EntityId> {
-        if entity.bucket() < self.sparse_len {
+        if entity.page_index() < self.sparse_len {
             // SAFE: `sparse` points to the `sparse_len` pages of the storage we borrow and
-            // `bucket` is below that length. A page is an `Option<Box<Page>>`,
+            // `entity.page_index()` is below that length. A page is an `Option<Box<Page>>`,
             // which is a nullable pointer to the page.
-            let bucket = unsafe { ptr::read(self.sparse.add(entity.bucket())) };
+            let page = unsafe { ptr::read(self.sparse.add(entity.page_index())) };
 
-            if !bucket.is_null() {
-                // SAFE: `bucket` points to an allocated page, `Page` is `repr(C)` around its
-                // `BUCKET_SIZE` entities and `bucket_index` is a remainder of `BUCKET_SIZE`.
-                Some(unsafe { ptr::read(bucket.add(entity.bucket_index())) })
+            if !page.is_null() {
+                // SAFE: `page` is non-null so it points to an allocated page. `Page` is `repr(C)` around
+                // its `PAGE_LEN` entities and `entity.page_offset()` is below `PAGE_LEN` because it is
+                // the remainder modulo `PAGE_LEN`.
+                Some(unsafe { ptr::read(page.add(entity.page_offset())) })
             } else {
                 None
             }

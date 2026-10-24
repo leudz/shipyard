@@ -11,8 +11,7 @@ use crate::get::Get;
 use crate::iter::Shiperator;
 use crate::remove::Remove;
 use crate::sparse_set::{
-    BUCKET_SIZE, EntityCursor, FullRawWindow, FullRawWindowMut, GroupRange, InsertionResult,
-    SparseSet,
+    EntityCursor, FullRawWindow, FullRawWindowMut, GroupRange, InsertionResult, PAGE_LEN, SparseSet,
 };
 use crate::storage::StorageId;
 use crate::track;
@@ -98,10 +97,10 @@ fn values_of(sparse_set: &SparseSet<Item>, entity: EntityId) -> &[u32] {
 fn page_boundaries() {
     let counter = counter();
     let mut sparse_set = SparseSet::new();
-    let last_of_page0 = id(BUCKET_SIZE - 1);
-    let first_of_page1 = id(BUCKET_SIZE);
-    let in_page2 = id(2 * BUCKET_SIZE);
-    let in_page3 = id(3 * BUCKET_SIZE + 1);
+    let last_of_page0 = id(PAGE_LEN - 1);
+    let first_of_page1 = id(PAGE_LEN);
+    let in_page2 = id(2 * PAGE_LEN);
+    let in_page3 = id(3 * PAGE_LEN + 1);
 
     for (entity, value) in [(last_of_page0, 0), (first_of_page1, 1), (in_page3, 3)] {
         sparse_set
@@ -570,16 +569,16 @@ fn bulk_page_boundary() {
     let counter = counter();
     let mut world = World::new_for_test();
 
-    world.spawn(id(BUCKET_SIZE - 2));
+    world.spawn(id(PAGE_LEN - 2));
     let pairs: Vec<EntityId> = world
         .bulk_add_entity((0..2).map(|value| (item(value, &counter), Aligned(value as u64))))
         .collect();
-    world.spawn(id(2 * BUCKET_SIZE - 2));
+    world.spawn(id(2 * PAGE_LEN - 2));
     let singles: Vec<EntityId> = world
         .bulk_add_entity((10..12).map(|value| item(value, &counter)))
         .collect();
-    assert_ne!(pairs[0].bucket(), pairs[1].bucket());
-    assert_ne!(singles[0].bucket(), singles[1].bucket());
+    assert_ne!(pairs[0].page_index(), pairs[1].page_index());
+    assert_ne!(singles[0].page_index(), singles[1].page_index());
 
     let (items, aligned) = world
         .borrow::<(View<'_, Item>, View<'_, Aligned>)>()

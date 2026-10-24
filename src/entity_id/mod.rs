@@ -103,12 +103,12 @@ impl EntityId {
         EntityId(unsafe { NonZeroU64::new_unchecked(!0) })
     }
     #[inline]
-    pub(crate) fn bucket(self) -> usize {
-        self.uindex() / crate::sparse_set::BUCKET_SIZE
+    pub(crate) fn page_index(self) -> usize {
+        self.uindex() / crate::sparse_set::PAGE_LEN
     }
     #[inline]
-    pub(crate) fn bucket_index(self) -> usize {
-        self.uindex() % crate::sparse_set::BUCKET_SIZE
+    pub(crate) fn page_offset(self) -> usize {
+        self.uindex() % crate::sparse_set::PAGE_LEN
     }
     #[inline]
     pub(crate) fn max_index() -> u64 {

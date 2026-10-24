@@ -30,7 +30,7 @@ pub use window::EntityCursor;
 #[cfg(test)]
 pub(crate) use groups::GroupRange;
 pub(crate) use groups::Ring;
-pub(crate) use sparse_array::BUCKET_SIZE;
+pub(crate) use sparse_array::PAGE_LEN;
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 
 use crate::all_storages::AllStorages;
@@ -167,7 +167,7 @@ impl<T: Component> SparseSet<T> {
     /// The index is only valid until a modification occurs in the storage.
     #[inline]
     pub unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-        // SAFE: Our caller guarantees `entity` owns a component, so its bucket is allocated.
+        // SAFE: Our caller guarantees `entity` owns a component, so its page is allocated.
         unsafe { self.sparse.get_unchecked(entity).uindex() }
     }
     /// Returns the `EntityId` at a given `index`.
