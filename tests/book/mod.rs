@@ -10,6 +10,7 @@ mod delete_entity;
 #[cfg(feature = "serde1")]
 mod entity_less_serde;
 mod get;
+mod grouping;
 mod hierarchy;
 mod iterators;
 #[cfg(feature = "thread_local")]
