@@ -74,7 +74,7 @@ pub(super) unsafe fn build(selected: &mut Selected<'_>, plan: &Plan) -> Vec<Layo
 /// changed since.
 pub(super) unsafe fn finish(selected: &mut Selected<'_>, layouts: &[Layout]) {
     for layout in layouts {
-        let storage = selected.get_mut(layout.storage_id);
+        let storage = selected.get_mut(&layout.storage_id);
 
         if let Some(envelope) = layout.envelope.clone() {
             // SAFE: `build` only permuted the storage's ids, and its envelope holds every row
@@ -273,7 +273,7 @@ impl<'a, 'p> Builder<'a, 'p> {
     }
 
     /// Returns the position of the storage with id `storage_id`.
-    fn index_of(&self, storage_id: StorageId) -> usize {
+    fn index_of(&self, storage_id: &StorageId) -> usize {
         self.memberships.position(storage_id)
     }
 
@@ -356,14 +356,14 @@ impl<'a, 'p> Builder<'a, 'p> {
                 if !plan.is_first_unevaluated(
                     &self.memberships,
                     group_index,
-                    membership.storage_id,
+                    &membership.storage_id,
                     entity,
                 ) {
                     continue;
                 }
 
-                for &member_id in plan.groups[group_index].group.iter() {
-                    if member_id == membership.storage_id {
+                for member_id in plan.groups[group_index].group.iter() {
+                    if member_id == &membership.storage_id {
                         continue;
                     }
 
@@ -380,7 +380,8 @@ impl<'a, 'p> Builder<'a, 'p> {
 
                         // The entity sits in the kept prefix of every member of the source,
                         // we gather it once for all of them, from the first.
-                        if logical < plan.groups[source_index].kept && member_id == range.group[0] {
+                        if logical < plan.groups[source_index].kept && member_id == &range.group[0]
+                        {
                             let before = gathered[source_index];
                             self.gather_kept(
                                 source_index,
@@ -411,7 +412,7 @@ impl<'a, 'p> Builder<'a, 'p> {
                 .all(|(group_plan, &gathered)| gathered == group_plan.leaving)
         );
         debug_assert!(self.memberships.storages.iter().zip(&promoted).all(
-            |(membership, &promoted)| { promoted == plan.storage(membership.storage_id).promoted }
+            |(membership, &promoted)| { promoted == plan.storage(&membership.storage_id).promoted }
         ));
     }
 
@@ -429,7 +430,7 @@ impl<'a, 'p> Builder<'a, 'p> {
         let plan = self.plan;
         let group = &plan.groups[group_index].group;
         let kept = plan.groups[group_index].kept;
-        let first = self.index_of(group[0]);
+        let first = self.index_of(&group[0]);
         let first_ring = self.ring(first, group_index);
 
         // Entities only enter the gathered area from their own starting position, and nothing
@@ -456,7 +457,7 @@ impl<'a, 'p> Builder<'a, 'p> {
             }
 
             // Kept prefixes are aligned, the same swap keeps every member aligned.
-            for &member_id in group.iter() {
+            for member_id in group.iter() {
                 let member = self.index_of(member_id);
                 let ring = self.ring(member, group_index);
 
@@ -610,7 +611,7 @@ impl<'a, 'p> Builder<'a, 'p> {
 
         let ungrouped_start = placements.last().map_or(0, |placement| placement.new.end());
         let staying_start =
-            membership.groups.grouped_end() + self.plan.storage(membership.storage_id).promoted;
+            membership.groups.grouped_end() + self.plan.storage(&membership.storage_id).promoted;
         let staying = staying_start.clamp(ungrouped_start, len)
             ..membership
                 .groups
@@ -682,9 +683,9 @@ impl<'a, 'p> Builder<'a, 'p> {
                     .expect("every member holds a range for its group")
             };
 
-            let mut reference = self.index_of(group_plan.group[0]);
+            let mut reference = self.index_of(&group_plan.group[0]);
             let mut reference_trust = 0;
-            for &member_id in group_plan.group.iter() {
+            for member_id in group_plan.group.iter() {
                 let member = self.index_of(member_id);
                 let trust = self.memberships.storages[member]
                     .groups
@@ -699,7 +700,7 @@ impl<'a, 'p> Builder<'a, 'p> {
             }
 
             let source = placement_of(reference);
-            for &member_id in group_plan.group.iter() {
+            for member_id in group_plan.group.iter() {
                 let member = self.index_of(member_id);
                 if member == reference {
                     continue;

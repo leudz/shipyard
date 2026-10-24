@@ -62,9 +62,9 @@ fn builder_wrappers() {
     drop((b, c, d));
 
     let storages = world.all_storages.get_mut().storages.get_mut();
-    assert!(storages.any(id::<B>()).is_none());
-    assert!(storages.any(id::<C>()).is_none());
-    assert!(storages.any(id::<D>()).is_none());
+    assert!(storages.any(&id::<B>()).is_none());
+    assert!(storages.any(&id::<C>()).is_none());
+    assert!(storages.any(&id::<D>()).is_none());
 }
 
 /// Asserts that each thread-local view tells the scheduler the id of the storage it borrows,
@@ -107,7 +107,7 @@ fn set_of_a(world: &mut World) -> crate::all_storages::group::ConnectedSet {
         .all_storages
         .get_mut()
         .grouping
-        .set_of(id::<A>())
+        .set_of(&id::<A>())
         .cloned()
         .unwrap()
 }

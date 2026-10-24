@@ -16,7 +16,7 @@ pub trait CustomStorageAccess {
     /// Returns a [`ARef`] to the requested `S` storage using a [`StorageId`].
     fn custom_storage_by_id(
         &self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<ARef<'_, &'_ dyn Storage>, error::GetStorage>;
     /// Returns a [`ARefMut`] to the requested `S` storage.
     #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
@@ -25,7 +25,7 @@ pub trait CustomStorageAccess {
     #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     fn custom_storage_mut_by_id(
         &self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<ARefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage>;
     /// Returns a [`ARef`] to the requested `S` storage and create it if it does not exist.
     fn custom_storage_or_insert<S, F>(&self, f: F) -> Result<ARef<'_, &'_ S>, error::GetStorage>
@@ -251,7 +251,7 @@ impl CustomStorageAccess for AllStorages {
             Some(entities.borrow())
         } else {
             let storages = self.storages.read();
-            let storage = storages.any(storage_id).map(|sbox| {
+            let storage = storages.any(&storage_id).map(|sbox| {
                 // SAFE: `sbox` is in the registry and `storages` is still locked.
                 unsafe { &*sbox.0 }.borrow()
             });
@@ -274,10 +274,10 @@ impl CustomStorageAccess for AllStorages {
     #[inline]
     fn custom_storage_by_id(
         &self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<ARef<'_, &'_ dyn Storage>, error::GetStorage> {
         // The entities aren't in the registry.
-        let storage = if storage_id == StorageId::of::<Entities>() {
+        let storage = if storage_id == &StorageId::of::<Entities>() {
             let entities: &AtomicRefCell<dyn Storage> = &self.entities;
             Some(entities.borrow())
         } else {
@@ -295,12 +295,12 @@ impl CustomStorageAccess for AllStorages {
             Some(Ok(storage)) => Ok(storage),
             Some(Err(err)) => Err(error::GetStorage::StorageBorrow {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
                 borrow: err,
             }),
             None => Err(error::GetStorage::MissingStorage {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
             }),
         }
     }
@@ -314,7 +314,7 @@ impl CustomStorageAccess for AllStorages {
             Some(entities.borrow_mut())
         } else {
             let storages = self.storages.read();
-            let storage = storages.any(storage_id).map(|sbox| {
+            let storage = storages.any(&storage_id).map(|sbox| {
                 // SAFE: `sbox` is in the registry and `storages` is still locked.
                 unsafe { &*sbox.0 }.borrow_mut()
             });
@@ -337,10 +337,10 @@ impl CustomStorageAccess for AllStorages {
     #[inline]
     fn custom_storage_mut_by_id(
         &self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<ARefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage> {
         // The entities aren't in the registry.
-        let storage = if storage_id == StorageId::of::<Entities>() {
+        let storage = if storage_id == &StorageId::of::<Entities>() {
             let entities: &AtomicRefCell<dyn Storage> = &self.entities;
             Some(entities.borrow_mut())
         } else {
@@ -358,12 +358,12 @@ impl CustomStorageAccess for AllStorages {
             Some(Ok(storage)) => Ok(storage),
             Some(Err(err)) => Err(error::GetStorage::StorageBorrow {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
                 borrow: err,
             }),
             None => Err(error::GetStorage::MissingStorage {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
             }),
         }
     }
@@ -739,7 +739,7 @@ impl AllStorages {
     #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     pub(crate) fn component_storage_mut_by_id(
         &self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<ARefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage> {
         let storages = self.storages.read();
         let storage = storages.component(storage_id).map(|sbox| {
@@ -752,12 +752,12 @@ impl AllStorages {
             Some(Ok(storage)) => Ok(storage),
             Some(Err(err)) => Err(error::GetStorage::StorageBorrow {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
                 borrow: err,
             }),
             None => Err(error::GetStorage::MissingStorage {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
             }),
         }
     }
@@ -768,7 +768,7 @@ impl AllStorages {
         let storage_id = StorageId::of::<S>();
 
         let storages = self.storages.read();
-        let storage = storages.unique(storage_id).map(|sbox| {
+        let storage = storages.unique(&storage_id).map(|sbox| {
             // SAFE: `sbox` is in the registry and `storages` is still locked.
             unsafe { &*sbox.0 }.borrow()
         });
@@ -791,7 +791,7 @@ impl AllStorages {
     #[inline]
     pub(crate) fn unique_storage_by_id(
         &self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<ARef<'_, &'_ dyn Storage>, error::GetStorage> {
         let storages = self.storages.read();
         let storage = storages.unique(storage_id).map(|sbox| {
@@ -804,12 +804,12 @@ impl AllStorages {
             Some(Ok(storage)) => Ok(storage),
             Some(Err(err)) => Err(error::GetStorage::StorageBorrow {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
                 borrow: err,
             }),
             None => Err(error::GetStorage::MissingStorage {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
             }),
         }
     }
@@ -823,7 +823,7 @@ impl AllStorages {
         let storage_id = StorageId::of::<S>();
 
         let storages = self.storages.read();
-        let storage = storages.unique(storage_id).map(|sbox| {
+        let storage = storages.unique(&storage_id).map(|sbox| {
             // SAFE: `sbox` is in the registry and `storages` is still locked.
             unsafe { &*sbox.0 }.borrow_mut()
         });
@@ -847,7 +847,7 @@ impl AllStorages {
     #[inline]
     pub(crate) fn unique_storage_mut_by_id(
         &self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<ARefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage> {
         let storages = self.storages.read();
         let storage = storages.unique(storage_id).map(|sbox| {
@@ -860,12 +860,12 @@ impl AllStorages {
             Some(Ok(storage)) => Ok(storage),
             Some(Err(err)) => Err(error::GetStorage::StorageBorrow {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
                 borrow: err,
             }),
             None => Err(error::GetStorage::MissingStorage {
                 name: None,
-                id: storage_id,
+                id: *storage_id,
             }),
         }
     }
@@ -895,7 +895,7 @@ impl AllStorages {
             entities.borrow()
         } else {
             let storages = self.storages.read();
-            let found = storages.any(storage_id).map(|sbox| {
+            let found = storages.any(&storage_id).map(|sbox| {
                 // SAFE: `sbox` is in the registry and `storages` is still locked.
                 unsafe { &*sbox.0 }.borrow()
             });
@@ -908,7 +908,7 @@ impl AllStorages {
                 }
                 None => {
                     let mut storages = self.storages.write();
-                    let cell = match storages.any(storage_id) {
+                    let cell = match storages.any(&storage_id) {
                         Some(sbox) => sbox.0,
                         None => {
                             storages
@@ -953,7 +953,7 @@ impl AllStorages {
             entities.borrow_mut()
         } else {
             let storages = self.storages.read();
-            let found = storages.any(storage_id).map(|sbox| {
+            let found = storages.any(&storage_id).map(|sbox| {
                 // SAFE: `sbox` is in the registry and `storages` is still locked.
                 unsafe { &*sbox.0 }.borrow_mut()
             });
@@ -966,7 +966,7 @@ impl AllStorages {
                 }
                 None => {
                     let mut storages = self.storages.write();
-                    let cell = match storages.any(storage_id) {
+                    let cell = match storages.any(&storage_id) {
                         Some(sbox) => sbox.0,
                         None => {
                             storages
@@ -1005,7 +1005,7 @@ impl AllStorages {
         new_storage: impl FnOnce() -> SBox,
     ) -> Result<ARef<'_, &'_ S>, error::GetStorage> {
         let storages = self.storages.read();
-        let found = storages.component(storage_id).map(|sbox| {
+        let found = storages.component(&storage_id).map(|sbox| {
             // SAFE: `sbox` is in the registry and `storages` is still locked.
             unsafe { &*sbox.0 }.borrow()
         });
@@ -1048,7 +1048,7 @@ impl AllStorages {
         new_storage: impl FnOnce() -> SBox,
     ) -> Result<ARefMut<'_, &'_ mut S>, error::GetStorage> {
         let storages = self.storages.read();
-        let found = storages.component(storage_id).map(|sbox| {
+        let found = storages.component(&storage_id).map(|sbox| {
             // SAFE: `sbox` is in the registry and `storages` is still locked.
             unsafe { &*sbox.0 }.borrow_mut()
         });
@@ -1108,7 +1108,7 @@ where
     let storage_id = StorageId::of::<S>();
 
     let storages = registry.read();
-    let found = storages.component(storage_id).map(|sbox| {
+    let found = storages.component(&storage_id).map(|sbox| {
         // SAFE: `sbox` is in the registry and `storages` is still locked.
         unsafe { &*sbox.0 }.borrow_mut()
     });

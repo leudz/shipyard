@@ -60,7 +60,7 @@ impl AllStorages {
     pub fn regroup_set<T: GroupMember>(&self) -> Result<(), error::RegroupSet> {
         let storage_id = T::storage_id();
 
-        let Some(set) = self.grouping.set_of(storage_id) else {
+        let Some(set) = self.grouping.set_of(&storage_id) else {
             return Err(error::RegroupSet::NotGrouped {
                 name: T::storage_name(),
                 id: storage_id,
@@ -108,7 +108,7 @@ impl AllStorages {
     ) -> Result<Vec<ARefMut<'_, &mut (dyn Storage + 'static)>>, error::GetStorage> {
         // Dropping `guards` on an early return releases the borrows already taken.
         let mut guards = Vec::with_capacity(set.members.len());
-        for &storage_id in &set.members {
+        for storage_id in &set.members {
             match self.component_storage_mut_by_id(storage_id) {
                 Ok(guard) => guards.push(guard),
                 Err(mut error) => {
@@ -193,8 +193,8 @@ impl<'a> Selected<'a> {
     }
 
     /// Returns the ids of the selected storages, sorted.
-    pub(super) fn ids(&self) -> impl Iterator<Item = StorageId> {
-        self.storages.iter().map(|&(storage_id, _)| storage_id)
+    pub(super) fn ids(&self) -> impl Iterator<Item = &StorageId> {
+        self.storages.iter().map(|(storage_id, _)| storage_id)
     }
 
     /// Returns the selected storage with id `storage_id`.
@@ -203,7 +203,7 @@ impl<'a> Selected<'a> {
     ///
     /// - The storage isn't selected.
     #[track_caller]
-    pub(super) fn get(&self, storage_id: StorageId) -> &(dyn Storage + 'static) {
+    pub(super) fn get(&self, storage_id: &StorageId) -> &(dyn Storage + 'static) {
         &*self.storages[self.position(storage_id)].1
     }
 
@@ -213,7 +213,7 @@ impl<'a> Selected<'a> {
     ///
     /// - The storage isn't selected.
     #[track_caller]
-    pub(super) fn get_mut(&mut self, storage_id: StorageId) -> &mut (dyn Storage + 'static) {
+    pub(super) fn get_mut(&mut self, storage_id: &StorageId) -> &mut (dyn Storage + 'static) {
         let position = self.position(storage_id);
 
         &mut *self.storages[position].1
@@ -234,9 +234,9 @@ impl<'a> Selected<'a> {
     ///
     /// - The storage isn't selected.
     #[track_caller]
-    fn position(&self, storage_id: StorageId) -> usize {
+    fn position(&self, storage_id: &StorageId) -> usize {
         self.storages
-            .binary_search_by_key(&storage_id, |&(storage_id, _)| storage_id)
+            .binary_search_by_key(&storage_id, |(storage_id, _)| storage_id)
             .expect("regroup can only reach the storages it selected")
     }
 }

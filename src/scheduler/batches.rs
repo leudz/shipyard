@@ -82,7 +82,7 @@ impl RegroupStep {
         let borrow = set
             .members
             .iter()
-            .map(|&storage_id| {
+            .map(|storage_id| {
                 let member = grouping
                     .member(storage_id)
                     .expect("a connected set's members are declared");
@@ -90,7 +90,7 @@ impl RegroupStep {
                 TypeInfo {
                     name: member.storage_name.into(),
                     mutability: Mutability::Exclusive,
-                    storage_id,
+                    storage_id: *storage_id,
                     thread_safe: member.thread_safe,
                 }
             })

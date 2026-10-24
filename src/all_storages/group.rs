@@ -254,7 +254,7 @@ impl Grouping {
         }
 
         for member in members {
-            if self.member(member.storage_id).is_none() {
+            if self.member(&member.storage_id).is_none() {
                 self.members.push(member);
             }
         }
@@ -280,7 +280,7 @@ impl Grouping {
         members.sort_unstable();
         members.dedup();
 
-        let thread_safe = members.iter().all(|&storage_id| {
+        let thread_safe = members.iter().all(|storage_id| {
             self.member(storage_id)
                 .expect("members are known before being linked")
                 .thread_safe
@@ -293,17 +293,17 @@ impl Grouping {
     }
 
     /// Returns the information about the member storage `storage_id`, `None` if it isn't one.
-    pub(crate) fn member(&self, storage_id: StorageId) -> Option<&MemberInfo> {
+    pub(crate) fn member(&self, storage_id: &StorageId) -> Option<&MemberInfo> {
         self.members
             .iter()
-            .find(|member| member.storage_id == storage_id)
+            .find(|member| &member.storage_id == storage_id)
     }
 
     /// Returns the connected set `storage_id` is part of, `None` if it isn't in any declared group.
-    pub(crate) fn set_of(&self, storage_id: StorageId) -> Option<&ConnectedSet> {
+    pub(crate) fn set_of(&self, storage_id: &StorageId) -> Option<&ConnectedSet> {
         self.sets
             .iter()
-            .find(|set| set.members.binary_search(&storage_id).is_ok())
+            .find(|set| set.members.binary_search(storage_id).is_ok())
     }
 
     /// Creates the member storages, attaches the groups and keeps `self` as `all_storages`'s configuration.
@@ -317,8 +317,8 @@ impl Grouping {
 
         let storages = &mut all_storages.storages.get_mut().components_and_custom;
         for group in &self.groups {
-            for &storage_id in group.iter() {
-                member_groups(storages, storage_id).attach(group.clone(), storage_id);
+            for storage_id in group.iter() {
+                member_groups(storages, storage_id).attach(group.clone(), *storage_id);
             }
         }
 

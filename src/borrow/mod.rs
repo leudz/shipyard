@@ -440,7 +440,7 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.unique_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_by_id(&StorageId::of::<UniqueStorage<T>>())?;
         let view = ARef::map(view, |storage| {
             storage
                 .as_any()
@@ -472,7 +472,7 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.unique_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_by_id(&StorageId::of::<UniqueStorage<T>>())?;
         let view = ARef::map(view, |storage| {
             storage
                 .as_any()
@@ -504,7 +504,7 @@ impl<T: Unique> Borrow for NonSendSync<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.unique_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_by_id(&StorageId::of::<UniqueStorage<T>>())?;
         let view = ARef::map(view, |storage| {
             storage
                 .as_any()
@@ -561,7 +561,7 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.unique_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_mut_by_id(&StorageId::of::<UniqueStorage<T>>())?;
         let view = ARefMut::map(view, |storage| {
             storage
                 .as_any_mut()
@@ -593,7 +593,7 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.unique_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_mut_by_id(&StorageId::of::<UniqueStorage<T>>())?;
         let view = ARefMut::map(view, |storage| {
             storage
                 .as_any_mut()
@@ -625,7 +625,7 @@ impl<T: Unique> Borrow for NonSendSync<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.unique_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = all_storages.unique_storage_mut_by_id(&StorageId::of::<UniqueStorage<T>>())?;
         let view = ARefMut::map(view, |storage| {
             storage
                 .as_any_mut()

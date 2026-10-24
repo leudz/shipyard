@@ -160,11 +160,11 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
     ///
     /// let all_storages = world.all_storages().unwrap();
     /// let scripting_storage =
-    ///     View::<ScriptingComponent>::new_for_custom_storage(StorageId::Custom(0), all_storages)
+    ///     View::<ScriptingComponent>::new_for_custom_storage(&StorageId::Custom(0), all_storages)
     ///         .unwrap();
     /// ```
     pub fn new_for_custom_storage(
-        storage_id: StorageId,
+        storage_id: &StorageId,
         all_storages: ARef<'a, &'a AllStorages>,
     ) -> Result<Self, error::CustomStorageView> {
         use crate::all_storages::CustomStorageAccess;

@@ -7,12 +7,12 @@ fn all_sorted() {
     world.add_entity(C);
     let mut all_storages = world.all_storages_mut().unwrap();
     let storages = &mut all_storages.storages.get_mut().components_and_custom;
-    let mut expected: Vec<StorageId> = storages.iter().map(|(storage_id, _)| storage_id).collect();
+    let mut expected: Vec<StorageId> = storages.iter().map(|(storage_id, _)| *storage_id).collect();
     expected.sort_unstable();
 
     let selected = Selected::all(storages);
 
-    assert_eq!(selected.ids().collect::<Vec<_>>(), expected);
+    assert_eq!(selected.ids().cloned().collect::<Vec<_>>(), expected);
 }
 
 /// Asserts that reaching a storage that isn't selected panics instead of reaching it.
@@ -23,5 +23,5 @@ fn unselected() {
     let mut all_storages = world.all_storages_mut().unwrap();
     let selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
 
-    selected.get(id::<C>());
+    selected.get(&id::<C>());
 }

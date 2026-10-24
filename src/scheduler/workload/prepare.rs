@@ -249,7 +249,7 @@ impl<'a> Planner<'a> {
 
     /// Adds the regroups of the storages still pending, so the workload leaves every set regrouped.
     fn finish(&mut self) {
-        let exit_sets = sets_of(self.grouping, self.pending.clone().into_iter());
+        let exit_sets = sets_of(self.grouping, self.pending.iter());
         let mut own_batches = Vec::new();
 
         for set in exit_sets {
@@ -277,7 +277,7 @@ impl<'a> Planner<'a> {
             .collect();
 
         let mut due = Vec::new();
-        for set in sets_of(self.grouping, borrowed.iter().copied()) {
+        for set in sets_of(self.grouping, borrowed.iter()) {
             let members = &self.grouping.sets[set].members;
 
             // A pending storage has to be regrouped before a system borrows it again.
@@ -333,8 +333,8 @@ impl<'a> Planner<'a> {
             for storage_id in grouped_writes(info, self.grouping) {
                 let set = set_index(self.grouping, storage_id).expect("the storage is grouped");
 
-                if let Err(position) = self.pending.binary_search(&storage_id) {
-                    self.pending.insert(position, storage_id);
+                if let Err(position) = self.pending.binary_search(storage_id) {
+                    self.pending.insert(position, *storage_id);
                 }
                 self.last_write[set] = Some(index);
             }
@@ -354,15 +354,17 @@ impl<'a> Planner<'a> {
 }
 
 /// Returns the grouped storages `info`'s system borrows exclusively, the ones it leaves pending.
-fn grouped_writes(info: &SystemInfo, grouping: &Grouping) -> Vec<StorageId> {
+fn grouped_writes<'a>(
+    info: &'a SystemInfo,
+    grouping: &'a Grouping,
+) -> impl Iterator<Item = &'a StorageId> {
     // We can't know what a system does with an exclusive borrow,
     // even one only updating values could add or remove components.
     info.borrow
         .iter()
         .filter(|type_info| type_info.mutability == Mutability::Exclusive)
-        .map(|type_info| type_info.storage_id)
-        .filter(|&storage_id| set_index(grouping, storage_id).is_some())
-        .collect()
+        .map(|type_info| &type_info.storage_id)
+        .filter(|storage_id| set_index(grouping, storage_id).is_some())
 }
 
 /// Returns the grouped storages each system of `user_batches` leaves pending,
@@ -375,7 +377,7 @@ fn systems_writes(user_batches: &[Batch], grouping: &Grouping) -> Vec<Vec<Storag
             continue;
         };
 
-        let storage_ids = grouped_writes(info, grouping);
+        let storage_ids = grouped_writes(info, grouping).cloned().collect::<Vec<_>>();
         if storage_ids.is_empty() {
             continue;
         }
@@ -422,7 +424,10 @@ fn sequential_position(job: &Job) -> usize {
 /// Returns the sorted indexes of the connected sets holding `storage_ids`.
 ///
 /// Storages outside every group are skipped.
-fn sets_of(grouping: &Grouping, storage_ids: impl Iterator<Item = StorageId>) -> Vec<usize> {
+fn sets_of<'a>(
+    grouping: &Grouping,
+    storage_ids: impl Iterator<Item = &'a StorageId>,
+) -> Vec<usize> {
     let mut sets: Vec<usize> = storage_ids
         .filter_map(|storage_id| set_index(grouping, storage_id))
         .collect();
@@ -433,11 +438,11 @@ fn sets_of(grouping: &Grouping, storage_ids: impl Iterator<Item = StorageId>) ->
 }
 
 /// Returns the index of the connected set holding `storage_id`, `None` if it isn't grouped.
-fn set_index(grouping: &Grouping, storage_id: StorageId) -> Option<usize> {
+fn set_index(grouping: &Grouping, storage_id: &StorageId) -> Option<usize> {
     grouping
         .sets
         .iter()
-        .position(|set| set.members.binary_search(&storage_id).is_ok())
+        .position(|set| set.members.binary_search(storage_id).is_ok())
 }
 
 /// Empties `batches` and `batches_info` into a list of batches.

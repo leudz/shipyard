@@ -48,7 +48,7 @@ pub trait WorkloadModificator {
         use crate::all_storages::CustomStorageAccess;
 
         let run_if = move |all_storages: AllStoragesViewMut<'_>| match all_storages
-            .custom_storage_by_id(storage_id)
+            .custom_storage_by_id(&storage_id)
         {
             Ok(storage) => storage.is_empty(),
             Err(error::GetStorage::MissingStorage { .. }) => true,
@@ -89,7 +89,7 @@ pub trait WorkloadModificator {
         use crate::all_storages::CustomStorageAccess;
 
         let should_skip = move |all_storages: AllStoragesViewMut<'_>| match all_storages
-            .custom_storage_by_id(storage_id)
+            .custom_storage_by_id(&storage_id)
         {
             Ok(storage) => storage.is_empty(),
             Err(error::GetStorage::MissingStorage { .. }) => true,
@@ -135,7 +135,7 @@ impl WorkloadModificator for Workload {
         use crate::all_storages::CustomStorageAccess;
 
         let run_if = move |all_storages: AllStoragesViewMut<'_>| match all_storages
-            .custom_storage_by_id(storage_id)
+            .custom_storage_by_id(&storage_id)
         {
             Ok(storage) => storage.is_empty(),
             Err(error::GetStorage::MissingStorage { .. }) => true,
@@ -171,7 +171,7 @@ impl WorkloadModificator for Workload {
         use crate::all_storages::CustomStorageAccess;
 
         let should_skip = move |all_storages: AllStoragesViewMut<'_>| match all_storages
-            .custom_storage_by_id(storage_id)
+            .custom_storage_by_id(&storage_id)
         {
             Ok(storage) => storage.is_empty(),
             Err(error::GetStorage::MissingStorage { .. }) => true,

@@ -175,8 +175,8 @@ fn ungrouped_promotion() {
     let plan = assert_plan(&world, &[&ab()]);
 
     assert_eq!(counts(&plan, &group), (4, 0, 1));
-    assert_eq!(plan.storage(id::<A>()).promoted, 1);
-    assert_eq!(plan.storage(id::<B>()).promoted, 0);
+    assert_eq!(plan.storage(&id::<A>()).promoted, 1);
+    assert_eq!(plan.storage(&id::<B>()).promoted, 0);
 }
 
 /// Asserts that with AB and AC, a pair gaining C leaves AB's kept prefix, even though both
@@ -231,7 +231,7 @@ fn promoted_twice() {
 
     let plan = assert_plan(&world, &[&ab(), &[id::<A>(), id::<C>()]]);
 
-    assert_eq!(plan.storage(id::<A>()).promoted, 1);
+    assert_eq!(plan.storage(&id::<A>()).promoted, 1);
     let abc = vec![id::<A>(), id::<B>(), id::<C>()];
     assert_eq!(counts_of(&plan, abc), (0, 0, 1));
 }

@@ -110,7 +110,7 @@ fn assert_regrouped(world: &World) {
 
             for member_id in range.group.iter() {
                 // SAFE: same as above.
-                let member = unsafe { &*storages.get(*member_id).unwrap().0 }
+                let member = unsafe { &*storages.get(member_id).unwrap().0 }
                     .borrow()
                     .unwrap();
 
@@ -136,7 +136,7 @@ fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
     // SAFE: `sbox.0` comes from a `Box` that lives as long as `all_storages`,
     // and `borrow` checks no one borrows the storage exclusively.
     let storage = |storage_id: &StorageId| {
-        unsafe { &*storages.get(*storage_id).unwrap().0 }
+        unsafe { &*storages.get(storage_id).unwrap().0 }
             .borrow()
             .unwrap()
     };
@@ -149,7 +149,7 @@ fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
         };
 
         for (index, &entity) in grouped.dense().unwrap().iter().enumerate() {
-            let expected = expected_union(declared, storage_id, |member_id| {
+            let expected = expected_union(declared, *storage_id, |member_id| {
                 storage(member_id).sparse_array().unwrap().contains(entity)
             });
 
@@ -266,7 +266,7 @@ fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
 
         for (row, &entity) in dense.iter().enumerate() {
             let expected = expected_union(declared, storage_id, |member_id| {
-                memberships.get(*member_id).sparse.contains(entity)
+                memberships.get(member_id).sparse.contains(entity)
             });
 
             if let Some(range_index) = groups.range_index_of(row) {
@@ -290,7 +290,7 @@ fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
         }
 
         assert_eq!(
-            plan.storage(storage_id).promoted,
+            plan.storage(&storage_id).promoted,
             promoted,
             "promoted in {storage_id:?}"
         );
@@ -302,7 +302,7 @@ fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
         let leaving = expected_leaving.remove(&group[..]).unwrap_or(0);
         let trust = group
             .iter()
-            .map(|&member_id| {
+            .map(|member_id| {
                 memberships
                     .get(member_id)
                     .groups
@@ -369,12 +369,12 @@ fn attach_ids(world: &World, ids: &[StorageId]) -> Arc<[StorageId]> {
 
     let mut all_storages = world.all_storages_mut().unwrap();
     let mut selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
-    for &member_id in group.iter() {
+    for member_id in group.iter() {
         selected
             .get_mut(member_id)
             .groups_mut()
             .unwrap()
-            .attach(group.clone(), member_id);
+            .attach(group.clone(), *member_id);
     }
 
     group

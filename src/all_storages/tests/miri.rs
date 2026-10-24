@@ -141,7 +141,7 @@ fn registry_growth() {
     drop(first);
 
     let mut storage = all_storages
-        .custom_storage_mut_by_id(StorageId::Custom(0))
+        .custom_storage_mut_by_id(&StorageId::Custom(0))
         .unwrap();
     let first = storage.any_mut().downcast_mut::<Counted>().unwrap();
     first.values.push(3);
@@ -205,19 +205,19 @@ fn custom_access() {
     let mut typed = all_storages.custom_storage_mut::<Counted>().unwrap();
     typed.values.push(3);
     assert!(all_storages.custom_storage::<Counted>().is_err());
-    assert!(all_storages.custom_storage_by_id(id).is_err());
+    assert!(all_storages.custom_storage_by_id(&id).is_err());
     drop(typed);
 
-    let erased = all_storages.custom_storage_by_id(id).unwrap();
+    let erased = all_storages.custom_storage_by_id(&id).unwrap();
     let typed = all_storages.custom_storage::<Counted>().unwrap();
     assert!(erased.any().downcast_ref::<Vec<u32>>().is_none());
     let counted = erased.any().downcast_ref::<Counted>().unwrap();
     assert_eq!(counted.values, [1, 2, 3]);
     assert_eq!(typed.values.len(), 3);
-    assert!(all_storages.custom_storage_mut_by_id(id).is_err());
+    assert!(all_storages.custom_storage_mut_by_id(&id).is_err());
     drop((erased, typed));
 
-    let mut erased = all_storages.custom_storage_mut_by_id(id).unwrap();
+    let mut erased = all_storages.custom_storage_mut_by_id(&id).unwrap();
     let counted = erased.any_mut().downcast_mut::<Counted>().unwrap();
     counted.values.clear();
     drop(erased);
@@ -492,7 +492,7 @@ fn replace_borrowed_foreign() {
     world.add_custom_storage(id, counted(0, &counter)).unwrap();
     let all_storages = world.all_storages().unwrap();
 
-    let storage = all_storages.custom_storage_by_id(id).unwrap();
+    let storage = all_storages.custom_storage_by_id(&id).unwrap();
     let result = catch_panic(|| all_storages.add_unique(counted(1, &counter)));
     assert_eq!(result, Err(borrowed_panic()));
     assert_eq!(drops(&counter), 1);
@@ -728,7 +728,7 @@ fn regroup_guarded() {
         .all_storages()
         .unwrap()
         .grouping
-        .set_of(counted_id)
+        .set_of(&counted_id)
         .unwrap()
         .clone();
 
@@ -1583,8 +1583,8 @@ fn generic_entities_skip_registry() {
     let acquisitions = registry_acquisitions(|| {
         drop(all_storages.custom_storage::<Entities>().unwrap());
         drop(all_storages.custom_storage_mut::<Entities>().unwrap());
-        drop(all_storages.custom_storage_by_id(id).unwrap());
-        drop(all_storages.custom_storage_mut_by_id(id).unwrap());
+        drop(all_storages.custom_storage_by_id(&id).unwrap());
+        drop(all_storages.custom_storage_mut_by_id(&id).unwrap());
     });
 
     assert_eq!(acquisitions, 0);
@@ -1623,7 +1623,7 @@ fn generic_entities_block_view() {
     let all_storages = world.all_storages().unwrap();
 
     let generic = all_storages
-        .custom_storage_mut_by_id(StorageId::of::<Entities>())
+        .custom_storage_mut_by_id(&StorageId::of::<Entities>())
         .unwrap();
     assert!(matches!(
         all_storages.borrow::<EntitiesView<'_>>(),
@@ -1644,7 +1644,7 @@ fn view_blocks_generic_entities() {
 
     let view = all_storages.borrow::<EntitiesViewMut<'_>>().unwrap();
     assert_eq!(
-        all_storages.custom_storage_by_id(id).err(),
+        all_storages.custom_storage_by_id(&id).err(),
         Some(error::GetStorage::StorageBorrow {
             name: None,
             id,
@@ -1653,7 +1653,7 @@ fn view_blocks_generic_entities() {
     );
 
     drop(view);
-    assert!(all_storages.custom_storage_by_id(id).is_ok());
+    assert!(all_storages.custom_storage_by_id(&id).is_ok());
 }
 
 /// Asserts that inserting through the generic API under the canonical entities id returns the
@@ -1673,7 +1673,7 @@ fn generic_insert_entities() {
     drop(entities);
 
     let registry = all_storages.storages.read();
-    assert!(registry.any(StorageId::of::<Entities>()).is_none());
+    assert!(registry.any(&StorageId::of::<Entities>()).is_none());
 }
 
 /// Asserts that `iter_storages` and `iter_storages_mut` yield the entities exactly once, next to
@@ -1772,7 +1772,7 @@ fn add_unique_map() {
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains(id));
+    assert!(!registry.components_and_custom.contains(&id));
 }
 
 /// Asserts that a unique registered through a custom path stays in the component and custom map,
@@ -1793,7 +1793,7 @@ fn custom_path_unique_view() {
     );
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
-    assert!(registry.components_and_custom.contains(id));
+    assert!(registry.components_and_custom.contains(&id));
     assert!(!registry.uniques.contains_key(&id));
 }
 
@@ -1817,7 +1817,7 @@ fn replace_custom_path_unique() {
     drop(view);
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
-    assert!(registry.components_and_custom.contains(id));
+    assert!(registry.components_and_custom.contains(&id));
     assert!(!registry.uniques.contains_key(&id));
 }
 
@@ -1842,7 +1842,7 @@ fn remove_custom_path_unique() {
             .storages
             .read()
             .components_and_custom
-            .contains(id)
+            .contains(&id)
     );
     drop(all_storages);
     assert_eq!(
@@ -1866,7 +1866,7 @@ fn replace_foreign_map() {
     let all_storages = world.all_storages().unwrap();
     let registry = all_storages.storages.read();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains(id));
+    assert!(!registry.components_and_custom.contains(&id));
 }
 
 /// Asserts that generic insertion under a unique's id returns the unique without running the
@@ -1889,7 +1889,7 @@ fn generic_insert_existing_unique() {
 
     let registry = all_storages.storages.read();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains(id));
+    assert!(!registry.components_and_custom.contains(&id));
 }
 
 /// Asserts that generic insertion under a component's id returns the component storage without
@@ -1967,7 +1967,7 @@ fn clone_unique_over_custom() {
     );
     let registry = destination.all_storages.get_mut().storages.get_mut();
     assert!(registry.uniques.contains_key(&id));
-    assert!(!registry.components_and_custom.contains(id));
+    assert!(!registry.components_and_custom.contains(&id));
 }
 
 /// Asserts that cloning a custom storage into a world holding a unique under the same id
@@ -1990,14 +1990,14 @@ fn clone_custom_over_unique() {
 
     assert_eq!(drops(&counter), 1);
     let all_storages = destination.all_storages().unwrap();
-    let clone = all_storages.custom_storage_by_id(id).unwrap();
+    let clone = all_storages.custom_storage_by_id(&id).unwrap();
     assert_eq!(
         clone.any().downcast_ref::<Cloneable>().unwrap().0.values,
         [0]
     );
     drop(clone);
     let registry = all_storages.storages.read();
-    assert!(registry.components_and_custom.contains(id));
+    assert!(registry.components_and_custom.contains(&id));
     assert!(!registry.uniques.contains_key(&id));
 }
 
@@ -2071,7 +2071,7 @@ fn add_counted(world: &World, ids: core::ops::Range<u64>, counter: &Arc<AtomicUs
 fn assert_counted(all_storages: &AllStorages, ids: core::ops::Range<u64>) {
     for id in ids {
         let storage = all_storages
-            .custom_storage_by_id(StorageId::Custom(id))
+            .custom_storage_by_id(&StorageId::Custom(id))
             .unwrap();
         let counted = storage.any().downcast_ref::<Counted>().unwrap();
         assert_eq!(counted.values, [id as u32], "Custom({id})");
@@ -2130,7 +2130,7 @@ fn panicking_factory() {
         assert!(
             !registry
                 .components_and_custom
-                .contains(StorageId::Custom(1))
+                .contains(&StorageId::Custom(1))
         );
         registry.components_and_custom.assert_consistent();
     }
@@ -2172,7 +2172,7 @@ fn lookups_agree() {
     assert_eq!(storages.len(), 22);
     assert_eq!(storages.values().count(), 22);
 
-    let mut ids: Vec<StorageId> = storages.iter().map(|(storage_id, _)| storage_id).collect();
+    let mut ids: Vec<StorageId> = storages.iter().map(|(storage_id, _)| *storage_id).collect();
     ids.sort_unstable();
     let mut expected: Vec<StorageId> = (0..20).map(StorageId::Custom).collect();
     expected.push(StorageId::of::<SparseSet<Heap>>());
@@ -2208,7 +2208,7 @@ fn lookups_agree_thread_local() {
     assert_counted(&all_storages, 0..10);
     for id in 10..20 {
         let storage = all_storages
-            .custom_storage_by_id(StorageId::Custom(id))
+            .custom_storage_by_id(&StorageId::Custom(id))
             .unwrap();
         let local = storage.any().downcast_ref::<Local>().unwrap();
         assert_eq!(local.values, [id as u32]);
@@ -2252,7 +2252,7 @@ fn probe_counts(world: &World) -> Vec<(usize, usize)> {
     (0..20)
         .map(|id| {
             let storage = all_storages
-                .custom_storage_by_id(StorageId::Custom(id))
+                .custom_storage_by_id(&StorageId::Custom(id))
                 .unwrap();
             let probe = storage.any().downcast_ref::<Probe>().unwrap();
             (probe.deletes, probe.clears)
@@ -2322,7 +2322,7 @@ fn clone_storages_ids() {
     let all_storages = destination.all_storages().unwrap();
     for id in 0..20 {
         let storage = all_storages
-            .custom_storage_by_id(StorageId::Custom(id))
+            .custom_storage_by_id(&StorageId::Custom(id))
             .unwrap();
         let clone = storage.any().downcast_ref::<Cloneable>().unwrap();
         assert_eq!(clone.0.values, [id as u32]);
@@ -2365,7 +2365,7 @@ fn unique_takeover_moves_slot() {
         let registry = all_storages.storages.read();
         registry.components_and_custom.assert_consistent();
         assert_eq!(registry.components_and_custom.len(), 20);
-        assert!(!registry.components_and_custom.contains(id));
+        assert!(!registry.components_and_custom.contains(&id));
     }
 
     drop(all_storages);
@@ -2408,7 +2408,7 @@ fn clone_takeover_moves_slot() {
         let registry = all_storages.storages.read();
         registry.components_and_custom.assert_consistent();
         assert_eq!(registry.components_and_custom.len(), 20);
-        assert!(!registry.components_and_custom.contains(id));
+        assert!(!registry.components_and_custom.contains(&id));
     }
 
     drop(all_storages);

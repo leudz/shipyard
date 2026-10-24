@@ -173,7 +173,7 @@ impl AllStorages {
         let mut storages = self.storages.write();
 
         // A unique registered through a custom path is found too, its value is replaced in place.
-        let Some(sbox) = storages.unique(storage_id) else {
+        let Some(sbox) = storages.unique(&storage_id) else {
             storages.uniques.insert(
                 storage_id,
                 new_storage(UniqueStorage::new(component, current)),
@@ -216,7 +216,7 @@ impl AllStorages {
             let foreign = storages
                 .uniques
                 .remove(&storage_id)
-                .or_else(|| storages.components_and_custom.remove(storage_id));
+                .or_else(|| storages.components_and_custom.remove(&storage_id));
             storages.uniques.insert(
                 storage_id,
                 new_storage(UniqueStorage::new(component, current)),
@@ -667,7 +667,7 @@ impl AllStorages {
         let storages = &mut self.storages.get_mut().components_and_custom;
 
         storages.for_each_mut(|storage_id, storage| {
-            if !excluded_storage.contains(&storage_id) {
+            if !excluded_storage.contains(storage_id) {
                 // SAFE: `storage` is in the registry and we hold `&mut self`, nobody else can reach it.
                 unsafe { &mut *storage.0 }.get_mut().delete(entity, current);
             }
@@ -1320,7 +1320,7 @@ let i = all_storages.run(sys1);
     pub(crate) fn exclusive_component_mut<T: 'static>(
         &mut self,
     ) -> Result<&mut T, error::GetStorage> {
-        let Some(sbox) = self.storages.get_mut().component(StorageId::of::<T>()) else {
+        let Some(sbox) = self.storages.get_mut().component(&StorageId::of::<T>()) else {
             return Err(error::GetStorage::MissingStorage {
                 name: Some(type_name::<T>()),
                 id: StorageId::of::<T>(),
@@ -1338,7 +1338,7 @@ let i = all_storages.run(sys1);
     #[track_caller]
     pub(crate) fn exclusive_unique_mut_by_id<T: 'static>(
         &mut self,
-        storage_id: StorageId,
+        storage_id: &StorageId,
     ) -> Result<&mut T, error::GetStorage> {
         let Some(sbox) = self.storages.get_mut().unique(storage_id) else {
             return Err(error::GetStorage::MissingStorage {
@@ -1863,7 +1863,7 @@ for (i, j) in &mut iter {
                 source
                     .uniques
                     .iter()
-                    .map(|(&storage_id, storage)| ((storage_id, storage), true)),
+                    .map(|(storage_id, storage)| ((storage_id, storage), true)),
             );
 
         for ((storage_id, storage), is_unique) in source_storages {
@@ -1936,27 +1936,31 @@ for (i, j) in &mut iter {
                 let mut displaced = if is_unique {
                     other_storages.components_and_custom.remove(storage_id)
                 } else {
-                    other_storages.uniques.remove(&storage_id)
+                    other_storages.uniques.remove(storage_id)
                 };
 
                 // The destination's groups stay, peers still list this storage as a member.
                 // Nothing here runs user code, user values were cloned already and the
                 // replaced storage is only dropped once the replacement is in place.
                 let destination = if is_unique {
-                    other_storages.uniques.get_mut(&storage_id)
+                    other_storages.uniques.get_mut(storage_id)
                 } else {
                     other_storages.components_and_custom.get_mut(storage_id)
                 };
                 if let Some(destination) = destination.or(displaced.as_mut()) {
-                    adopt_groups(destination.storage_mut(), storage.storage_mut(), storage_id);
+                    adopt_groups(
+                        destination.storage_mut(),
+                        storage.storage_mut(),
+                        *storage_id,
+                    );
                 }
 
                 let replaced = if is_unique {
-                    other_storages.uniques.insert(storage_id, storage)
+                    other_storages.uniques.insert(*storage_id, storage)
                 } else {
                     other_storages
                         .components_and_custom
-                        .insert(storage_id, storage)
+                        .insert(*storage_id, storage)
                 };
                 drop(replaced);
                 drop(displaced);
@@ -2111,7 +2115,10 @@ fn unique_storage_mut<T: Unique>(storage: &mut dyn Storage) -> Option<&mut Uniqu
 /// - The storage doesn't exist.
 /// - The storage doesn't support grouping.
 #[track_caller]
-fn member_groups(storages: &mut ComponentsAndCustom, storage_id: StorageId) -> &mut Groups {
+fn member_groups<'a>(
+    storages: &'a mut ComponentsAndCustom,
+    storage_id: &'_ StorageId,
+) -> &'a mut Groups {
     let sbox = storages
         .get_mut(storage_id)
         .expect("group members are created before being grouped");

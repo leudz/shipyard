@@ -591,7 +591,7 @@ fn check_uniques_in_systems(
 
     for type_info in borrow_constraints {
         if type_info.name.starts_with(unique_name)
-            && storages.unique(type_info.storage_id).is_none()
+            && storages.unique(&type_info.storage_id).is_none()
         {
             return Some(Err(error::UniquePresence::Unique(type_info.clone())));
         }

@@ -8,7 +8,7 @@ fn set_of<T: Component + Send + Sync>(world: &World) -> ConnectedSet {
         .all_storages()
         .unwrap()
         .grouping
-        .set_of(id::<T>())
+        .set_of(&id::<T>())
         .expect("the storage is grouped")
         .clone()
 }

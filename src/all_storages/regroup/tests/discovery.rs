@@ -9,7 +9,7 @@ fn discover(world: &World, storage_id: StorageId, entity: EntityId) -> Option<Ve
     Discovery::default()
         .discover(
             &frozen.memberships,
-            frozen.memberships.position(storage_id),
+            frozen.memberships.position(&storage_id),
             entity,
         )
         .map(<[StorageId]>::to_vec)

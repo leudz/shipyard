@@ -26,7 +26,7 @@ fn two_sets() -> World {
 fn entry_regroup<T: GroupMember>(world: &World) -> RegroupStep {
     let all_storages = world.all_storages.borrow().unwrap();
     let grouping = &all_storages.grouping;
-    let set = grouping.set_of(T::storage_id()).unwrap();
+    let set = grouping.set_of(&T::storage_id()).unwrap();
 
     RegroupStep::new(set, grouping, RegroupTrigger::Entry)
 }

@@ -34,7 +34,7 @@ impl StorageMaps {
     ///
     /// Never looks at the uniques.
     #[inline]
-    pub(crate) fn component(&self, storage_id: StorageId) -> Option<&SBox> {
+    pub(crate) fn component(&self, storage_id: &StorageId) -> Option<&SBox> {
         self.components_and_custom.get(storage_id)
     }
 
@@ -43,9 +43,9 @@ impl StorageMaps {
     /// Looks at the uniques first, then at the custom storages, where a unique registered through
     /// a custom path lives.
     #[inline]
-    pub(crate) fn unique(&self, storage_id: StorageId) -> Option<&SBox> {
+    pub(crate) fn unique(&self, storage_id: &StorageId) -> Option<&SBox> {
         self.uniques
-            .get(&storage_id)
+            .get(storage_id)
             .or_else(|| self.components_and_custom.get(storage_id))
     }
 
@@ -53,10 +53,10 @@ impl StorageMaps {
     ///
     /// Looks at the components and custom storages first, then at the uniques.
     #[inline]
-    pub(crate) fn any(&self, storage_id: StorageId) -> Option<&SBox> {
+    pub(crate) fn any(&self, storage_id: &StorageId) -> Option<&SBox> {
         self.components_and_custom
             .get(storage_id)
-            .or_else(|| self.uniques.get(&storage_id))
+            .or_else(|| self.uniques.get(storage_id))
     }
 
     /// Returns how many storages are registered, in both maps.
@@ -111,24 +111,24 @@ impl ComponentsAndCustom {
 
     /// Returns the storage registered under `storage_id`.
     #[inline]
-    pub(crate) fn get(&self, storage_id: StorageId) -> Option<&SBox> {
-        let index = *self.indices.get(&storage_id)?;
+    pub(crate) fn get(&self, storage_id: &StorageId) -> Option<&SBox> {
+        let index = *self.indices.get(storage_id)?;
 
         Some(&self.storages[index])
     }
 
     /// Returns the storage registered under `storage_id`.
     #[inline]
-    pub(crate) fn get_mut(&mut self, storage_id: StorageId) -> Option<&mut SBox> {
-        let index = *self.indices.get(&storage_id)?;
+    pub(crate) fn get_mut(&mut self, storage_id: &StorageId) -> Option<&mut SBox> {
+        let index = *self.indices.get(storage_id)?;
 
         Some(&mut self.storages[index])
     }
 
     /// Returns `true` when a storage is registered under `storage_id`.
     #[cfg(test)]
-    pub(crate) fn contains(&self, storage_id: StorageId) -> bool {
-        self.indices.contains_key(&storage_id)
+    pub(crate) fn contains(&self, storage_id: &StorageId) -> bool {
+        self.indices.contains_key(storage_id)
     }
 
     /// Returns how many storages are registered.
@@ -188,8 +188,8 @@ impl ComponentsAndCustom {
     ///
     /// Only for a unique taking over the id, see [`StorageMaps`].
     /// The last storage moves into the freed slot, it's the only one whose index changes.
-    pub(crate) fn remove(&mut self, storage_id: StorageId) -> Option<SBox> {
-        let index = self.indices.remove(&storage_id)?;
+    pub(crate) fn remove(&mut self, storage_id: &StorageId) -> Option<SBox> {
+        let index = self.indices.remove(storage_id)?;
         let last = self.storages.len() - 1;
 
         // `swap_remove` moves the last storage into the hole, its id has to follow it.
@@ -228,10 +228,10 @@ impl ComponentsAndCustom {
     }
 
     /// Iterates over every storage with its id.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (StorageId, &SBox)> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&StorageId, &SBox)> {
         self.indices
             .iter()
-            .map(|(&storage_id, &index)| (storage_id, &self.storages[index]))
+            .map(|(storage_id, &index)| (storage_id, &self.storages[index]))
     }
 
     /// Collects exclusive storage references with their ids in slot order, in one allocation.
@@ -261,8 +261,8 @@ impl ComponentsAndCustom {
     /// Unlike [`collect_storages_mut`](Self::collect_storages_mut), only one storage is reachable
     /// at a time.
     #[inline]
-    pub(crate) fn for_each_mut(&mut self, mut visit: impl FnMut(StorageId, &mut SBox)) {
-        for (&storage_id, &index) in &self.indices {
+    pub(crate) fn for_each_mut(&mut self, mut visit: impl FnMut(&StorageId, &mut SBox)) {
+        for (storage_id, &index) in &self.indices {
             visit(storage_id, &mut self.storages[index]);
         }
     }

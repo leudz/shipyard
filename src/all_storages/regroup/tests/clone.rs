@@ -182,7 +182,7 @@ fn source_groups() {
         .all_storages()
         .unwrap()
         .grouping
-        .set_of(id::<A>())
+        .set_of(&id::<A>())
         .cloned();
     let mut source = World::builder_for_test().with_group::<(B, C)>().build();
     for i in 0..3 {
@@ -196,8 +196,8 @@ fn source_groups() {
 
     assert!(same_groups(&groups_of::<B>(&destination), &groups));
     let all_storages = destination.all_storages().unwrap();
-    assert_eq!(all_storages.grouping.set_of(id::<A>()).cloned(), set);
-    assert!(all_storages.grouping.set_of(id::<C>()).is_none());
+    assert_eq!(all_storages.grouping.set_of(&id::<A>()).cloned(), set);
+    assert!(all_storages.grouping.set_of(&id::<C>()).is_none());
     drop(all_storages);
     assert!(groups_of::<C>(&destination).is_empty());
 }

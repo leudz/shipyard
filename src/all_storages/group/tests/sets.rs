@@ -7,7 +7,7 @@ fn set_of<T: Component + Send + Sync>(world: &mut World) -> Option<ConnectedSet>
         .all_storages
         .get_mut()
         .grouping
-        .set_of(id::<T>())
+        .set_of(&id::<T>())
         .cloned()
 }
 

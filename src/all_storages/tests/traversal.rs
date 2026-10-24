@@ -352,7 +352,7 @@ fn clone_entity_borrowed_custom() {
     let entity = world.add_entity(());
     let all_storages = world.all_storages().unwrap();
 
-    let _recorder = all_storages.custom_storage_mut_by_id(RECORDER).unwrap();
+    let _recorder = all_storages.custom_storage_mut_by_id(&RECORDER).unwrap();
 
     all_storages.clone_entity_to(other.all_storages.get_mut(), entity);
 }
@@ -368,7 +368,7 @@ fn clone_components_borrowed_custom() {
     let to = other.add_entity(());
     let all_storages = world.all_storages().unwrap();
 
-    let _recorder = all_storages.custom_storage_mut_by_id(RECORDER).unwrap();
+    let _recorder = all_storages.custom_storage_mut_by_id(&RECORDER).unwrap();
 
     all_storages.clone_components_to(other.all_storages.get_mut(), from, to);
 }

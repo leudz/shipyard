@@ -209,9 +209,10 @@ impl WindowMetadata<'_> {
     /// Returns the id of the storage, as its own group metadata records it.
     ///
     /// Thread-local storages have ids distinct from their `Send + Sync` counterparts.
-    pub(crate) fn storage_id(&self) -> StorageId {
+    pub(crate) fn storage_id(&self) -> &StorageId {
         self.groups
             .storage_id
+            .as_ref()
             .expect("handles are only taken for storages recording their id")
     }
 
@@ -1022,7 +1023,7 @@ pub(crate) fn cover_sets(windows: &[Option<WindowMetadata<'_>>]) -> impl Iterato
 /// Returns the children holding `group`'s members, bit `i` for child `i`,
 /// `None` unless each member is held by exactly one window child.
 fn member_mask(windows: &[Option<WindowMetadata<'_>>], group: &[StorageId]) -> Option<u32> {
-    group.iter().try_fold(0, |mask, &storage_id| {
+    group.iter().try_fold(0, |mask, storage_id| {
         let child = window_child(windows, storage_id)?;
 
         Some(mask | 1u32.checked_shl(u32::try_from(child).ok()?)?)
@@ -1034,7 +1035,7 @@ fn member_mask(windows: &[Option<WindowMetadata<'_>>], group: &[StorageId]) -> O
 ///
 /// A storage held by several children, like A in `(&a, &a, &b)`, is ambiguous and we don't
 /// pick which child would drive.
-fn window_child(windows: &[Option<WindowMetadata<'_>>], storage_id: StorageId) -> Option<usize> {
+fn window_child(windows: &[Option<WindowMetadata<'_>>], storage_id: &StorageId) -> Option<usize> {
     let mut holders = windows
         .iter()
         .enumerate()
@@ -1076,7 +1077,7 @@ fn containing_ranges(
             mask_children(required).all(|child| {
                 range
                     .group
-                    .binary_search(&window_of(windows, child).storage_id())
+                    .binary_search(window_of(windows, child).storage_id())
                     .is_ok()
             })
         })
@@ -1091,7 +1092,7 @@ fn containing_ranges(
 /// Returns each child holding a member of `group` alone, in child order, with its part of `group`'s range.
 fn range_members(windows: &[Option<WindowMetadata<'_>>], group: &Arc<[StorageId]>) -> RangeMembers {
     let mut members = RangeMembers::new();
-    for &storage_id in group.iter() {
+    for storage_id in group.iter() {
         let Some(child) = window_child(windows, storage_id) else {
             continue;
         };

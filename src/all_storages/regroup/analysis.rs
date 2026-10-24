@@ -58,7 +58,7 @@ impl<'a> Memberships<'a> {
                     .ranges
                     .iter()
                     .flat_map(|range| range.group.iter())
-                    .map(|&member_id| memberships.position(member_id))
+                    .map(|member_id| memberships.position(member_id))
                     .collect()
             })
             .collect();
@@ -80,9 +80,9 @@ impl<'a> Memberships<'a> {
     /// ### Panics
     ///
     /// - The storage has no range.
-    pub(super) fn position(&self, storage_id: StorageId) -> usize {
+    pub(super) fn position(&self, storage_id: &StorageId) -> usize {
         self.storages
-            .binary_search_by_key(&storage_id, |membership| membership.storage_id)
+            .binary_search_by_key(storage_id, |membership| membership.storage_id)
             .expect("group members are grouped storages")
     }
 
@@ -91,7 +91,7 @@ impl<'a> Memberships<'a> {
     /// ### Panics
     ///
     /// - The storage has no range.
-    pub(super) fn get(&self, storage_id: StorageId) -> &Membership<'a> {
+    pub(super) fn get(&self, storage_id: &StorageId) -> &Membership<'a> {
         &self.storages[self.position(storage_id)]
     }
 }
@@ -116,7 +116,7 @@ impl<'a> Frozen<'a> {
             };
 
             memberships.push(Membership {
-                storage_id,
+                storage_id: *storage_id,
                 groups,
                 sparse: storage.sparse_array().expect("group members are SparseSet"),
             });
@@ -286,7 +286,7 @@ impl Plan {
                 let kept = range
                     .group
                     .iter()
-                    .map(|&member_id| {
+                    .map(|member_id| {
                         memberships
                             .get(member_id)
                             .groups
@@ -333,19 +333,19 @@ impl Plan {
     }
 
     /// Returns the plan of the storage with id `storage_id`.
-    pub(super) fn storage(&self, storage_id: StorageId) -> &StoragePlan {
+    pub(super) fn storage(&self, storage_id: &StorageId) -> &StoragePlan {
         &self.storages[self.storage_index(storage_id)]
     }
 
-    fn storage_mut(&mut self, storage_id: StorageId) -> &mut StoragePlan {
+    fn storage_mut(&mut self, storage_id: &StorageId) -> &mut StoragePlan {
         let index = self.storage_index(storage_id);
 
         &mut self.storages[index]
     }
 
-    fn storage_index(&self, storage_id: StorageId) -> usize {
+    fn storage_index(&self, storage_id: &StorageId) -> usize {
         self.storages
-            .binary_search_by_key(&storage_id, |plan| plan.storage_id)
+            .binary_search_by_key(storage_id, |plan| plan.storage_id)
             .expect("every grouped storage has a plan")
     }
 
@@ -402,7 +402,7 @@ impl Plan {
         let storages = frozen.memberships.storages.iter().zip(&frozen.dense);
         for (index, (membership, dense)) in storages.enumerate() {
             for &entity in &dense[membership.groups.unevaluated_start..] {
-                let storage_id = membership.storage_id;
+                let storage_id = &membership.storage_id;
                 let Some(group_index) = self.count(&frozen.memberships, discovery, index, entity)
                 else {
                     continue;
@@ -423,14 +423,14 @@ impl Plan {
         &self,
         memberships: &Memberships<'_>,
         group_index: usize,
-        storage_id: StorageId,
+        storage_id: &StorageId,
         entity: EntityId,
     ) -> bool {
         self.groups[group_index]
             .group
             .iter()
-            .take_while(|&&member_id| member_id < storage_id)
-            .all(|&member_id| {
+            .take_while(|&member_id| member_id < storage_id)
+            .all(|member_id| {
                 let member = memberships.get(member_id);
                 let row = original_row(member.sparse, entity)
                     .expect("the entity satisfies the group, it owns a component in each member");
@@ -448,17 +448,17 @@ impl Plan {
         &mut self,
         memberships: &Memberships<'_>,
         group_index: usize,
-        storage_id: StorageId,
+        storage_id: &StorageId,
         entity: EntityId,
     ) {
         // We read the members by position, `self` changes in the loop.
         for position in 0..self.groups[group_index].group.len() {
             let member_id = self.groups[group_index].group[position];
-            if member_id == storage_id {
+            if &member_id == storage_id {
                 continue;
             }
 
-            let member = memberships.get(member_id);
+            let member = memberships.get(&member_id);
             let row = original_row(member.sparse, entity)
                 .expect("the entity satisfies the group, it owns a component in each member");
 
@@ -481,7 +481,7 @@ impl Plan {
 
                 is_kept
             } else if row < member.groups.unevaluated_start {
-                self.storage_mut(member_id).promoted += 1;
+                self.storage_mut(&member_id).promoted += 1;
 
                 true
             } else {
@@ -515,12 +515,12 @@ impl Plan {
     /// A union only joins groups that share members, so its members are selected too.
     fn attach_new(&mut self, selected: &mut Selected<'_>) {
         for plan in &self.groups[self.attached..] {
-            for &member_id in plan.group.iter() {
+            for member_id in plan.group.iter() {
                 selected
                     .get_mut(member_id)
                     .groups_mut()
                     .expect("group members are SparseSet")
-                    .attach(plan.group.clone(), member_id);
+                    .attach(plan.group.clone(), *member_id);
             }
         }
 
@@ -580,12 +580,12 @@ pub(super) fn is_clean(selected: &Selected<'_>) -> bool {
             // Each member compares its length with the first one, their own trust is checked
             // when we get to them.
             let first_id = range.group[0];
-            if first_id == storage_id {
+            if &first_id == storage_id {
                 continue;
             }
 
             let first_len = selected
-                .get(first_id)
+                .get(&first_id)
                 .groups()
                 .and_then(|groups| groups.range(&range.group))
                 .expect("every member holds a range for its group")

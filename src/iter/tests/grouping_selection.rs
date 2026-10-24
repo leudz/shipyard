@@ -179,7 +179,7 @@ fn window_metadata() {
     // SAFE: `a` keeps A borrowed, and its group metadata unmodified, until the end of the test.
     let window = unsafe { handle.get(EntityCursor::empty()) };
     assert!(core::ptr::eq(window.groups, &a.groups));
-    assert_eq!(window.storage_id(), StorageId::of::<SparseSet<A>>());
+    assert_eq!(window.storage_id(), &StorageId::of::<SparseSet<A>>());
     assert_eq!((window.groups.unevaluated_start, window.len), (4, 5));
     let [range] = &window.groups.ranges[..] else {
         panic!("A holds a single range");

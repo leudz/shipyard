@@ -298,7 +298,7 @@ fn metadata_ranges() {
 
     let window = metadata(&groups, 8).unwrap();
 
-    assert_eq!(window.storage_id(), StorageId::Custom(0));
+    assert_eq!(window.storage_id(), &StorageId::Custom(0));
     assert_eq!((window.len, window.groups.unevaluated_start), (8, 6));
     let rings: Vec<(Ring, usize)> = window
         .groups
