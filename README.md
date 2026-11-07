@@ -8,7 +8,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 
-### [Guide Master](https://leudz.github.io/shipyard/guide/master) | [Guide 0.11](https://leudz.github.io/shipyard/guide/0.11) | [Bunny Mark](https://leudz.github.io/shipyard/bunny_demo) | [Tiny Game](https://leudz.github.io/shipyard/square_eater)
+### [Guide Master](https://leudz.github.io/shipyard/guide/master) | [Guide 0.11](https://leudz.github.io/shipyard/guide/0.11) | [Visualizer](https://leudz.github.io/shipyard/visualizer) | [Bunny Mark](https://leudz.github.io/shipyard/bunny_demo) | [Tiny Game](https://leudz.github.io/shipyard/square_eater)
 
 </div>
 

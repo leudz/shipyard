@@ -15,6 +15,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       deploy: ${{ steps.filter.outputs.deploy }}
+      visualizer: ${{ steps.filter.outputs.visualizer }}
     steps:
     - uses: actions/checkout@v3
     - uses: dorny/paths-filter@v2
@@ -26,6 +27,11 @@ jobs:
             - 'tests/**'
             - 'shipyard_proc/**'
             - 'benches/**'
+            - 'Cargo.toml'
+            - '.github/**'
+          visualizer:
+            - 'visualizer/**'
+            - 'src/**'
             - 'Cargo.toml'
             - '.github/**'
           deploy:
@@ -329,21 +335,24 @@ jobs:
   visualizer:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    # Bundled on PRs touching the visualizer too, only the deploy job is restricted to pushes.
+    if: needs.changes.outputs.visualizer == 'true' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
-      - uses: jetli/trunk-action@v0.5.1
-      # GH pages doesn't use the same url naming as trunk's default
-      # https://github.com/thedodd/trunk/issues/268
-      - run: trunk build --public-url "/shipyard/visualizer/" --release true -d visualizer/dist visualizer/index.html
+      - uses: cargo-bins/cargo-binstall@main
+      # Keep the CLI version in sync with the `dioxus` dependency in visualizer/Cargo.toml
+      - run: cargo binstall dioxus-cli@0.7.10 --no-confirm --locked
+      # Visualizer/Dioxus.toml sets the `/shipyard/visualizer/` base path used by GitHub Pages
+      - run: dx bundle --platform web --release --out-dir dist
+        working-directory: ./visualizer
       - name: save visualizer
         uses: actions/upload-artifact@v4
         with:
           name: visualizer
-          path: visualizer/dist
+          path: visualizer/dist/public
   deploy:
     runs-on: ubuntu-latest
     needs: [

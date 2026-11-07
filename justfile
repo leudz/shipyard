@@ -45,11 +45,14 @@ square_eater: build_square_eater move_square_eater
 
 test: fmt check-features test-all doc miri clippy
 
-dev_visualizer $RUSTFLAGS = "--cfg=web_sys_unstable_apis":
-    trunk serve visualizer/index.html
-
 visualizer:
-    trunk serve visualizer/index.html
+    cd visualizer && dx serve --platform web
+
+visualizer_desktop:
+    cd visualizer && dx serve --platform desktop
+
+visualizer_bundle:
+    cd visualizer && dx bundle --platform web --release --out-dir dist
 
 rustfmt_errors:
     cargo +nightly fmt -- --config=error_on_line_overflow=true,error_on_unformatted=true

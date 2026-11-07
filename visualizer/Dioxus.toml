@@ -1,0 +1,13 @@
+[application]
+
+[web.app]
+title = "Shipyard Visualizer"
+# GitHub Pages serves the visualizer from https://leudz.github.io/shipyard/visualizer/
+base_path = "shipyard/visualizer"
+
+[web.wasm_opt]
+level = "z"
+
+[bundle]
+identifier = "io.github.leudz.shipyard-visualizer"
+publisher = "shipyard"

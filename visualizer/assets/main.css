@@ -1,0 +1,1175 @@
+/* Visual tokens adapted from the Workload Explorer preview.
+   We switch palettes with a media query rather than `light-dark()` so older
+   system WebViews (WebKitGTK in particular) get the same colors. */
+:root {
+    color-scheme: light dark;
+
+    --bg: #e9edf1;
+    --panel: #fcfdff;
+    --bar: #f1f4f8;
+    --text: #263549;
+    --muted: #596c83;
+    --line: #c4ceda;
+    --accent: #225b96;
+    --tint: #e3eefc;
+    --red: #b72f46;
+    --red-bg: #fde7eb;
+    --blue: #2567b5;
+    --blue-bg: #dfedff;
+    --shadow: #24374b26;
+    --system: #80632e;
+    --component: #715297;
+
+    --font-ui: system-ui, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #171d26;
+        --panel: #252e3c;
+        --bar: #2c3849;
+        --text: #e4ebf6;
+        --muted: #acbbcf;
+        --line: #465772;
+        --accent: #9ec9ff;
+        --tint: #344b69;
+        --red: #ff97a6;
+        --red-bg: #562f3e;
+        --blue: #9ac7ff;
+        --blue-bg: #294362;
+        --shadow: #00000055;
+        --system: #d7bd87;
+        --component: #c4aae6;
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+}
+
+body {
+    font: 13px/1.4 var(--font-ui);
+    color: var(--text);
+    background: var(--bg);
+}
+
+#main {
+    height: 100%;
+}
+
+button,
+input {
+    font: inherit;
+    color: inherit;
+}
+
+code,
+pre {
+    font-family: var(--font-mono);
+}
+
+a {
+    color: var(--accent);
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* Application frame */
+
+.app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    min-height: 49px;
+    padding: 12px 17px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--line);
+}
+
+.app-title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+}
+
+.app-title span {
+    font-weight: 400;
+    color: var(--muted);
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.app-main {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+}
+
+/* Controls */
+
+.button {
+    padding: 4px 11px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.button:hover {
+    background: var(--tint);
+}
+
+.button-primary,
+.button-primary:hover {
+    color: var(--panel);
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Panels and notices */
+
+.panel {
+    width: min(560px, 100%);
+    padding: 20px 24px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    box-shadow: 0 4px 14px var(--shadow);
+}
+
+.panel h2 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.panel p {
+    margin: 8px 0;
+}
+
+.notice {
+    padding: 12px 16px;
+}
+
+.notice-error {
+    border-color: var(--red);
+    background: var(--red-bg);
+}
+
+.notice-details {
+    font-size: 12px;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+/* Wide enough for the first sentence, the type's path included, to fit on one line. */
+.empty-state {
+    width: min(680px, 100%);
+}
+
+.empty-state code {
+    overflow-wrap: anywhere;
+}
+
+.code-block {
+    margin: 10px 0;
+    padding: 10px 12px;
+    font-size: 12px;
+    background: var(--bar);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow-x: auto;
+}
+
+/* Hides an element visually while keeping it focusable and announced. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* The file input inside is hidden, so the label shows its focus. */
+.file-button:has(:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Loaded file */
+
+.file-name {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+/* Modal dialogs */
+
+.dialog {
+    color: var(--text);
+}
+
+/* Browsers hide the focus ring when a mouse click opened the dialog, but Enter still activates
+   the focused button, so we always show which one that is. */
+.dialog :focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.dialog::backdrop {
+    background: #10182480;
+}
+
+/* Search */
+
+.search {
+    width: min(760px, 100%);
+    padding: 9px 12px;
+}
+
+.search-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: 12px;
+}
+
+/* First in the DOM, last on screen. */
+.map-launch {
+    grid-row: 1;
+    grid-column: 4;
+    align-self: end;
+    height: 32px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.search-field {
+    display: grid;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.search-field input {
+    min-width: 0;
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+}
+
+.search-results {
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    max-height: min(360px, 50vh);
+    margin-top: 8px;
+    padding-top: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-top: 1px solid var(--line);
+}
+
+.search-result {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 11px;
+    font: 12px var(--font-mono);
+    overflow-wrap: anywhere;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.search-result:hover {
+    background: var(--tint);
+}
+
+/* Focus stays in the field, so the active result needs its own visible marker. */
+.search-result[aria-selected="true"] {
+    background: var(--tint);
+    border-color: var(--accent);
+}
+
+.search-result small {
+    flex-shrink: 0;
+    font: 11px var(--font-ui);
+    color: var(--muted);
+}
+
+.panel .search-note {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.search-note:empty {
+    display: none;
+}
+
+/* Workload scene */
+
+.workspace {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+    background-image: none;
+}
+
+/* `clip` rather than `hidden`, so focusing a tile outside the screen can't scroll the scene: the
+   camera pans to it instead. */
+.scene {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: clip;
+}
+
+/* Text selection would fight with dragging to pan, the floating panels keep it. */
+.scene-surface {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.scene-surface.panning {
+    cursor: grabbing;
+}
+
+.scene .search {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    right: 14px;
+    z-index: 6;
+    width: auto;
+    max-width: 930px;
+}
+
+/* Errors float over the scene and its panels, the workspace stays as it was. */
+.workspace .notice {
+    position: absolute;
+    top: 100px;
+    right: 14px;
+    z-index: 8;
+    width: min(420px, calc(100% - 28px));
+}
+
+.workload-heading {
+    position: absolute;
+    top: 103px;
+    left: 25px;
+    right: 25px;
+    pointer-events: none;
+}
+
+.workload-heading > span {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.workload-heading h2 {
+    margin: 4px 0 5px;
+    font: 21px var(--font-mono);
+    overflow-wrap: anywhere;
+}
+
+.workload-heading small {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.scene-note {
+    position: absolute;
+    top: 190px;
+    left: 25px;
+    margin: 0;
+    color: var(--muted);
+}
+
+.scene-world {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+}
+
+.batch {
+    position: absolute;
+    top: 0;
+    border-right: 1px solid var(--line);
+}
+
+.batch:last-child {
+    border-right: 0;
+}
+
+.batch-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 10px;
+    height: 33px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0 9px;
+    border-bottom: 1px solid var(--line);
+}
+
+.batch-header h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.batch-header span {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* The hidden copy keeps the tiles' styles, so it measures what the scene shows. */
+.system-tile {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    min-height: 36px;
+    margin: 0;
+    /* Room on the right for the highlight's access mark, kept without a highlight so labels
+       wrap the same either way. */
+    padding: 6px 22px 6px 8px;
+    font: 11px/15px var(--font-mono);
+    text-align: left;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.system-tile:hover {
+    background: var(--tint);
+}
+
+/* The focus ring sits outside the tile, so the selection uses the border and background to stay
+   distinct from it. */
+.system-tile.selected {
+    background: var(--tint);
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* The highlight. Colors repeat what the accessible names and the EX/SH marks say. */
+.system-tile.target {
+    background: var(--tint);
+    border-color: var(--accent);
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.system-tile.exclusive,
+.chip.exclusive,
+.map-select.exclusive {
+    color: var(--red);
+    background: var(--red-bg);
+    border-color: var(--red);
+}
+
+.system-tile.shared,
+.chip.shared,
+.map-select.shared {
+    color: var(--blue);
+    background: var(--blue-bg);
+    border-color: var(--blue);
+}
+
+.system-tile.dimmed,
+.map-select.dimmed {
+    opacity: 0.4;
+}
+
+.tile-access {
+    position: absolute;
+    top: 4px;
+    right: 5px;
+    font: 9px var(--font-ui);
+}
+
+.highlight-summary {
+    /* As tall as its Clear button, so highlighting doesn't change the panel's height. */
+    min-height: 20px;
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 11px;
+}
+
+.highlight-summary b {
+    font-weight: 500;
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+}
+
+.highlight-summary .button {
+    padding: 1px 7px;
+    font-size: 11px;
+}
+
+.legend-exclusive {
+    color: var(--red);
+}
+
+.legend-shared {
+    color: var(--blue);
+}
+
+.highlight-absent {
+    color: var(--muted);
+}
+
+.tile-mark {
+    color: var(--accent);
+}
+
+/* Floats above its tile, `top` is where its bottom edge goes. */
+.tile-tooltip {
+    position: absolute;
+    z-index: 4;
+    width: max-content;
+    max-width: min(20rem, calc(100% - 28px));
+    padding: 5px 8px;
+    font: 11px/15px var(--font-mono);
+    overflow-wrap: anywhere;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    box-shadow: 0 4px 14px var(--shadow);
+    transform: translateY(-100%);
+    pointer-events: none;
+}
+
+/* Only focused from script on the way out of the search fields, Tab then continues to the tiles. */
+.workload:focus {
+    outline: none;
+}
+
+.tile-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tile-measure {
+    position: absolute;
+    top: 0;
+    left: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.tile-measure .system-tile {
+    position: static;
+}
+
+/* Zoom controls */
+
+.scene .navigation {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    right: 14px;
+    z-index: 6;
+    display: grid;
+    gap: 5px;
+    width: auto;
+    max-width: 900px;
+    padding: 6px 10px;
+}
+
+/* The highlight, with the zoom buttons on its right. */
+.navigation-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* The slider, with a reminder of how to read the workload on its right. */
+.overview-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 16px;
+    row-gap: 2px;
+}
+
+/* One bar per batch, each at the place and width `overview::lens` gives it, which fit the strip
+   exactly. Below them, the mark of the part on screen. */
+.overview {
+    position: relative;
+    height: 34px;
+}
+
+/* The part of the workload on screen, under the bars it covers. */
+.overview-viewport {
+    position: absolute;
+    bottom: 0;
+    height: 3px;
+    background: var(--muted);
+    border-radius: 1px;
+    pointer-events: none;
+}
+
+/* The whole span is the button, the bar painted inside leaves a gap on its right. */
+.overview-batch {
+    position: absolute;
+    top: 0;
+    bottom: 5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 0;
+    color: var(--text);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+/* Rises above a bar, its left edge on the bar's, or its right edge for `anchor-right`. */
+.batch-tooltip {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 1;
+    width: max-content;
+    max-width: 20rem;
+    padding: 5px 8px;
+    font: 11px/15px var(--font-mono);
+    text-align: left;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    box-shadow: 0 4px 14px var(--shadow);
+    pointer-events: none;
+}
+
+.batch-tooltip.anchor-right {
+    right: 0;
+    left: auto;
+}
+
+.batch-tooltip-title {
+    margin-bottom: 3px;
+    font-family: var(--font-ui);
+    font-weight: 600;
+}
+
+.batch-tooltip-more {
+    margin-top: 3px;
+    font-family: var(--font-ui);
+    color: var(--muted);
+}
+
+/* The gap between bars shrinks with very narrow spans, so thousands of batches still fit. */
+.overview-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(100% - min(2px, 25%));
+    overflow: hidden;
+    font: 11px/14px var(--font-mono);
+    background: var(--line);
+    border-radius: 1px;
+}
+
+.overview-batch.on-screen .overview-bar {
+    color: var(--panel);
+    background: var(--muted);
+}
+
+.overview-batch.highlighted .overview-bar {
+    color: var(--panel);
+}
+
+.overview-batch.muted .overview-bar {
+    color: var(--muted);
+    background: color-mix(in srgb, var(--line) 30%, var(--panel));
+}
+
+.overview-position {
+    display: flex;
+    flex: 1 1 240px;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+/* Points to the workload when it's all off screen. */
+/* Its width comes from the longest label, with digits all as wide. */
+.overview-range {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.overview-position input {
+    flex: 1;
+    min-width: 0;
+    accent-color: var(--muted);
+}
+
+.panel .navigation-status {
+    margin: 0;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.zoom-controls {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.zoom-controls .button {
+    min-width: 22px;
+    padding: 1px 5px;
+    font-size: 11px;
+    text-align: center;
+    border-color: transparent;
+}
+
+/* Inspectors. They float above the workload and the other panels, so one moved over the search
+   panel keeps its title within reach. Each inspector's z-index follows the front order, it's
+   local to this layer. The position and size come from the inspector itself. */
+
+.inspectors {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    pointer-events: none;
+}
+
+.panel.floating {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    pointer-events: auto;
+    box-shadow: 0 8px 24px var(--shadow);
+}
+
+.floating[data-kind="system"] {
+    border-top: 3px solid var(--system);
+}
+
+.floating[data-kind="component"] {
+    border-top: 3px solid var(--component);
+}
+
+.floating-head {
+    display: flex;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px 4px 4px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--line);
+}
+
+/* The title doubles as the move handle, it takes the header's free space. */
+.floating-grip {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 3px 7px;
+    color: inherit;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-radius: 3px;
+    cursor: move;
+    touch-action: none;
+}
+
+.floating-grip-mark {
+    color: var(--muted);
+}
+
+.floating-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 22px;
+    height: 20px;
+    padding: 0;
+    font-size: 11px;
+    line-height: 20px;
+    color: var(--muted);
+    background: var(--panel);
+    border: 0;
+    border-radius: 3px 0 0;
+    cursor: nwse-resize;
+    touch-action: none;
+}
+
+.floating h2:focus {
+    outline: none;
+}
+
+.floating h2:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.floating-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+}
+
+.floating[data-kind="system"] .floating-title {
+    color: var(--system);
+}
+
+.floating[data-kind="component"] .floating-title {
+    color: var(--component);
+}
+
+.floating-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.floating-head .button {
+    padding: 3px 6px;
+    font-size: 10px;
+}
+
+.inspector-history {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border-bottom: 1px solid var(--line);
+}
+
+.inspector-history .button {
+    padding: 3px 7px;
+    font-size: 11px;
+    border-color: transparent;
+}
+
+.inspector-history .button:disabled {
+    color: var(--muted);
+    background: none;
+    cursor: default;
+}
+
+.inspector-history span {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+}
+
+.inspector-body {
+    flex: 1;
+    min-height: 0;
+    padding: 14px 14px 24px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+}
+
+.panel .inspector-body h2 {
+    margin: 0 0 9px;
+    font: 15px/1.3 var(--font-mono);
+}
+
+.inspector-body h3 {
+    margin: 17px 0 7px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.panel .full-name {
+    margin: 0;
+    font: 10px/1.5 var(--font-mono);
+    color: var(--muted);
+}
+
+.panel .inspector-note {
+    margin: 9px 0 0;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chip {
+    max-width: 100%;
+    min-height: 40px;
+    padding: 10px 12px;
+    font: 11px var(--font-mono);
+    text-align: left;
+    overflow-wrap: anywhere;
+    border: 1px solid;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.chip.exclusive {
+    color: var(--red);
+    background: var(--red-bg);
+    border-color: var(--red);
+}
+
+.chip.shared {
+    color: var(--blue);
+    background: var(--blue-bg);
+    border-color: var(--blue);
+}
+
+.chip:hover {
+    box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.chip.target {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.occurrences {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.occurrences li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+.occurrence-workload {
+    flex-basis: 100%;
+    font: 11px var(--font-mono);
+}
+
+.occurrence {
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+/* The global map. Its lists scroll on their own inside the panel's height. */
+
+.floating[data-kind="map"] {
+    border-top: 3px solid var(--accent);
+}
+
+.floating[data-kind="map"] .floating-title {
+    color: var(--accent);
+}
+
+.map-pinned {
+    margin: 0 7px;
+    font-size: 10px;
+    color: var(--muted);
+}
+
+/* The lists, side by side or stacked, the grid comes from the map. The gap shows the body's
+   background as a line between them. */
+.map-body {
+    display: grid;
+    flex: 1;
+    gap: 1px;
+    min-height: 0;
+    background: var(--line);
+}
+
+/* The bottom padding keeps the last rows clear of the resize handle. */
+.map-list {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px 8px 26px;
+    background: var(--panel);
+}
+
+.panel .map-list h2 {
+    margin: 0 4px 10px;
+    font: 12px var(--font-ui);
+}
+
+.map-count {
+    font-size: 10px;
+    color: var(--muted);
+}
+
+/* Room for a scrollbar whether the list scrolls or not, so lists as wide have as many columns. */
+.map-items {
+    flex: 1;
+    min-height: 0;
+    padding: 3px 4px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.map-items ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    column-gap: 8px;
+}
+
+.map-row {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    margin-bottom: 5px;
+    break-inside: avoid;
+}
+
+.map-select {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+    min-width: 0;
+    padding: 6px 7px;
+    font: 11px var(--font-mono);
+    text-align: left;
+    overflow-wrap: anywhere;
+    background: var(--bar);
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.map-select:hover,
+.map-inspect:hover {
+    background: var(--tint);
+}
+
+.map-select small {
+    font: 9px var(--font-ui);
+}
+
+.map-select[aria-pressed="true"] {
+    background: var(--tint);
+    outline: 2px solid var(--text);
+    outline-offset: -1px;
+}
+
+.map-inspect {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 25px;
+    padding: 4px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+/* Auto-reload, next to the file name on desktop. */
+.auto-reload {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.auto-reload:has(input:disabled) {
+    opacity: 0.6;
+}
+
+.reload-status {
+    font-size: 11px;
+    color: var(--muted);
+}
