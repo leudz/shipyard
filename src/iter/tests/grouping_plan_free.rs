@@ -218,6 +218,64 @@ fn nested_offset() {
     assert_eq!(items, expected);
 }
 
+/// 4 pairs `A(i)` and `B(100 + i)` grouped as AB, then both members' rings rotated by one slot.
+///
+/// The pairs are in the same physical order in both members, so both hold the same logical
+/// sequence after the rotation, as group metadata requires.
+fn rotated_world() -> World {
+    let mut world = World::builder_for_test().with_group::<(A, B)>().build();
+    for i in 0..4 {
+        world.add_entity((A(i), B(100 + i)));
+    }
+    world.regroup();
+
+    {
+        let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+        assert_eq!(a.dense, b.dense);
+        assert_eq!(a.groups.ranges[0].len, 4);
+        assert_eq!(b.groups.ranges[0].len, 4);
+
+        a.groups.ranges[0].shift = 1;
+        b.groups.ranges[0].shift = 1;
+    }
+
+    world
+}
+
+/// Asserts that the normal constructor walks equally rotated rings as a single segment without
+/// plan: both windows drive from the start of the range, in physical order. Construction and
+/// traversal leave the stored shifts as they were.
+#[test]
+fn rotated_state() {
+    let world = rotated_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let iter = (&a, &b).iter();
+
+    assert!(iter.schedule.is_none());
+    assert_eq!(
+        SegmentRow::of(&iter.shiperator).states(),
+        [
+            NodeState::Mixed {
+                captain_mask: 0b11,
+                coverage: CoverageSpan::EMPTY
+            },
+            NodeState::Window { segment_start: 0 },
+            NodeState::Window { segment_start: 0 },
+        ]
+    );
+    assert_eq!(iter.cursor.as_ptr().as_ptr().cast_const(), a.dense.as_ptr());
+    assert_eq!((iter.cursor.local_index(), iter.cursor.len()), (0, 4));
+
+    let items: Vec<_> = iter.with_id().map(|(id, (a, b))| (id, a.0, b.0)).collect();
+    let expected: Vec<_> = a
+        .dense
+        .iter()
+        .map(|&id| (id, a.get(id).unwrap().0, b.get(id).unwrap().0))
+        .collect();
+    assert_eq!(items, expected);
+    assert_eq!((a.groups.ranges[0].shift, b.groups.ranges[0].shift), (1, 1));
+}
+
 /// Asserts that halves split after a partial `next` walk the rest of the segment with its offset,
 /// whichever half is consumed first.
 #[test]

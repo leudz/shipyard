@@ -92,9 +92,9 @@ pub(super) const RING_PAIRS: usize = 15;
 ///
 /// 7 AC entities own `A(200 + i)` and 3 B-only entities `B(300 + i)`.
 ///
-/// The real planner prefers its grouped walks (38) over B captaining alone (54), 6 segments:
+/// The real planner prefers its grouped walks (38) over B captaining alone (54), 5 segments:
 /// - AB, aligned
-/// - ABC, aligned, cut in 3 where regroup left A's and B's wrap points, which differ
+/// - ABC, aligned, cut in 2 where regroup left A's and B's wrap points, which differ
 /// - A's unevaluated pairs
 /// - B's unevaluated pairs, which A's region covers\
 /// Returned ids are indexed by pair, independent of storage order.

@@ -424,8 +424,9 @@ fn grouped_held_mut() {
     assert_written(&world, &e);
 }
 
-/// Asserts that an aligned walk over a ring whose range wraps around in A, but not in C, is cut
-/// at A's wrap point, and that items held from the first piece stay valid after the second.
+/// Asserts that an aligned walk over a ring whose range wraps around in A, but not in C, starts
+/// at A's range start and is cut at C's, and that items held from the first piece stay valid
+/// after the second.
 #[test]
 fn ring_wrap() {
     let mut world = World::builder_for_test()
@@ -442,7 +443,7 @@ fn ring_wrap() {
     {
         let (mut a, c) = world.borrow::<(ViewMut<'_, A>, View<'_, C>)>().unwrap();
         let iter = grouped((&mut a, &c).into_shiperator());
-        assert_eq!(route(&iter, None), [(0b11, 0, 1), (0b11, 0, 2)]);
+        assert_eq!(route(&iter, None), [(0b11, 0, 2), (0b11, 0, 1)]);
 
         let items: Vec<(&mut A, &C)> = iter.collect();
         assert_eq!(items.len(), 3);

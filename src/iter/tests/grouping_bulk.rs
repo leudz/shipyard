@@ -315,7 +315,7 @@ fn strategies<S: Shiperator>(
 }
 
 /// Asserts that each segment of `ring_world`'s pair walks picks its bulk strategy from its own
-/// mask and coverage: AB and the 3 pieces of ABC fold without lookups, A's unevaluated walk
+/// mask and coverage: AB and the 2 pieces of ABC fold without lookups, A's unevaluated walk
 /// with its single captain, B's checking coverage.
 /// Every way yields every pair once, after any `next` prefix, across every boundary.
 #[test]
@@ -326,7 +326,6 @@ fn ring_strategies_and_prefixes() {
     assert_eq!(
         strategies((&a, &b).iter(), |mixed| mixed.bulk_strategy()),
         [
-            BulkStrategy::Aligned,
             BulkStrategy::Aligned,
             BulkStrategy::Aligned,
             BulkStrategy::Aligned,

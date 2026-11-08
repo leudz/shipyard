@@ -362,7 +362,7 @@ fn ring_entry() {
         .upgrade()
         .unwrap();
     let segments = plan.segments();
-    assert_eq!(segments.len(), 6);
+    assert_eq!(segments.len(), 5);
 
     for (index, segment) in segments.iter().enumerate() {
         if index > 0 {

@@ -1031,8 +1031,8 @@ fn ring_nested() {
                 mask
             })
             .collect();
-        assert_eq!(pair_masks, [0b11, 0b11, 0b11, 0b11, 0b01, 0b10]);
-        let State::Mixed(_, coverage) = &segments[5].row[1] else {
+        assert_eq!(pair_masks, [0b11, 0b11, 0b11, 0b01, 0b10]);
+        let State::Mixed(_, coverage) = &segments[4].row[1] else {
             panic!("the pair drives");
         };
         assert_eq!(coverage.len(), 1);

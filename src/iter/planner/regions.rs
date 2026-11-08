@@ -4,6 +4,9 @@
 //! one per piece of a walk, each with the row it installs and the regions earlier pieces own.
 //! Several segments are published as a plan, a single one is installed without plan. Walks already split at trust endpoints; placement also cuts them wherever
 //! one of their active captains' rings wraps. Neither cut changes the covered logical positions.\
+//! An aligned walk over its captains' whole rings starts at its driver's range start instead of
+//! logical 0, every captain shifted by the same amount. It then only has a cut per distinct wrap
+//! point, a single segment when all its captains wrap at the same position.\
 //! It doesn't read entities, segments are carved out of the members' entities from metadata alone.
 //!
 //! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
@@ -108,7 +111,9 @@ unsafe fn enter_first<S: Shiperator>(root: &mut S, entry: &mut SegmentEntry<'_>)
     // of the segment's first entity and the segment fits in that storage. Segments stop at every
     // captain's wrap point, so each captain's entities are consecutive from there. With several
     // captains, this relies on members holding the same entities at the logical positions they
-    // all trust, which their group metadata guarantees.
+    // all trust, which their group metadata guarantees. An aligned walk over whole rings moves
+    // logical 0 by the same amount in every captain, they keep reading the same entity at each
+    // position, and its pieces still stop at each captain's physical wrap point.
     // The `Mixed`s above the group's owner only have the child leading to it as captain, they
     // pass the candidates down unchanged.
     // Our caller drives `root` with this segment's entities and keeps `entry`'s pool alive.
@@ -133,6 +138,11 @@ unsafe fn enter_first<S: Shiperator>(root: &mut S, entry: &mut SegmentEntry<'_>)
 // Placement cuts walks into pieces wherever a captain's ring wraps, so that each captain
 // advances linearly. Pieces visit the same positions as their walk, the cuts don't change
 // which entities are met.
+// An aligned walk covering its captains' whole rings is visited from its driver's range start
+// rather than logical 0. All captains move by the same amount, so they still read the same
+// entity at each position, and a full cycle visits every position once. Only the order changes,
+// the walk still meets the same entities. Aligned walks own nothing, so later walks' coverage
+// doesn't depend on that order.
 //
 // Completeness, for a match `e`:
 // - When one of `e`'s required members is unevaluated, that member's unevaluated walk meets `e`.
@@ -268,12 +278,27 @@ impl Placement {
                 // Captains hold the same entities over these positions, any of them can drive.
                 // Later walks never meet these entities, see the reasoning above `grouped_plan`.
                 let driver = captains.trailing_zeros() as usize;
+                let mut rings = captain_rings(candidate, range, captains);
                 let positions = start..start + len;
 
-                Placement::ring(
-                    candidate, range, driver, positions, captains, false, placements,
-                );
+                // A walk over whole rings can start anywhere on the cycle. Starting at logical 0
+                // cuts it there on top of every captain's range start, unless one of them holds
+                // logical 0 at its range start. Moving logical 0 to the driver's range start
+                // removes that extra cut: with `d` distinct wrap points among the captains, we
+                // get exactly `d` pieces.
+                //
+                // Calling `s` the driver's wrap offset, new position `t` is old logical position
+                // `(t - s) mod len` in every captain, so they still read the same entity at each
+                // position. A full cycle visits the same positions once, only their order changes.
+                //
+                // A partial walk can't do this, its positions past the end aren't trusted.
+                if covers_whole_rings(&rings, &positions) {
+                    rebase_on_driver(&mut rings, driver);
+                }
+
+                Placement::ring(candidate, driver, &rings, positions, false, placements);
             }
+            // A damaged walk keeps its logical positions as they are, it owns exactly them.
             Walk::Damaged {
                 range,
                 owner,
@@ -281,11 +306,10 @@ impl Placement {
                 len,
                 captains,
             } => {
+                let rings = captain_rings(candidate, range, captains);
                 let positions = start..start + len;
 
-                Placement::ring(
-                    candidate, range, owner, positions, captains, true, placements,
-                );
+                Placement::ring(candidate, owner, &rings, positions, true, placements);
             }
             // The unevaluated region isn't a ring, its positions are physical indices already.
             Walk::Unevaluated { owner, start, len } => {
@@ -296,33 +320,19 @@ impl Placement {
         }
     }
 
-    /// Places logical positions `positions` of `candidate`'s range at position `range`,
-    /// driven by child `driver` with the children `captains` flags, after `placements`.
+    /// Places logical positions `positions` of `rings`, each captain's ring in a range of
+    /// `candidate`, driven by child `driver`, after `placements`.
     ///
     /// Gives one piece per stretch where every captain's part is physically consecutive.
     /// When `owns` is set, each piece owns `driver`'s part of it.
     fn ring(
         candidate: &GroupedCandidate,
-        range: usize,
         driver: usize,
+        rings: &[(usize, Ring)],
         positions: Range<usize>,
-        captains: u32,
         owns: bool,
         placements: &mut Placements,
     ) {
-        let range = &candidate.ranges[range];
-        let rings: ScratchVec<(usize, Ring), 4> = mask_children(captains)
-            .map(|child| {
-                let member = range
-                    .members
-                    .iter()
-                    .find(|member| member.child == child)
-                    .expect("captains are members of their range");
-
-                (child, member.ring)
-            })
-            .collect();
-
         let mut position = positions.start;
         while position < positions.end {
             // Members' rings wrap at their own points, unrelated to each other's.
@@ -425,6 +435,65 @@ impl Placement {
         for &(child, segment_start) in &self.captains {
             row[slots[child]] = NodeState::Window { segment_start };
         }
+    }
+}
+
+/// Returns the ring of each child `captains` flags in `candidate`'s range at position `range`,
+/// in child order.
+fn captain_rings(
+    candidate: &GroupedCandidate,
+    range: usize,
+    captains: u32,
+) -> ScratchVec<(usize, Ring), 4> {
+    let range = &candidate.ranges[range];
+
+    mask_children(captains)
+        .map(|child| {
+            let member = range
+                .members
+                .iter()
+                .find(|member| member.child == child)
+                .expect("captains are members of their range");
+
+            (child, member.ring)
+        })
+        .collect()
+}
+
+/// Returns `true` when `positions` are every logical position of each of `rings`.
+fn covers_whole_rings(rings: &[(usize, Ring)], positions: &Range<usize>) -> bool {
+    positions.start == 0
+        && !positions.is_empty()
+        && rings.iter().all(|(_, ring)| ring.len == positions.end)
+}
+
+/// Moves logical 0 of every ring of `rings` by the same amount, until `driver`'s is at its range
+/// start and its shift is 0. Each ring keeps its start and length.
+///
+/// Rings must be non-empty and all have the same length.
+fn rebase_on_driver(rings: &mut [(usize, Ring)], driver: usize) {
+    let driver_offset = rings
+        .iter()
+        .find(|&&(child, _)| child == driver)
+        .expect("the driver is a captain")
+        .1
+        .wrap_offset();
+    if driver_offset == 0 {
+        return;
+    }
+
+    for (_, ring) in rings {
+        let offset = ring.wrap_offset();
+        // `(offset - driver_offset) mod len`, both offsets are smaller than `len`.
+        // We never add them to `len`, which could overflow.
+        let rebased = if offset >= driver_offset {
+            offset - driver_offset
+        } else {
+            ring.len - (driver_offset - offset)
+        };
+
+        // `rebased` is smaller than `len`, which fits in an isize like every dense length.
+        ring.shift = isize::try_from(rebased).expect("range lengths fit in an isize");
     }
 }
 
