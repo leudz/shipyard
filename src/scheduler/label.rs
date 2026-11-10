@@ -6,6 +6,7 @@ use core::any::Any;
 use core::any::TypeId;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Workload identifier
 pub trait Label: 'static + Send + Sync {
@@ -141,18 +142,44 @@ impl<T: Label> AsLabel<T> for T {
     }
 }
 
-#[derive(Clone, Debug, Hash)]
-pub(crate) struct SequentialLabel(pub(crate) Box<dyn Label>);
+/// Identifies one child of one sequential tuple conversion, so the next child can be placed after it.
+///
+/// Children are told apart by their position, not their name: two children can share a name.\
+/// Each conversion gets its own `conversion` id, so nested or repeated conversions never share labels.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct SequentialLabel {
+    conversion: usize,
+    child: usize,
+}
+
+impl SequentialLabel {
+    /// Returns an id no other sequential conversion uses.
+    pub(crate) fn new_conversion() -> usize {
+        static NEXT_CONVERSION: AtomicUsize = AtomicUsize::new(0);
+
+        NEXT_CONVERSION.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub(crate) fn new(conversion: usize, child: usize) -> SequentialLabel {
+        SequentialLabel { conversion, child }
+    }
+}
+
+// Workload information shows it, so we only print what doesn't depend on the other conversions.
+impl Debug for SequentialLabel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Sequential(child {})", self.child)
+    }
+}
 
 impl Label for SequentialLabel {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    #[allow(clippy::op_ref)]
     fn dyn_eq(&self, other: &dyn Label) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<SequentialLabel>() {
-            &self.0 == &other.0
+            self == other
         } else {
             false
         }
@@ -163,7 +190,7 @@ impl Label for SequentialLabel {
     }
 
     fn dyn_clone(&self) -> Box<dyn Label> {
-        Box::new(SequentialLabel(self.0.clone()))
+        Box::new(*self)
     }
 
     fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {

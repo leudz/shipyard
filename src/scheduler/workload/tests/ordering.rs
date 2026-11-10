@@ -504,6 +504,75 @@ fn append_empty_donor() {
     );
 }
 
+/// Asserts that an empty first child of a sequential tuple doesn't break the order of the rest.
+#[test]
+fn sequential_empty_first() {
+    fn a() {}
+    fn b() {}
+
+    let workload = (Workload::new("empty"), a, b).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a"]), steps(&["b"])],
+            sequential: steps(&["a", "b"]),
+        }
+    );
+}
+
+/// Asserts that an empty last child of a sequential tuple doesn't break the order of the rest.
+#[test]
+fn sequential_empty_last() {
+    fn a() {}
+    fn b() {}
+
+    let workload = (a, b, Workload::new("empty")).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a"]), steps(&["b"])],
+            sequential: steps(&["a", "b"]),
+        }
+    );
+}
+
+/// Asserts that a sequential tuple of empty children builds into an empty schedule.
+#[test]
+fn sequential_empty_all() {
+    let workload = (Workload::new("empty1"), Workload::new("empty2")).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![],
+            sequential: vec![],
+        }
+    );
+}
+
+/// Asserts that two children of a sequential tuple with distinct names run one after the other,
+/// the first child's systems staying in parallel.
+#[test]
+fn sequential_distinct_names() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+
+    let first = Workload::new("first").with_system(a).with_system(b);
+    let second = Workload::new("second").with_system(c);
+    let workload = (first, second).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
 /// Asserts that three independent systems added with `extend` schedule like `with_system`:
 /// one batch, in declaration order.
 #[test]
@@ -970,4 +1039,95 @@ fn sequential_factory_repeated() {
             sequential: steps(&["a", "a"]),
         }
     );
+}
+
+/// Asserts that an empty child between two systems of a sequential tuple
+/// doesn't break their order.
+#[test]
+fn sequential_empty_middle() {
+    fn a() {}
+    fn b() {}
+
+    let workload = (a, Workload::new("empty"), b).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a"]), steps(&["b"])],
+            sequential: steps(&["a", "b"]),
+        }
+    );
+}
+
+/// Asserts that several empty children between two systems of a sequential tuple
+/// don't break their order.
+#[test]
+fn sequential_empty_several() {
+    fn a() {}
+    fn b() {}
+
+    let workload =
+        (a, Workload::new("empty1"), Workload::new("empty2"), b).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a"]), steps(&["b"])],
+            sequential: steps(&["a", "b"]),
+        }
+    );
+}
+
+/// Asserts that two children of a sequential tuple sharing a name run one after the other,
+/// the first child's systems staying in parallel.
+#[test]
+fn sequential_same_names() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+
+    let first = Workload::new("same").with_system(a).with_system(b);
+    let second = Workload::new("same").with_system(c);
+    let workload = (first, second).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
+/// Asserts that a child name reused at two nesting levels of sequential tuples
+/// doesn't link the levels: `a`, then the inner `p`, then the inner `c`.
+#[test]
+fn sequential_same_names_nested() {
+    fn a() {}
+    fn p() {}
+    fn c() {}
+
+    let inner = (p, Workload::new("same").with_system(c)).into_sequential_workload();
+    let workload = (Workload::new("same").with_system(a), inner).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a"]), steps(&["p"]), steps(&["c"])],
+            sequential: steps(&["a", "p", "c"]),
+        }
+    );
+}
+
+/// Asserts that a sequential tuple still rejects a system listed in two of its children,
+/// even when the children have different names.
+#[test]
+#[should_panic(expected = "appears twice in this workload")]
+fn sequential_duplicate() {
+    fn a() {}
+
+    let first = Workload::new("first").with_system(a);
+    let second = Workload::new("second").with_system(a);
+
+    let _ = (first, second).into_sequential_workload();
 }

@@ -261,26 +261,25 @@ macro_rules! impl_into_workload {
                     barriers: Vec::new(),
                 };
 
-                let mut sequential_tags = Vec::new();
+                let mut children = vec![$(self.$index.into_workload()),+];
 
-                let mut workloads = ($({
-                    let mut w = self.$index.into_workload();
+                // We link each child to the next one with systems.
+                // An empty child has no system to carry a link, skipping it keeps its neighbors linked.
+                let conversion = SequentialLabel::new_conversion();
+                let nonempty: Vec<usize> = (0..children.len())
+                    .filter(|&child| !children[child].systems.is_empty())
+                    .collect();
+                for pair in nonempty.windows(2) {
+                    let (previous, next) = (pair[0], pair[1]);
+                    let label = SequentialLabel::new(conversion, next);
 
-                    let tag = SequentialLabel(w.name.clone());
-                    w = w.tag(tag.clone());
+                    children[next].tags.push(Box::new(label));
+                    children[previous].before_all.add(label);
+                }
 
-                    sequential_tags.push(tag);
-
-                    w
-                },)+);
-
-                $(
-                    if let Some(sequential_tag) = sequential_tags.get($index + 1) {
-                        workloads.$index = workloads.$index.before_all(sequential_tag.clone());
-                    }
-
-                    workload = workload.merge(workloads.$index);
-                )+
+                for child in children {
+                    workload = workload.merge(child);
+                }
 
                 let mut system_names = DedupedLabels::with_capacity(workload.systems.len());
 
