@@ -197,9 +197,21 @@ impl Workload {
     }
     /// Moves all systems of `other` into `Self`, leaving `other` empty.
     /// This allows us to collect systems in different builders before joining them together.
+    ///
+    /// `other`'s barriers move along with its systems.\
+    /// Its conditions, tags and ordering requirements stay in `other`, [`merge`](Workload::merge) applies them to its systems first.
     pub fn append(mut self, other: &mut Self) -> Self {
+        // Barriers are positions in the systems list, `other`'s ones now start after our systems.
+        let systems_len = self.systems.len();
+        self.barriers.extend(
+            other
+                .barriers
+                .drain(..)
+                .map(|barrier| barrier + systems_len),
+        );
+
         for system in &mut other.systems {
-            system.unique_id += self.systems.len();
+            system.unique_id += systems_len;
         }
 
         self.systems.append(&mut other.systems);
@@ -211,14 +223,6 @@ impl Workload {
     pub fn merge(mut self, mut other: Workload) -> Workload {
         self.propagate();
         other.propagate();
-
-        let systems_len = self.systems.len();
-        self.barriers.extend(
-            other
-                .barriers
-                .drain(..)
-                .map(|barrier| barrier + systems_len),
-        );
 
         self.append(&mut other)
     }

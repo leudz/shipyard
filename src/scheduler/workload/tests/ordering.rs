@@ -433,6 +433,77 @@ fn extend_two() {
     assert_eq!(Schedule::built(workload), expected);
 }
 
+/// Returns a workload with two independent systems split by a barrier: `[a] -> [b]`.
+fn barrier_donor() -> Workload {
+    fn a() {}
+    fn b() {}
+
+    Workload::new("donor")
+        .with_system(a)
+        .with_barrier()
+        .with_system(b)
+}
+
+/// Asserts that `merge` keeps the barrier of the workload it takes systems from.
+#[test]
+fn merge_barrier() {
+    let workload = Workload::new("").merge(barrier_donor());
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a"]), steps(&["b"])],
+            sequential: steps(&["a", "b"]),
+        }
+    );
+}
+
+/// Asserts that `append` keeps the destination's own barrier:
+/// `p` stays alone, everything after the barrier waits for it.
+#[test]
+fn append_destination_barrier() {
+    fn p() {}
+    fn q() {}
+    fn a() {}
+    fn b() {}
+
+    let mut donor = Workload::new("donor").with_system(a).with_system(b);
+    let workload = Workload::new("")
+        .with_system(p)
+        .with_barrier()
+        .with_system(q)
+        .append(&mut donor);
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["p"]), steps(&["q", "a", "b"])],
+            sequential: steps(&["p", "q", "a", "b"]),
+        }
+    );
+}
+
+/// Asserts that appending an empty workload leaves the destination's schedule unchanged.
+#[test]
+fn append_empty_donor() {
+    fn p() {}
+    fn q() {}
+
+    let workload = Workload::new("")
+        .with_system(p)
+        .with_barrier()
+        .with_system(q)
+        .append(&mut Workload::new("donor"));
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["p"]), steps(&["q"])],
+            sequential: steps(&["p", "q"]),
+        }
+    );
+}
+
 /// Asserts that three independent systems added with `extend` schedule like `with_system`:
 /// one batch, in declaration order.
 #[test]
@@ -650,4 +721,131 @@ fn extend_conditions() {
 
     let runs = [&A_RUNS, &B_RUNS, &C_RUNS].map(|runs| runs.load(Ordering::Relaxed));
     assert_eq!(runs, [1, 0, 1]);
+}
+
+/// Asserts that `append` keeps the barrier of the workload it takes systems from.
+#[test]
+fn append_barrier() {
+    let workload = Workload::new("").append(&mut barrier_donor());
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a"]), steps(&["b"])],
+            sequential: steps(&["a", "b"]),
+        }
+    );
+}
+
+/// Asserts that a barrier `append` takes from its donor moves past the destination's systems:
+/// `p` then `[a] | [b]` gives `[p, a] -> [b]`.
+#[test]
+fn append_barrier_after_prefix() {
+    fn p() {}
+
+    let workload = Workload::new("")
+        .with_system(p)
+        .append(&mut barrier_donor());
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["p", "a"]), steps(&["b"])],
+            sequential: steps(&["p", "a", "b"]),
+        }
+    );
+}
+
+/// Asserts that `append` keeps a barrier the donor ends with,
+/// so a system added afterwards waits for the donor's systems.
+#[test]
+fn append_trailing_barrier() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+
+    let mut donor = Workload::new("donor")
+        .with_system(a)
+        .with_system(b)
+        .with_barrier();
+    let workload = Workload::new("").append(&mut donor).with_system(c);
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
+/// Asserts that a workload emptied by `append` builds as an empty workload.
+#[test]
+fn append_drained_donor() {
+    let mut donor = barrier_donor();
+    let _ = Workload::new("").append(&mut donor);
+
+    assert_eq!(
+        Schedule::built(donor),
+        Schedule {
+            parallel: vec![],
+            sequential: vec![],
+        }
+    );
+}
+
+/// Asserts that a workload emptied by `append` can be reused with fewer systems
+/// than its old barrier position.
+#[test]
+fn append_reused_donor() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+    fn x() {}
+
+    let mut donor = Workload::new("donor")
+        .with_system(a)
+        .with_system(b)
+        .with_barrier()
+        .with_system(c);
+    let _ = Workload::new("").append(&mut donor);
+
+    assert_eq!(
+        Schedule::built(donor.with_system(x)),
+        Schedule {
+            parallel: vec![steps(&["x"])],
+            sequential: steps(&["x"]),
+        }
+    );
+}
+
+/// Asserts that a workload emptied by `append` doesn't apply its old barrier
+/// to the systems it's reused with.
+#[test]
+fn append_reused_donor_stale_barrier() {
+    fn x() {}
+    fn y() {}
+
+    let mut donor = barrier_donor();
+    let _ = Workload::new("").append(&mut donor);
+
+    let workload = donor.with_system(x).with_system(y);
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["x", "y"])],
+            sequential: steps(&["x", "y"]),
+        }
+    );
+}
+
+/// Asserts that `merge` moves each of the donor's barriers once, past the destination's systems.
+#[test]
+fn merge_barrier_once() {
+    fn p() {}
+
+    let workload = Workload::new("").with_system(p).merge(barrier_donor());
+
+    assert_eq!(workload.barriers, [2]);
 }
