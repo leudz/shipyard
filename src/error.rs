@@ -1,5 +1,10 @@
 //! All error types.
 
+// Rustdoc doesn't set `test` when it collects doc tests, these checks need their own gate.
+#[cfg(doctest)]
+#[path = "error/tests/compile_fail.rs"]
+mod compile_fail_tests;
+
 use crate::entity_id::EntityId;
 use crate::scheduler::Label;
 use crate::scheduler::info::TypeInfo;
@@ -8,9 +13,8 @@ use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::type_name;
+use core::error::Error;
 use core::fmt::{Debug, Display, Formatter};
-#[cfg(feature = "std")]
-use std::error::Error;
 
 /// AtomicRefCell's borrow error.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -25,7 +29,6 @@ pub enum Borrow {
     MultipleThreads,
 }
 
-#[cfg(feature = "std")]
 impl Error for Borrow {}
 
 impl Debug for Borrow {
@@ -151,7 +154,6 @@ impl PartialEq for GetStorage {
 
 impl Eq for GetStorage {}
 
-#[cfg(feature = "std")]
 impl Error for GetStorage {}
 
 impl Debug for GetStorage {
@@ -234,7 +236,6 @@ pub enum RegroupSet {
     Storage(GetStorage),
 }
 
-#[cfg(feature = "std")]
 impl Error for RegroupSet {}
 
 impl Debug for RegroupSet {
@@ -264,7 +265,6 @@ pub enum NewEntity {
     Entities(Borrow),
 }
 
-#[cfg(feature = "std")]
 impl Error for NewEntity {}
 
 impl Debug for NewEntity {
@@ -301,7 +301,6 @@ pub enum AddComponent {
     EntityIsNotAlive,
 }
 
-#[cfg(feature = "std")]
 impl Error for AddComponent {}
 
 impl Debug for AddComponent {
@@ -380,7 +379,6 @@ impl PartialEq for AddWorkload {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for AddWorkload {}
 
 impl Debug for AddWorkload {
@@ -448,7 +446,6 @@ pub enum SetDefaultWorkload {
     MissingWorkload,
 }
 
-#[cfg(feature = "std")]
 impl Error for SetDefaultWorkload {}
 
 impl Debug for SetDefaultWorkload {
@@ -507,7 +504,6 @@ impl RunWorkload {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for RunWorkload {}
 
 impl Debug for RunWorkload {
@@ -579,7 +575,6 @@ impl PartialEq for Run {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for Run {}
 
 impl Debug for Run {
@@ -599,6 +594,68 @@ impl Display for Run {
     }
 }
 
+/// Error returned by a system.
+///
+/// Any error that is `Send + Sync + 'static` converts into it, so `?` can be used on any of them.
+///
+/// ```
+/// use shipyard::error::SystemError;
+///
+/// fn check(input: &str) -> Result<(), SystemError> {
+///     input.parse::<u32>()?;
+///
+///     Ok(())
+/// }
+///
+/// assert!(check("not a number").is_err());
+/// ```
+///
+/// ### Interoperability
+///
+/// `SystemError` doesn't implement [`Error`], that implementation would conflict with the conversion from any error.\
+/// [`as_error`](SystemError::as_error) and [`into_inner`](SystemError::into_inner) give access to the underlying error.
+///
+/// The workload errors wrapping it, like [`RunWorkload`], implement [`Error`].\
+/// They convert into other error types, like `anyhow::Error`, as usual.
+pub struct SystemError {
+    error: Box<dyn Error + Send + Sync + 'static>,
+}
+
+impl<E> From<E> for SystemError
+where
+    E: Into<Box<dyn Error + Send + Sync + 'static>>,
+{
+    fn from(error: E) -> SystemError {
+        SystemError {
+            error: error.into(),
+        }
+    }
+}
+
+impl SystemError {
+    /// Returns the underlying error.
+    pub fn as_error(&self) -> &(dyn Error + Send + Sync + 'static) {
+        &*self.error
+    }
+
+    /// Returns the underlying error, use [`downcast`](Box::downcast) to get back its original type.
+    pub fn into_inner(self) -> Box<dyn Error + Send + Sync + 'static> {
+        self.error
+    }
+}
+
+impl Debug for SystemError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(&self.error, f)
+    }
+}
+
+impl Display for SystemError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Display::fmt(&self.error, f)
+    }
+}
+
 /// Returned by [`get`] when an entity does not have a component in the requested storage(s).
 ///
 /// [`get`]: crate::Get
@@ -610,7 +667,6 @@ pub struct MissingComponent {
     pub name: &'static str,
 }
 
-#[cfg(feature = "std")]
 impl Error for MissingComponent {}
 
 impl Debug for MissingComponent {
@@ -641,7 +697,6 @@ pub enum InvalidSystem {
     WorkloadUsedAsSystem(&'static str),
 }
 
-#[cfg(feature = "std")]
 impl Error for InvalidSystem {}
 
 impl Debug for InvalidSystem {
@@ -675,7 +730,6 @@ pub enum UniqueRemove {
     StorageBorrow((&'static str, Borrow)),
 }
 
-#[cfg(feature = "std")]
 impl Error for UniqueRemove {}
 
 impl Debug for UniqueRemove {
@@ -710,7 +764,6 @@ pub enum Apply {
     MissingComponent(EntityId),
 }
 
-#[cfg(feature = "std")]
 impl Error for Apply {}
 
 impl Debug for Apply {
@@ -757,7 +810,6 @@ impl PartialEq for UniquePresence {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for UniquePresence {}
 
 impl Debug for UniquePresence {
@@ -801,7 +853,6 @@ impl From<GetStorage> for CustomStorageView {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for CustomStorageView {}
 
 impl Debug for CustomStorageView {
@@ -852,7 +903,6 @@ impl PartialEq for ImpossibleRequirements {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for ImpossibleRequirements {}
 
 impl Debug for ImpossibleRequirements {
@@ -909,7 +959,6 @@ impl From<MissingComponent> for GetComponent {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for GetComponent {}
 
 impl Debug for GetComponent {
@@ -940,7 +989,7 @@ pub enum Serialize<S: serde::Serializer> {
     Serialization(S::Error),
 }
 
-#[cfg(all(feature = "serde1", feature = "std"))]
+#[cfg(feature = "serde1")]
 impl<S: serde::Serializer> Error for Serialize<S> {}
 
 #[cfg(feature = "serde1")]
@@ -973,7 +1022,7 @@ pub enum Deserialize<'de, D: serde::Deserializer<'de>> {
     Deserialization(D::Error),
 }
 
-#[cfg(all(feature = "serde1", feature = "std"))]
+#[cfg(feature = "serde1")]
 impl<'de, D: serde::Deserializer<'de>> Error for Deserialize<'de, D> {}
 
 #[cfg(feature = "serde1")]
