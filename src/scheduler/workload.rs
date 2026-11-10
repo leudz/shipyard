@@ -479,39 +479,65 @@ impl Workload {
             .all_storages()
             .map_err(|_| error::AddWorkload::TrackingAllStoragesBorrow)?;
 
+        if workloads.contains_key(&self.name) {
+            return Err(error::AddWorkload::AlreadyExists);
+        }
+
         let mut tracking_to_enable = Vec::new();
 
         let name = self.name.dyn_clone();
 
-        let mut workload_info = create_workload::create_workload(
+        let registered = systems.len();
+
+        // We only publish the workload once every step that can fail succeeded,
+        // a rejected workload doesn't show up in `workloads`, `default` or `workloads_info`.
+        let built = create_workload::create_workload(
             self,
             systems,
             system_names,
             system_generators,
             lookup_table,
             &mut tracking_to_enable,
-            workloads,
-            default,
-        )?;
+        )
+        .and_then(|(mut batches, mut workload_info)| {
+            prepare::prepare_regroups(
+                &mut batches,
+                &mut workload_info.batches_info,
+                &all_storages.grouping,
+            );
 
-        let batches = workloads
-            .get_mut(&name)
-            .expect("create_workload added the workload");
-        prepare::prepare_regroups(
-            batches,
-            &mut workload_info.batches_info,
-            &all_storages.grouping,
-        );
+            for enable_tracking_fn in &tracking_to_enable {
+                (enable_tracking_fn)(&all_storages).map_err(|err| match err {
+                    error::GetStorage::StorageBorrow { name, id, borrow } => {
+                        error::AddWorkload::TrackingStorageBorrow { name, id, borrow }
+                    }
+                    _ => unreachable!(),
+                })?;
+            }
 
-        for enable_tracking_fn in &tracking_to_enable {
-            (enable_tracking_fn)(&all_storages).map_err(|err| match err {
-                error::GetStorage::StorageBorrow { name, id, borrow } => {
-                    error::AddWorkload::TrackingStorageBorrow { name, id, borrow }
-                }
-                _ => unreachable!(),
-            })?;
+            Ok((batches, workload_info))
+        });
+
+        let (batches, workload_info) = match built {
+            Ok(built) => built,
+            Err(err) => {
+                // The rejected workload's callables can't stay registered, a later workload would reuse them.
+                // Callables are only ever appended and we hold the scheduler the whole time,
+                // so the ones from earlier workloads are exactly those below `registered`.
+                // Tracking enabled by the callbacks that succeeded stays enabled, that's harmless.
+                systems.truncate(registered);
+                system_names.truncate(registered);
+                system_generators.truncate(registered);
+                lookup_table.retain(|_, index| *index < registered);
+
+                return Err(err);
+            }
+        };
+
+        if workloads.is_empty() {
+            *default = name.clone();
         }
-
+        workloads.insert(name.clone(), batches);
         workloads_info.insert(name, workload_info);
 
         Ok(())
@@ -568,23 +594,16 @@ impl Workload {
             batches: Batches::default(),
         };
 
-        let workload_name = self.name.clone();
-        let mut default: Box<dyn Label> = Box::new("");
-
-        let mut workloads = ShipHashMap::new();
-
-        let workload_info = create_workload::create_workload(
+        let (batches, workload_info) = create_workload::create_workload(
             self,
             &mut workload.systems,
             &mut workload.system_names,
             &mut workload.system_generators,
             &mut workload.lookup_table,
             &mut workload.tracking_to_enable,
-            &mut workloads,
-            &mut default,
         )?;
 
-        workload.batches = workloads.remove(&workload_name).unwrap();
+        workload.batches = batches;
 
         Ok((workload, workload_info))
     }

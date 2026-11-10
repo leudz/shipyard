@@ -86,7 +86,10 @@ impl DedupedUniqueIds {
     }
 }
 
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+/// Registers `builder`'s new callables and splits its systems into batches.
+///
+/// The workload isn't published, the caller decides where the returned batches go.
+#[allow(clippy::type_complexity)]
 pub(super) fn create_workload(
     mut builder: Workload,
     systems: &mut Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
@@ -94,13 +97,7 @@ pub(super) fn create_workload(
     system_generators: &mut Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
     lookup_table: &mut ShipHashMap<TypeId, usize>,
     tracking_to_enable: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
-    workloads: &mut ShipHashMap<Box<dyn Label>, Batches>,
-    default: &mut Box<dyn Label>,
-) -> Result<WorkloadInfo, error::AddWorkload> {
-    if workloads.contains_key(&builder.name) {
-        return Err(error::AddWorkload::AlreadyExists);
-    }
-
+) -> Result<(Batches, WorkloadInfo), error::AddWorkload> {
     let mut to_be_placed_systems = insert_systems_in_scheduler(
         &mut builder,
         systems,
@@ -159,12 +156,7 @@ pub(super) fn create_workload(
         batches_info,
     };
 
-    if workloads.is_empty() {
-        *default = workload_name.clone();
-    }
-    workloads.insert(workload_name, batches);
-
-    Ok(workload_info)
+    Ok((batches, workload_info))
 }
 
 fn check_require_in_workload(
