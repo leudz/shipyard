@@ -414,3 +414,279 @@ fn seventeen_conditions() {
 
     check_condition_slots(workload, 16, &runs, &evaluations);
 }
+
+/// Returns a two-worker pool whose threads are named `custom-<index>`,
+/// so tests can tell its workers apart from the global pool's.
+fn named_pool() -> rayon::ThreadPool {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .thread_name(|index| alloc::format!("custom-{index}"))
+        .build()
+        .unwrap()
+}
+
+/// Returns a world with its own [`named_pool`] and the storages of [`non_send_world`].
+#[cfg(feature = "thread_local")]
+fn local_pool_world() -> World {
+    non_send_world(World::builder_for_test().with_local_thread_pool(named_pool()))
+}
+
+/// Returns a world using the global pool, with the same storages as [`local_pool_world`].
+#[cfg(feature = "thread_local")]
+fn global_pool_world() -> World {
+    non_send_world(World::builder_for_test())
+}
+
+/// Builds `builder` with the AB group with a `NonSend<B>` member and an unevaluated entity in it.
+///
+/// It also creates the ungrouped `NonSend<D>` and `NonSendSync<D>` storages.
+/// Everything is created from the calling thread, which makes it these storages' owner.
+#[cfg(feature = "thread_local")]
+fn non_send_world(
+    builder: crate::world::WorldBuilder<
+        crate::all_storages::LockPresent,
+        crate::all_storages::ThreadIdPresent,
+    >,
+) -> World {
+    use crate::AddComponent;
+    use crate::borrow::{NonSend, NonSendSync};
+
+    let mut world = builder.with_group::<(A, NonSend<B>)>().build();
+    let entity = world.add_entity(A);
+    world
+        .borrow::<NonSend<ViewMut<'_, B>>>()
+        .unwrap()
+        .add_component_unchecked(entity, B);
+    world.borrow::<NonSend<ViewMut<'_, D>>>().unwrap();
+    world.borrow::<NonSendSync<ViewMut<'_, D>>>().unwrap();
+
+    world
+}
+
+/// Records the threads something ran on.
+#[derive(Clone, Default)]
+struct Threads(Arc<std::sync::Mutex<Vec<std::thread::Thread>>>);
+
+impl Threads {
+    fn record(&self) {
+        self.0.lock().unwrap().push(std::thread::current());
+    }
+
+    fn ids(&self) -> Vec<std::thread::ThreadId> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|thread| thread.id())
+            .collect()
+    }
+
+    fn names(&self) -> Vec<Option<String>> {
+        let threads = self.0.lock().unwrap();
+
+        threads
+            .iter()
+            .map(|thread| thread.name().map(Into::into))
+            .collect()
+    }
+}
+
+/// Runs a system borrowing `NonSend<ViewMut<D>>` on `world`, in one batch with `read_c`,
+/// returns its result and the threads the `NonSend` system ran on.
+///
+/// `D` isn't grouped, so there's no regroup step in the workload.
+/// `read_c` is declared first: if the `NonSend` system wasn't given the calling-thread slot,
+/// the runner's habit of running a batch's first ordinary system on the caller
+/// would pick `read_c` and leave the `NonSend` system on a worker.
+#[cfg(feature = "thread_local")]
+fn run_non_send_system(world: &World) -> (Result<(), error::RunWorkload>, Threads) {
+    use crate::borrow::NonSend;
+
+    let threads = Threads::default();
+    let system = {
+        let threads = threads.clone();
+        move |_: NonSend<ViewMut<'_, D>>| threads.record()
+    };
+    let workload = Workload::new("").with_system(read_c).with_system(system);
+    let workload = prepare(workload, world);
+    assert_eq!(
+        workload.batches.parallel,
+        [(Some(System(1)), vec![System(0)])]
+    );
+
+    (run(&workload, world), threads)
+}
+
+/// Asserts that with the global pool, a `NonSend` system takes the calling-thread slot
+/// of a batch it shares with a thread-safe system, and runs on the calling thread.
+#[cfg(feature = "thread_local")]
+#[test]
+fn global_pool_non_send_system() {
+    let world = global_pool_world();
+
+    let (result, threads) = run_non_send_system(&world);
+
+    result.unwrap();
+    assert_eq!(threads.ids(), [std::thread::current().id()]);
+}
+
+/// Asserts that with a world's own pool, a `NonSend` system takes the calling-thread slot
+/// of a batch it shares with a thread-safe system, and runs on the calling thread.
+#[cfg(feature = "thread_local")]
+#[test]
+fn local_pool_non_send_system() {
+    let world = local_pool_world();
+
+    let (result, threads) = run_non_send_system(&world);
+
+    result.unwrap();
+    assert_eq!(threads.ids(), [std::thread::current().id()]);
+}
+
+/// Runs a workload where the entry regroup of the AB set is the only step reading `NonSend<B>`,
+/// next to `read_a` which only borrows the thread-safe member.
+/// Returns the result and the threads the regroup ran on.
+#[cfg(feature = "thread_local")]
+fn run_non_send_regroup(world: &World) -> (Result<(), error::RunWorkload>, Threads) {
+    let mut workload = prepare(Workload::new("").with_system(read_a), world);
+    assert_eq!(
+        workload.batches.parallel[0],
+        (Some(Step::Regroup(0)), vec![])
+    );
+    let threads = Threads::default();
+    let recorder = threads.clone();
+    hook(&mut workload, 0, move || recorder.record());
+
+    (run(&workload, world), threads)
+}
+
+/// Asserts that with the global pool, the regroup of a set with a `NonSend` member
+/// runs on the calling thread.
+#[cfg(feature = "thread_local")]
+#[test]
+fn global_pool_non_send_regroup() {
+    let world = global_pool_world();
+
+    let (result, threads) = run_non_send_regroup(&world);
+
+    result.unwrap();
+    assert_eq!(threads.ids(), [std::thread::current().id()]);
+    assert!(evaluated::<A>(&world));
+}
+
+/// Asserts that with a world's own pool, the regroup of a set with a `NonSend` member
+/// runs on the calling thread.
+#[cfg(feature = "thread_local")]
+#[test]
+fn local_pool_non_send_regroup() {
+    let world = local_pool_world();
+
+    let (result, threads) = run_non_send_regroup(&world);
+
+    result.unwrap();
+    assert_eq!(threads.ids(), [std::thread::current().id()]);
+    assert!(evaluated::<A>(&world));
+}
+
+/// Runs a thread-safe system whose condition borrows `NonSendSync<View<D>>`,
+/// returns the result and the threads the condition ran on.
+///
+/// Unlike `NonSend`, a `NonSendSync` storage can't even be read from another thread.
+#[cfg(feature = "thread_local")]
+fn run_non_send_condition(world: &World) -> (Result<(), error::RunWorkload>, Threads) {
+    use crate::borrow::NonSendSync;
+
+    fn thread_safe(_: View<'_, C>) {}
+
+    let threads = Threads::default();
+    let condition = {
+        let threads = threads.clone();
+        move |_: NonSendSync<View<'_, D>>| {
+            threads.record();
+            true
+        }
+    };
+    let workload = Workload::new("").with_system(thread_safe.run_if(condition));
+    let workload = prepare(workload, world);
+
+    (run(&workload, world), threads)
+}
+
+/// Asserts that with the global pool, a condition borrowing `NonSendSync` storage
+/// runs on the calling thread.
+#[cfg(feature = "thread_local")]
+#[test]
+fn global_pool_non_send_condition() {
+    let world = global_pool_world();
+
+    let (result, threads) = run_non_send_condition(&world);
+
+    result.unwrap();
+    assert_eq!(threads.ids(), [std::thread::current().id()]);
+}
+
+/// Asserts that with a world's own pool, a condition borrowing `NonSendSync` storage
+/// runs on the calling thread.
+#[cfg(feature = "thread_local")]
+#[test]
+fn local_pool_non_send_condition() {
+    let world = local_pool_world();
+
+    let (result, threads) = run_non_send_condition(&world);
+
+    result.unwrap();
+    assert_eq!(threads.ids(), [std::thread::current().id()]);
+}
+
+/// Asserts that with a world's own pool, the thread-safe systems of a batch
+/// run in that pool or on the calling thread, never in the global pool.
+///
+/// The two systems meet so they run at the same time, one of them has to be on a worker.
+#[test]
+fn local_pool_workers() {
+    let world = World::builder_for_test()
+        .with_local_thread_pool(named_pool())
+        .build();
+    let threads = Threads::default();
+    let meeting = Meeting::default();
+    let first = {
+        let (threads, meeting) = (threads.clone(), meeting.clone());
+        move |_: View<'_, C>| {
+            threads.record();
+            meeting.meet();
+        }
+    };
+    let second = {
+        let threads = threads.clone();
+        move |_: View<'_, Usize>| {
+            threads.record();
+            meeting.meet();
+        }
+    };
+    let workload = Workload::new("").with_system(first).with_system(second);
+    let workload = prepare(workload, &world);
+    assert_eq!(
+        workload.batches.parallel[0],
+        (None, vec![System(0), System(1)])
+    );
+
+    run(&workload, &world).unwrap();
+
+    // Whatever didn't run on the calling thread has to be on one of the world's workers.
+    let caller = std::thread::current().id();
+    let on_worker = threads
+        .ids()
+        .into_iter()
+        .zip(threads.names())
+        .filter(|(id, _)| *id != caller)
+        .map(|(_, name)| name)
+        .collect::<Vec<_>>();
+    assert!(!on_worker.is_empty());
+    for name in on_worker {
+        assert!(
+            name.as_deref()
+                .is_some_and(|name| name.starts_with("custom-")),
+            "ran on {name:?}"
+        );
+    }
+}

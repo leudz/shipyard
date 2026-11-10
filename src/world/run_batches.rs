@@ -98,7 +98,7 @@ impl World {
                 if spawns {
                     let mut result = Ok(());
 
-                    rayon::in_place_scope(|scope| {
+                    self.in_place_scope(|scope| {
                         scope.spawn(|_| {
                             use rayon::prelude::*;
 
@@ -141,11 +141,18 @@ impl World {
             Ok(())
         };
 
-        if let Some(thread_pool) = &self.thread_pool {
-            thread_pool.scope(|_| run_batch())
-        } else {
-            // Use non local ThreadPool
-            run_batch()
+        // The batch loop stays on the calling thread, even with a local pool.
+        // Conditions and the calling-thread step have to run on the world's thread.
+        run_batch()
+    }
+
+    /// Runs `op` on the current thread, in a scope whose spawned jobs run in the world's pool,
+    /// or the global pool when the world doesn't have one.
+    #[cfg(feature = "parallel")]
+    fn in_place_scope<'scope, R>(&self, op: impl FnOnce(&rayon::Scope<'scope>) -> R) -> R {
+        match &self.thread_pool {
+            Some(thread_pool) => thread_pool.in_place_scope(op),
+            None => rayon::in_place_scope(op),
         }
     }
 
