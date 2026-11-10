@@ -34,6 +34,41 @@ impl IntoRunIf<RunIf> for RunIf {
     }
 }
 
+/// Checks that a condition's borrows can all be held at the same time.
+fn validate_borrows(borrows: &[TypeInfo]) -> Result<(), error::InvalidSystem> {
+    if borrows.contains(&TypeInfo {
+        name: "".into(),
+        storage_id: StorageId::of::<AllStorages>(),
+        mutability: Mutability::Exclusive,
+        thread_safe: true,
+    }) && borrows.len() > 1
+    {
+        return Err(error::InvalidSystem::AllStorages);
+    }
+
+    // The condition holds all its borrows at once, so every pair has to be compatible.
+    for (index, a_type_info) in borrows.iter().enumerate() {
+        for b_type_info in &borrows[index + 1..] {
+            if a_type_info.storage_id != b_type_info.storage_id {
+                continue;
+            }
+
+            match (a_type_info.mutability, b_type_info.mutability) {
+                (Mutability::Exclusive, Mutability::Exclusive) => {
+                    return Err(error::InvalidSystem::MultipleViewsMut);
+                }
+                (Mutability::Exclusive, Mutability::Shared)
+                | (Mutability::Shared, Mutability::Exclusive) => {
+                    return Err(error::InvalidSystem::MultipleViews);
+                }
+                (Mutability::Shared, Mutability::Shared) => {}
+            }
+        }
+    }
+
+    Ok(())
+}
+
 macro_rules! impl_into_workload_run_if {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: WorldBorrow + BorrowInfo,)+ Func> IntoRunIf<($($type,)+)> for Func
@@ -51,34 +86,7 @@ macro_rules! impl_into_workload_run_if {
                     $type::borrow_info(&mut borrows);
                 )+
 
-                if borrows.contains(&TypeInfo {
-                    name: "".into(),
-                    storage_id: StorageId::of::<AllStorages>(),
-                    mutability: Mutability::Exclusive,
-                    thread_safe: true,
-                }) && borrows.len() > 1
-                {
-                    return Err(error::InvalidSystem::AllStorages);
-                }
-
-                let mid = borrows.len() / 2 + (borrows.len() % 2 != 0) as usize;
-
-                for a_type_info in &borrows[..mid] {
-                    for b_type_info in &borrows[mid..] {
-                        if a_type_info.storage_id == b_type_info.storage_id {
-                            match (a_type_info.mutability, b_type_info.mutability) {
-                                (Mutability::Exclusive, Mutability::Exclusive) => {
-                                    return Err(error::InvalidSystem::MultipleViewsMut)
-                                }
-                                (Mutability::Exclusive, Mutability::Shared)
-                                | (Mutability::Shared, Mutability::Exclusive) => {
-                                    return Err(error::InvalidSystem::MultipleViews)
-                                }
-                                (Mutability::Shared, Mutability::Shared) => {}
-                            }
-                        }
-                    }
-                }
+                validate_borrows(&borrows)?;
 
                 let last_run = AtomicU64::new(0);
                 Ok(RunIf {
@@ -144,34 +152,7 @@ macro_rules! impl_into_workload_run_if {
                     $type::borrow_info(&mut borrows);
                 )+
 
-                if borrows.contains(&TypeInfo {
-                    name: "".into(),
-                    storage_id: StorageId::of::<AllStorages>(),
-                    mutability: Mutability::Exclusive,
-                    thread_safe: true,
-                }) && borrows.len() > 1
-                {
-                    return Err(error::InvalidSystem::AllStorages);
-                }
-
-                if borrows.len() > 1 {
-                    for (i, a_type_info) in borrows[..borrows.len() - 1].iter().enumerate() {
-                        for b_type_info in &borrows[i + 1..] {
-                            if a_type_info.storage_id == b_type_info.storage_id {
-                                match (a_type_info.mutability, b_type_info.mutability) {
-                                    (Mutability::Exclusive, Mutability::Exclusive) => {
-                                        return Err(error::InvalidSystem::MultipleViewsMut)
-                                    }
-                                    (Mutability::Exclusive, Mutability::Shared)
-                                    | (Mutability::Shared, Mutability::Exclusive) => {
-                                        return Err(error::InvalidSystem::MultipleViews)
-                                    }
-                                    (Mutability::Shared, Mutability::Shared) => {}
-                                }
-                            }
-                        }
-                    }
-                }
+                validate_borrows(&borrows)?;
 
                 let last_run = Arc::new(AtomicU64::new(0));
                 Ok(Box::new(move |world: &World| {
