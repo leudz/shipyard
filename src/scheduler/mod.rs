@@ -10,7 +10,7 @@ mod system_modificator;
 mod workload;
 mod workload_modificator;
 
-pub use into_workload::IntoWorkload;
+pub use into_workload::{IntoSequentialWorkload, IntoWorkload};
 pub use into_workload_system::IntoWorkloadSystem;
 pub use into_workload_try_system::IntoWorkloadTrySystem;
 pub use label::{AsLabel, Label};

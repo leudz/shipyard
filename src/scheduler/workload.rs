@@ -2,6 +2,10 @@ mod create_workload;
 mod prepare;
 #[cfg(test)]
 mod tests;
+// Rustdoc doesn't set `test` when it collects doc tests, these checks need their own gate.
+#[cfg(doctest)]
+#[path = "workload/tests/compile_fail.rs"]
+mod compile_fail_tests;
 
 use crate::all_storages::{AllStorages, StorageMaps};
 use crate::component::{Component, Unique};

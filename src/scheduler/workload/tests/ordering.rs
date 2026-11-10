@@ -849,3 +849,125 @@ fn merge_barrier_once() {
 
     assert_eq!(workload.barriers, [2]);
 }
+
+/// Asserts that `into_sequential_workload` on a function returning a workload keeps that workload's
+/// independent systems in one batch, like `into_workload` does.
+#[test]
+fn sequential_factory() {
+    fn a() {}
+    fn b() {}
+    fn factory() -> Workload {
+        (a, b).into_workload()
+    }
+
+    let workload = factory.into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"])],
+            sequential: steps(&["a", "b"]),
+        }
+    );
+}
+
+/// Asserts that `into_sequential_workload` on a function returning a workload keeps the ordering
+/// inside that workload: `b` follows `a`, `c` stays next to `a`.
+#[test]
+fn sequential_factory_constraints() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+    fn factory() -> Workload {
+        (a, b.after_all(a), c).into_workload()
+    }
+
+    let workload = factory.into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "c"]), steps(&["b"])],
+            sequential: steps(&["a", "c", "b"]),
+        }
+    );
+}
+
+/// Asserts that `into_sequential_workload` on a function returning a workload names the workload
+/// after the function, like `into_workload` does.
+#[test]
+fn sequential_factory_name() {
+    fn a() {}
+    fn factory() -> Workload {
+        a.into_workload()
+    }
+
+    let world = World::new_for_test();
+    factory
+        .into_sequential_workload()
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(world.contains_workload(factory));
+}
+
+/// Asserts that `into_sequential_workload` calls a function returning a workload once.
+#[test]
+fn sequential_factory_once() {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+    fn a() {}
+    fn factory() -> Workload {
+        CALLS.fetch_add(1, Ordering::Relaxed);
+
+        a.into_workload()
+    }
+
+    let _ = factory.into_sequential_workload();
+
+    assert_eq!(CALLS.load(Ordering::Relaxed), 1);
+}
+
+/// Asserts that a function returning a workload, as a child of a sequential tuple,
+/// keeps its systems in parallel and runs them before the next child.
+#[test]
+fn sequential_factory_child() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+    fn factory() -> Workload {
+        (a, b).into_workload()
+    }
+
+    let workload = (factory, c).into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
+/// Asserts that `into_sequential_workload` accepts a function returning a workload that lists
+/// a system twice, like `into_workload` does: the workload's own systems aren't sequenced.
+#[test]
+fn sequential_factory_repeated() {
+    fn a() {}
+    fn factory() -> Workload {
+        Workload::new("").with_system(a).with_system(a)
+    }
+
+    let workload = factory.into_sequential_workload();
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "a"])],
+            sequential: steps(&["a", "a"]),
+        }
+    );
+}

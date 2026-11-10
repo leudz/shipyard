@@ -14,9 +14,9 @@ mod traced;
 
 use super::*;
 use crate::component::{Component, Unique};
-use crate::scheduler::IntoWorkload;
 use crate::scheduler::Step::System;
 use crate::scheduler::{Batches, Step, SystemModificator, WorkloadModificator};
+use crate::scheduler::{IntoSequentialWorkload, IntoWorkload};
 use crate::views::{AllStoragesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 use crate::world::World;
 use alloc::string::String;

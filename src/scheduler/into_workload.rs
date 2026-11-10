@@ -12,7 +12,8 @@ use alloc::vec;
 
 /// Turns a collection of systems into a [`Workload`](crate::scheduler::Workload)
 ///
-/// To modify the workload execution see [WorkloadModificator](crate::scheduler::WorkloadModificator).
+/// To modify the workload execution see [WorkloadModificator](crate::scheduler::WorkloadModificator).\
+/// To run the systems one after the other see [`IntoSequentialWorkload`].
 pub trait IntoWorkload<Views, R> {
     /// Converts to a collection of systems.
     ///
@@ -84,10 +85,27 @@ pub trait IntoWorkload<Views, R> {
     /// assert_eq!(world.borrow::<View<Health>>().unwrap().len(), 900);
     /// ```
     fn into_workload(self) -> Workload;
-    /// Converts to a collection of systems.  
-    /// All systems will run one after the other. Does not propagate into nested [`Workload`] but they will run sequentially between them.
+}
+
+/// Turns a collection of systems into a [`Workload`](crate::scheduler::Workload) running them one after the other.
+///
+/// It's implemented for tuples, single systems and functions returning a [`Workload`].\
+/// [`Workload`] itself doesn't implement it, put it in a tuple to order it with other systems.
+///
+/// ### Migration
+///
+/// `into_sequential_workload` used to be a method of [`IntoWorkload`], import this trait to call it.\
+/// Calling it on a [`Workload`] used to compile but didn't order anything, a [`Workload`] has
+/// already lost the order of its children. That call doesn't compile anymore.
+pub trait IntoSequentialWorkload<Views, R> {
+    /// Converts to a collection of systems running one after the other.
     ///
-    /// Not different than [`into_workload`](IntoWorkload::into_workload) for a single system.
+    /// Each element of the tuple runs after the previous one.
+    /// A nested [`Workload`], or a function returning one, is a single element:
+    /// its systems keep their own ordering and can run in parallel with each other.
+    ///
+    /// Not different than [`into_workload`](IntoWorkload::into_workload) for a single system
+    /// or a function returning a [`Workload`].
     ///
     /// ### Panics
     ///
@@ -95,7 +113,7 @@ pub trait IntoWorkload<Views, R> {
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{IntoWorkload, Workload};
+    /// use shipyard::{IntoSequentialWorkload, IntoWorkload, Workload};
     ///
     /// fn sys1() {}
     /// fn sys2() {}
@@ -108,34 +126,13 @@ pub trait IntoWorkload<Views, R> {
     /// (workload1, sys3, sys4).into_sequential_workload();
     /// ```
     ///
-    /// In this example `sys1` and `sys2` can run in parallel but always before `sys3`.  
+    /// In this example `sys1` and `sys2` can run in parallel but always before `sys3`.
     /// `sys3` and `sys4` run sequentially.
     fn into_sequential_workload(self) -> Workload;
 }
 
 impl IntoWorkload<Workload, Workload> for Workload {
     fn into_workload(self) -> Workload {
-        self
-    }
-    fn into_sequential_workload(mut self) -> Workload {
-        let mut system_names = DedupedLabels::with_capacity(self.systems.len());
-
-        for system in &self.systems {
-            if !system_names.add(system.type_id.as_label()) {
-                panic!(
-                    "{:?} appears twice in this workload. `into_sequential_workload` cannot currently handle this case.",
-                    system.display_name
-                );
-            }
-        }
-
-        for index in 0..self.systems.len() {
-            if let Some(next_system) = self.systems.get(index + 1) {
-                let tag = SequentialLabel(next_system.type_id.as_label());
-                self.systems[index].before_all.add(tag);
-            }
-        }
-
         self
     }
 }
@@ -188,15 +185,17 @@ where
             }
         }
     }
+}
 
+impl<Views, R, Sys> IntoSequentialWorkload<Views, R> for Sys
+where
+    Sys: IntoWorkloadSystem<Views, R> + 'static,
+    R: 'static,
+{
     fn into_sequential_workload(self) -> Workload {
-        let workload = self.into_workload();
-
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            workload.into_sequential_workload()
-        } else {
-            workload
-        }
+        // A single system has nothing to order.
+        // A function returning a workload is a single child, its systems keep their own ordering.
+        IntoWorkload::<Views, R>::into_workload(self)
     }
 }
 
@@ -234,7 +233,14 @@ macro_rules! impl_into_workload {
 
                 workload
             }
+        }
 
+        impl<$($type, $borrow, $return),+> IntoSequentialWorkload<($($borrow,)+), ($($return,)+)> for ($($type,)+)
+        where
+            $(
+                $type: IntoWorkload<$borrow, $return> + 'static,
+            )+
+        {
             #[track_caller]
             fn into_sequential_workload(self) -> Workload {
                 let name = Box::new(WorkloadLabel {

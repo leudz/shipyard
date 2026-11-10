@@ -100,7 +100,7 @@ pub use get::Get;
 pub use iter::IntoIter;
 pub use remove::Remove;
 #[doc(inline)]
-pub use scheduler::{IntoWorkload, Workload};
+pub use scheduler::{IntoSequentialWorkload, IntoWorkload, Workload};
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{Borrow, BorrowInfo, Component, IntoIter, Label, Unique, WorldBorrow};
 pub use unique::UniqueStorage;
