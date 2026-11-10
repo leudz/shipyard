@@ -47,32 +47,56 @@ fn prepare(workload: Workload, world: &World) -> (Batches, Vec<BatchInfo>) {
     (batches, batches_info)
 }
 
-/// Returns the user steps with their condition, in sequential order.
-fn user_sequential(batches: &Batches) -> Vec<(Step, usize)> {
-    batches
+/// Returns the user steps with their condition and occurrence, in sequential order.
+///
+/// Asserts that regroups have no occurrence.
+fn user_sequential(batches: &Batches) -> Vec<(Step, usize, usize)> {
+    let steps = batches
         .sequential
         .iter()
         .copied()
         .zip(batches.sequential_run_if.iter().copied())
-        .filter(|(step, _)| matches!(step, System(_)))
+        .zip(batches.sequential_occurrences.iter().copied())
+        .map(|((step, run_if), occurrence)| (step, run_if, occurrence));
+
+    steps
+        .filter(|&(step, _, occurrence)| match step {
+            System(_) => true,
+            Regroup(_) => {
+                assert_eq!(occurrence, usize::MAX, "a regroup has an occurrence");
+                false
+            }
+        })
         .collect()
 }
 
-/// Returns the user steps' callable index and condition from the parallel batches, sorted.
-fn user_parallel(batches: &Batches) -> Vec<(usize, usize)> {
-    let mut parallel: Vec<(usize, usize)> = batches
+/// Returns the user steps' callable index, condition and occurrence from the parallel batches,
+/// sorted.
+///
+/// Asserts that regroups have no occurrence.
+fn user_parallel(batches: &Batches) -> Vec<(usize, usize, usize)> {
+    let mut parallel: Vec<(usize, usize, usize)> = batches
         .parallel
         .iter()
         .zip(&batches.parallel_run_if)
-        .flat_map(|((single, steps), (single_run_if, steps_run_if))| {
-            single
-                .iter()
-                .zip([single_run_if])
-                .chain(steps.iter().zip(steps_run_if))
-        })
-        .filter_map(|(step, &run_if)| match step {
-            System(index) => Some((*index, run_if)),
-            Regroup(_) => None,
+        .zip(&batches.parallel_occurrences)
+        .flat_map(
+            |(
+                ((single, steps), (single_run_if, steps_run_if)),
+                (single_occurrence, occurrences),
+            )| {
+                single
+                    .iter()
+                    .zip([(single_run_if, single_occurrence)])
+                    .chain(steps.iter().zip(steps_run_if.iter().zip(occurrences)))
+            },
+        )
+        .filter_map(|(step, (&run_if, &occurrence))| match step {
+            System(index) => Some((*index, run_if, occurrence)),
+            Regroup(_) => {
+                assert_eq!(occurrence, usize::MAX, "a regroup has an occurrence");
+                None
+            }
         })
         .collect();
     parallel.sort_unstable();
@@ -165,6 +189,38 @@ fn repeated() {
     assert_eq!(
         batches.sequential,
         &[Regroup(0), System(0), Regroup(1), System(0), Regroup(2)]
+    );
+}
+
+/// Asserts that each occurrence of a repeated writer keeps its own occurrence once regroups are
+/// placed, even when the sequential order differs from the declaration order.
+///
+/// `read_c` is declared first but follows both writers.
+#[test]
+fn repeated_occurrences() {
+    let workload = Workload::new("")
+        .with_system(read_c.after_all(write_a))
+        .with_system(write_a)
+        .with_system(write_a);
+
+    let (batches, _) = prepare(workload, &world());
+
+    assert_eq!(
+        batches.sequential,
+        &[
+            Regroup(0),
+            System(1),
+            Regroup(1),
+            System(1),
+            Regroup(2),
+            System(0),
+            Regroup(3)
+        ]
+    );
+    let max = usize::MAX;
+    assert_eq!(
+        batches.sequential_occurrences,
+        &[max, 1, max, 2, max, 0, max]
     );
 }
 

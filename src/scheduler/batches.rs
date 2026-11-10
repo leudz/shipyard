@@ -16,10 +16,17 @@ pub(crate) struct Batches {
     pub(crate) parallel: Vec<(Option<Step>, Vec<Step>)>,
     /// Index into `systems_run_if`
     pub(crate) parallel_run_if: Vec<(usize, Vec<usize>)>,
+    /// Occurrence of each step of `parallel`, `usize::MAX` for regroups and empty single slots.
+    ///
+    /// An occurrence is the position of a system in the list the workload was built from.
+    /// Unlike `Step::System`, it tells apart the occurrences of a callable listed several times.
+    pub(crate) parallel_occurrences: Vec<(usize, Vec<usize>)>,
     /// Steps in the order they run without parallelism.
     pub(crate) sequential: Vec<Step>,
     /// Index into `systems_run_if`
     pub(crate) sequential_run_if: Vec<usize>,
+    /// Occurrence of each step of `sequential`, `usize::MAX` for regroups.
+    pub(crate) sequential_occurrences: Vec<usize>,
     pub(crate) workload_run_if: Option<Box<dyn WorkloadRunIfFn>>,
     pub(crate) systems_run_if: Vec<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>,
     /// The regroups `Step::Regroup` points to.

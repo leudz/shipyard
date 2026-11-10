@@ -19,7 +19,12 @@ use core::hash::Hash;
 
 #[allow(clippy::type_complexity)]
 struct ToBePlacedSystem {
+    /// Index of the callable in the scheduler, shared by all occurrences of a callable.
     index: usize,
+    /// Position of the system in the workload's list, its identity while we schedule it.
+    ///
+    /// Ordering edges (`soft_after`, `hard_after`, ...) point to occurrences.
+    occurrence: usize,
     display_name: Box<dyn Label>,
     borrow_constraints: Vec<TypeInfo>,
     tags: Vec<Box<dyn Label>>,
@@ -66,8 +71,14 @@ impl DedupedUniqueIds {
         self.0.is_empty()
     }
 
-    fn retain(&mut self, mut label_eq: impl FnMut(&dyn Label) -> bool) {
-        self.0.retain(|id| (label_eq)(&UniqueSystemId(*id)));
+    fn remove(&mut self, id: usize) {
+        if let Ok(index) = self.0.binary_search(&id) {
+            self.0.remove(index);
+        }
+    }
+
+    fn retain(&mut self, mut keep: impl FnMut(usize) -> bool) {
+        self.0.retain(|&id| keep(id));
     }
 
     fn contains(&self, system_index: usize) -> bool {
@@ -294,28 +305,34 @@ fn insert_systems_in_scheduler(
     lookup_table: &mut ShipHashMap<TypeId, usize>,
     all_tracking_to_enable: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
 ) -> Vec<ToBePlacedSystem> {
+    // An occurrence is identified by its position in the final list.
+    // We don't use `WorkloadSystem::unique_id`, only `with_system` keeps it in sync with positions.
     builder
         .systems
         .drain(..)
+        .enumerate()
         .map(
-            |WorkloadSystem {
-                 type_id,
-                 display_name,
-                 system_fn,
-                 borrow_constraints,
-                 mut tracking_to_enable,
-                 generator,
-                 run_if,
-                 mut tags,
-                 before_all,
-                 after_all,
-                 after,
-                 before,
-                 unique_id,
-                 require_in_workload,
-                 require_before,
-                 require_after,
-             }| {
+            |(
+                occurrence,
+                WorkloadSystem {
+                    type_id,
+                    display_name,
+                    system_fn,
+                    borrow_constraints,
+                    mut tracking_to_enable,
+                    generator,
+                    run_if,
+                    mut tags,
+                    before_all,
+                    after_all,
+                    after,
+                    before,
+                    unique_id: _,
+                    require_in_workload,
+                    require_before,
+                    require_after,
+                },
+            )| {
                 let system_index = *lookup_table.entry(type_id).or_insert_with(|| {
                     systems.push(system_fn);
                     system_names.push(display_name.clone());
@@ -339,10 +356,11 @@ fn insert_systems_in_scheduler(
                     id
                 }));
 
-                tags.push(Box::new(UniqueSystemId(unique_id)));
+                tags.push(Box::new(UniqueSystemId(occurrence)));
 
                 ToBePlacedSystem {
                     index: system_index,
+                    occurrence,
                     display_name,
                     borrow_constraints,
                     tags,
@@ -365,7 +383,7 @@ fn insert_systems_in_scheduler(
         .collect()
 }
 
-/// Uniquely identify systems to translate the implicit ordering to tags.
+/// Tags an occurrence with its position, so the numeric `before` constraints can find it.
 ///
 /// The system name or TypeId cannot be used since systems can be present
 /// multiple times in a workload.
@@ -584,18 +602,23 @@ fn order_systems(
     }];
     batches.parallel.push((None, Vec::new()));
     batches.parallel_run_if.push((usize::MAX, Vec::new()));
+    batches.parallel_occurrences.push((usize::MAX, Vec::new()));
     let mut latest_batch = &mut batches.parallel[0];
     let mut latest_batch_run_if = &mut batches.parallel_run_if[0];
+    let mut latest_batch_occurrences = &mut batches.parallel_occurrences[0];
     let mut latest_batch_info = &mut batches_info[0];
-    let mut to_delete_tags = Vec::new();
+    // Occurrences placed since we last released hard edges.
+    let mut placed = Vec::new();
     loop {
         while let Some(mut system) = constraint_free_systems.pop_front() {
             batches.sequential.push(Step::System(system.index));
+            batches.sequential_occurrences.push(system.occurrence);
 
             let conflict = check_can_go_in_parallel_batch(latest_batch_info, &system);
             if conflict.is_some() {
                 batches.parallel.push((None, Vec::new()));
                 batches.parallel_run_if.push((usize::MAX, Vec::new()));
+                batches.parallel_occurrences.push((usize::MAX, Vec::new()));
                 batches_info.push(BatchInfo {
                     systems: (None, Vec::new()),
                     regroups: Vec::new(),
@@ -604,6 +627,7 @@ fn order_systems(
 
                 latest_batch = batches.parallel.last_mut().unwrap();
                 latest_batch_run_if = batches.parallel_run_if.last_mut().unwrap();
+                latest_batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
                 latest_batch_info = batches_info.last_mut().unwrap();
             }
 
@@ -613,6 +637,7 @@ fn order_systems(
 
             if is_single_system {
                 latest_batch.0 = Some(Step::System(system.index));
+                latest_batch_occurrences.0 = system.occurrence;
                 latest_batch_info.systems.0 = Some(SystemInfo {
                     name: format!("{:?}", system.display_name),
                     borrow: system.borrow_constraints,
@@ -624,6 +649,7 @@ fn order_systems(
                 });
             } else {
                 latest_batch.1.push(Step::System(system.index));
+                latest_batch_occurrences.1.push(system.occurrence);
                 latest_batch_info.systems.1.push(SystemInfo {
                     name: format!("{:?}", system.display_name),
                     borrow: system.borrow_constraints,
@@ -652,21 +678,19 @@ fn order_systems(
 
             constraint_free_systems.extend(to_be_placed_systems.extract_if(.., |other_system| {
                 // We remove constraints to the system we just remove
-                other_system
-                    .soft_after
-                    .retain(|constraint| system.tags.iter().all(|tag| !tag.dyn_eq(constraint)));
+                other_system.soft_after.remove(system.occurrence);
 
                 other_system.hard_after.is_empty() && other_system.soft_after.is_empty()
             }));
 
-            to_delete_tags.append(&mut system.tags);
+            placed.push(system.occurrence);
         }
 
         constraint_free_systems.extend(to_be_placed_systems.extract_if(.., |other_system| {
-            // We remove constraints to the system we just remove
+            // We remove constraints to the systems we just removed
             other_system
                 .hard_after
-                .retain(|constraint| to_delete_tags.iter().all(|tag| !tag.dyn_eq(constraint)));
+                .retain(|occurrence| !placed.contains(&occurrence));
 
             other_system.hard_after.is_empty() && other_system.soft_after.is_empty()
         }));
@@ -676,14 +700,16 @@ fn order_systems(
         } else {
             batches.parallel.push((None, Vec::new()));
             batches.parallel_run_if.push((usize::MAX, Vec::new()));
+            batches.parallel_occurrences.push((usize::MAX, Vec::new()));
             batches_info.push(BatchInfo {
                 systems: (None, Vec::new()),
                 regroups: Vec::new(),
             });
-            to_delete_tags.clear();
+            placed.clear();
 
             latest_batch = batches.parallel.last_mut().unwrap();
             latest_batch_run_if = batches.parallel_run_if.last_mut().unwrap();
+            latest_batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
             latest_batch_info = batches_info.last_mut().unwrap();
         }
     }

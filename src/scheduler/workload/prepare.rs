@@ -74,6 +74,8 @@ struct Job {
     step: Step,
     /// Index of its condition in `Batches::systems_run_if`, `usize::MAX` without one.
     run_if: usize,
+    /// Occurrence of the system, see `Batches::parallel_occurrences`. `usize::MAX` for regroups.
+    occurrence: usize,
     kind: JobKind,
 }
 
@@ -153,6 +155,7 @@ impl Batch {
         let job = Job {
             step: Step::Regroup(regroups.len()),
             run_if: usize::MAX,
+            occurrence: usize::MAX,
             kind: JobKind::Regroup(regroup.info()),
         };
 
@@ -447,65 +450,51 @@ fn set_index(grouping: &Grouping, storage_id: &StorageId) -> Option<usize> {
 
 /// Empties `batches` and `batches_info` into a list of batches.
 fn take_batches(batches: &mut Batches, batches_info: &mut Vec<BatchInfo>) -> Vec<Batch> {
-    let sequential = mem::take(&mut batches.sequential);
+    batches.sequential.clear();
     batches.sequential_run_if.clear();
+    let sequential_occurrences = mem::take(&mut batches.sequential_occurrences);
 
     let parallel = mem::take(&mut batches.parallel);
     let parallel_run_if = mem::take(&mut batches.parallel_run_if);
+    let parallel_occurrences = mem::take(&mut batches.parallel_occurrences);
     let infos = mem::take(batches_info);
 
-    let mut user_batches = Vec::with_capacity(parallel.len());
-    // Position in the sequential order of the current batch's first step.
-    let mut start = 0;
-    for (((single, steps), (single_run_if, steps_run_if)), info) in
-        parallel.into_iter().zip(parallel_run_if).zip(infos)
-    {
-        let (single_info, steps_info) = info.systems;
+    // There are only user systems so far, their occurrences go from 0 to their count.
+    let mut sequential_positions = vec![usize::MAX; sequential_occurrences.len()];
+    for (position, &occurrence) in sequential_occurrences.iter().enumerate() {
+        sequential_positions[occurrence] = position;
+    }
+    let system_job = |step, run_if, occurrence: usize, info| Job {
+        step,
+        run_if,
+        occurrence,
+        kind: JobKind::System {
+            info: Box::new(info),
+            sequential: sequential_positions[occurrence],
+        },
+    };
 
-        // Systems are added to the sequential order as they're placed in batches,
-        // so each batch's steps are next to each other.
-        // The parallel ones keep their order, the single one can be anywhere among them.
-        let len = usize::from(single.is_some()) + steps.len();
-        let segment = &sequential[start..start + len];
-        let single_offset = single.map(|step| {
-            segment
-                .iter()
-                .position(|&other| other == step)
-                .expect("a batch's single step is in its sequential order")
-        });
+    let mut user_batches = Vec::with_capacity(parallel.len());
+    for (((single, steps), (single_run_if, steps_run_if)), (occurrences, info)) in parallel
+        .into_iter()
+        .zip(parallel_run_if)
+        .zip(parallel_occurrences.into_iter().zip(infos))
+    {
+        let (single_occurrence, steps_occurrences) = occurrences;
+        let (single_info, steps_info) = info.systems;
 
         let single = single
             .zip(single_info)
-            .zip(single_offset)
-            .map(|((step, info), offset)| Job {
-                step,
-                run_if: single_run_if,
-                kind: JobKind::System {
-                    info: Box::new(info),
-                    sequential: start + offset,
-                },
-            });
+            .map(|(step, info)| system_job(step, single_run_if, single_occurrence, info));
         let jobs = steps
             .into_iter()
             .zip(steps_run_if)
+            .zip(steps_occurrences)
             .zip(steps_info)
-            .enumerate()
-            .map(|(index, ((step, run_if), info))| {
-                let skips_single = single_offset.is_some_and(|offset| offset <= index);
-
-                Job {
-                    step,
-                    run_if,
-                    kind: JobKind::System {
-                        info: Box::new(info),
-                        sequential: start + index + usize::from(skips_single),
-                    },
-                }
-            })
+            .map(|(((step, run_if), occurrence), info)| system_job(step, run_if, occurrence, info))
             .collect();
 
         user_batches.push(Batch { single, jobs });
-        start += len;
     }
 
     user_batches
@@ -521,6 +510,13 @@ fn put_batches(batches: &mut Batches, batches_info: &mut Vec<BatchInfo>, planned
         batches.parallel_run_if.push((
             batch.single.as_ref().map_or(usize::MAX, |job| job.run_if),
             batch.jobs.iter().map(|job| job.run_if).collect(),
+        ));
+        batches.parallel_occurrences.push((
+            batch
+                .single
+                .as_ref()
+                .map_or(usize::MAX, |job| job.occurrence),
+            batch.jobs.iter().map(|job| job.occurrence).collect(),
         ));
 
         let system_info = |job: &Job| match &job.kind {
@@ -542,9 +538,10 @@ fn put_batches(batches: &mut Batches, batches_info: &mut Vec<BatchInfo>, planned
         });
     }
 
-    for (step, run_if) in sequential_order(planned) {
-        batches.sequential.push(step);
-        batches.sequential_run_if.push(run_if);
+    for job in sequential_order(planned) {
+        batches.sequential.push(job.step);
+        batches.sequential_run_if.push(job.run_if);
+        batches.sequential_occurrences.push(job.occurrence);
     }
 }
 
@@ -596,7 +593,7 @@ fn point_conflicts_to_regroups(batches_info: &mut [BatchInfo]) {
 /// User systems keep the workload's sequential order.\
 /// Each regroup goes right before the first system after it in `planned` borrowing from its set,
 /// that's the first one needing it. The ones no system needs go last.
-fn sequential_order(planned: &[Batch]) -> Vec<(Step, usize)> {
+fn sequential_order(planned: &[Batch]) -> Vec<&Job> {
     let mut systems: Vec<&Job> = planned
         .iter()
         .flat_map(Batch::iter)
@@ -605,7 +602,7 @@ fn sequential_order(planned: &[Batch]) -> Vec<(Step, usize)> {
     systems.sort_by_key(|job| sequential_position(job));
 
     // Each regroup with the sequential position of the first system needing it.
-    let mut regroups: Vec<(Option<usize>, Step)> = Vec::new();
+    let mut regroups: Vec<(Option<usize>, &Job)> = Vec::new();
     for (index, batch) in planned.iter().enumerate() {
         for job in batch.iter() {
             let JobKind::Regroup(info) = &job.kind else {
@@ -620,7 +617,7 @@ fn sequential_order(planned: &[Batch]) -> Vec<(Step, usize)> {
                 })
                 .map(sequential_position)
                 .min();
-            regroups.push((first_need, job.step));
+            regroups.push((first_need, job));
         }
     }
 
@@ -628,13 +625,13 @@ fn sequential_order(planned: &[Batch]) -> Vec<(Step, usize)> {
         regroups
             .iter()
             .filter(move |(first_need, _)| *first_need == position)
-            .map(|&(_, step)| (step, usize::MAX))
+            .map(|&(_, job)| job)
     };
 
     let mut order = Vec::new();
     for system in systems {
         order.extend(regroups_before(Some(sequential_position(system))));
-        order.push((system.step, system.run_if));
+        order.push(system);
     }
     order.extend(regroups_before(None));
 

@@ -20,8 +20,10 @@ fn single_immutable() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -51,8 +53,10 @@ fn single_mutable() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -84,8 +88,10 @@ fn multiple_immutable() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -117,8 +123,10 @@ fn multiple_mutable() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)]), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -150,8 +158,10 @@ fn multiple_mixed() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)]), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -177,8 +187,10 @@ fn multiple_mixed() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)]), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -217,8 +229,10 @@ fn append_optimizes_batches() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)]), (None, vec![System(1), System(2)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1), System(2)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -249,8 +263,10 @@ fn all_storages() {
         Some(&Batches {
             parallel: vec![(Some(System(0)), Vec::new())],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -275,8 +291,10 @@ fn all_storages() {
         Some(&Batches {
             parallel: vec![(Some(System(0)), Vec::new()), (Some(System(0)), Vec::new())],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(0)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -302,8 +320,10 @@ fn all_storages() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)]), (Some(System(1)), Vec::new())],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -328,8 +348,10 @@ fn all_storages() {
         Some(&Batches {
             parallel: vec![(Some(System(0)), Vec::new()), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -373,8 +395,10 @@ fn non_send() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0), System(0)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(0)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -404,8 +428,10 @@ fn non_send() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0)]), (Some(System(1)), Vec::new())],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -430,8 +456,10 @@ fn non_send() {
         Some(&Batches {
             parallel: vec![(Some(System(0)), Vec::new()), (None, vec![System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -456,8 +484,10 @@ fn non_send() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -487,8 +517,10 @@ fn non_send() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -520,8 +552,10 @@ fn unique_and_non_unique() {
         Some(&Batches {
             parallel: vec![(None, vec![System(0), System(1)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -546,8 +580,10 @@ fn empty_workload() {
         Some(&Batches {
             parallel: vec![],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -591,8 +627,10 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
                 (None, vec![System(1), System(2), System(3)])
             ],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1), System(2), System(3)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -632,12 +670,56 @@ fn non_send_distinct_storage() {
         Some(&Batches {
             parallel: vec![(Some(System(1)), vec![System(0)])],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
             grouped_writes: Vec::new(),
         })
     );
+}
+
+/// Asserts that `Schedule` shows a workload's real batches by system name,
+/// counting a repeated system once per occurrence.
+///
+/// The world registers an unrelated system first, so callable indices don't start at zero
+/// and a name lookup by occurrence position would show the wrong systems.
+#[test]
+fn schedule_names() {
+    fn unrelated(_: View<'_, U16>) {}
+    fn write_usize(_: ViewMut<'_, Usize>) {}
+    fn read_u32(_: View<'_, U32>) {}
+
+    let world = World::new_for_test();
+    Workload::new("Unrelated")
+        .with_system(unrelated)
+        .add_to_world(&world)
+        .unwrap();
+
+    let workload = || {
+        Workload::new("Probe")
+            .with_system(write_usize)
+            .with_system(read_u32)
+            .with_system(write_usize)
+    };
+    workload().add_to_world(&world).unwrap();
+
+    let expected = Schedule {
+        parallel: vec![
+            vec!["write_usize".into(), "read_u32".into()],
+            vec!["write_usize".into()],
+        ],
+        sequential: vec![
+            "write_usize".into(),
+            "read_u32".into(),
+            "write_usize".into(),
+        ],
+    };
+    assert_eq!(Schedule::registered(&world, "Probe"), expected);
+    assert_eq!(Schedule::built(workload()), expected);
+    assert_eq!(expected.batch("read_u32"), 0);
+    assert_eq!(expected.count("write_usize"), (2, 2));
 }

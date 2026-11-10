@@ -202,8 +202,10 @@ fn after_all_single_system() {
                 (None, vec![System(2)])
             ],
             parallel_run_if: Vec::new(),
+            parallel_occurrences: Vec::new(),
             sequential: vec![System(0), System(1), System(2)],
             sequential_run_if: Vec::new(),
+            sequential_occurrences: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
@@ -406,4 +408,246 @@ fn complex_ordering() {
         batches.sequential,
         &[System(0), System(2), System(1), System(3)]
     );
+}
+
+/// Asserts that two independent systems added with `extend` build the same schedule
+/// as when they're added with `with_system`.
+#[test]
+fn extend_two() {
+    fn a() {}
+    fn b() {}
+
+    let expected = Schedule {
+        parallel: vec![steps(&["a", "b"])],
+        sequential: steps(&["a", "b"]),
+    };
+
+    let workload = Workload::new("").with_system(a).with_system(b);
+    assert_eq!(Schedule::built(workload), expected);
+
+    let mut workload = Workload::new("");
+    workload.extend([
+        a.into_workload_system().unwrap(),
+        b.into_workload_system().unwrap(),
+    ]);
+    assert_eq!(Schedule::built(workload), expected);
+}
+
+/// Asserts that three independent systems added with `extend` schedule like `with_system`:
+/// one batch, in declaration order.
+#[test]
+fn extend_three() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+
+    let expected = Schedule {
+        parallel: vec![steps(&["a", "b", "c"])],
+        sequential: steps(&["a", "b", "c"]),
+    };
+
+    let workload = Workload::new("")
+        .with_system(a)
+        .with_system(b)
+        .with_system(c);
+    assert_eq!(Schedule::built(workload), expected);
+
+    let mut workload = Workload::new("");
+    workload.extend([
+        a.into_workload_system().unwrap(),
+        b.into_workload_system().unwrap(),
+        c.into_workload_system().unwrap(),
+    ]);
+    assert_eq!(Schedule::built(workload), expected);
+}
+
+/// Asserts that three writers of the same storage added with `extend` each get their own
+/// batch, in declaration order.
+#[test]
+fn extend_writers() {
+    fn w1(_: ViewMut<'_, Usize>) {}
+    fn w2(_: ViewMut<'_, Usize>) {}
+    fn w3(_: ViewMut<'_, Usize>) {}
+
+    let expected = Schedule {
+        parallel: vec![steps(&["w1"]), steps(&["w2"]), steps(&["w3"])],
+        sequential: steps(&["w1", "w2", "w3"]),
+    };
+
+    let workload = Workload::new("")
+        .with_system(w1)
+        .with_system(w2)
+        .with_system(w3);
+    assert_eq!(Schedule::built(workload), expected);
+
+    let mut workload = Workload::new("");
+    workload.extend([
+        w1.into_workload_system().unwrap(),
+        w2.into_workload_system().unwrap(),
+        w3.into_workload_system().unwrap(),
+    ]);
+    assert_eq!(Schedule::built(workload), expected);
+}
+
+/// Asserts that two systems added with `extend` after an existing system keep their order.
+#[test]
+fn extend_after_prefix() {
+    fn p() {}
+    fn a() {}
+    fn b() {}
+
+    let expected = Schedule {
+        parallel: vec![steps(&["p", "a", "b"])],
+        sequential: steps(&["p", "a", "b"]),
+    };
+
+    let workload = Workload::new("")
+        .with_system(p)
+        .with_system(a)
+        .with_system(b);
+    assert_eq!(Schedule::built(workload), expected);
+
+    let mut workload = Workload::new("").with_system(p);
+    workload.extend([
+        a.into_workload_system().unwrap(),
+        b.into_workload_system().unwrap(),
+    ]);
+    assert_eq!(Schedule::built(workload), expected);
+}
+
+/// Asserts that a barrier after systems added with `extend` makes the next system wait
+/// for all of them.
+#[test]
+fn extend_barrier() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+
+    let expected = Schedule {
+        parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+        sequential: steps(&["a", "b", "c"]),
+    };
+
+    let workload = Workload::new("")
+        .with_system(a)
+        .with_system(b)
+        .with_barrier()
+        .with_system(c);
+    assert_eq!(Schedule::built(workload), expected);
+
+    let mut workload = Workload::new("");
+    workload.extend([
+        a.into_workload_system().unwrap(),
+        b.into_workload_system().unwrap(),
+    ]);
+    let workload = workload.with_barrier().with_system(c);
+    assert_eq!(Schedule::built(workload), expected);
+}
+
+/// Asserts that a system added three times with `extend` is scheduled and runs three times.
+#[test]
+fn extend_repeated() {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    static RUNS: AtomicUsize = AtomicUsize::new(0);
+
+    fn a() {
+        RUNS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    let expected = Schedule {
+        parallel: vec![steps(&["a", "a", "a"])],
+        sequential: steps(&["a", "a", "a"]),
+    };
+
+    let workload = Workload::new("")
+        .with_system(a)
+        .with_system(a)
+        .with_system(a);
+    assert_eq!(Schedule::built(workload), expected);
+
+    let mut workload = Workload::new("Repeated");
+    workload.extend([
+        a.into_workload_system().unwrap(),
+        a.into_workload_system().unwrap(),
+        a.into_workload_system().unwrap(),
+    ]);
+    let world = World::new_for_test();
+    workload.add_to_world(&world).unwrap();
+    assert_eq!(Schedule::registered(&world, "Repeated"), expected);
+
+    world.run_workload("Repeated").unwrap();
+    assert_eq!(RUNS.load(Ordering::Relaxed), 3);
+}
+
+/// Asserts that `d.after_all(a)` keeps `d` in a later batch than `a`
+/// when an unrelated system was added with `extend` in between.
+///
+/// `a` waits on `b`, so it lands in the second batch. The extended `c` runs in the first one.
+#[test]
+fn extend_explicit() {
+    fn a() {}
+    fn b() {}
+    fn c() {}
+    fn d() {}
+
+    let mut workload = Workload::new("")
+        .with_system(a.after_all(b))
+        .with_system(b)
+        .with_system(c)
+        .with_system(d.after_all(a));
+    let schedule = Schedule::built(workload);
+    assert!(schedule.batch("b") < schedule.batch("a"), "{schedule:?}");
+    assert!(schedule.batch("a") < schedule.batch("d"), "{schedule:?}");
+
+    workload = Workload::new("").with_system(a.after_all(b)).with_system(b);
+    workload.extend([c.into_workload_system().unwrap()]);
+    let workload = workload.with_system(d.after_all(a));
+    let schedule = Schedule::built(workload);
+    assert!(schedule.batch("b") < schedule.batch("a"), "{schedule:?}");
+    assert!(schedule.batch("a") < schedule.batch("d"), "{schedule:?}");
+}
+
+/// Asserts that conditions of systems added with `extend` stay with their own system,
+/// even when the sequential order differs from the declaration order.
+///
+/// `a` is declared first but follows `b`, `b`'s condition refuses to run it.
+#[test]
+fn extend_conditions() {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    static A_RUNS: AtomicUsize = AtomicUsize::new(0);
+    static B_RUNS: AtomicUsize = AtomicUsize::new(0);
+    static C_RUNS: AtomicUsize = AtomicUsize::new(0);
+
+    fn a() {
+        A_RUNS.fetch_add(1, Ordering::Relaxed);
+    }
+    fn b() {
+        B_RUNS.fetch_add(1, Ordering::Relaxed);
+    }
+    fn c() {
+        C_RUNS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    let mut workload = Workload::new("Conditions");
+    workload.extend([
+        a.after_all(b).run_if(|| true),
+        b.run_if(|| false),
+        c.into_workload_system().unwrap(),
+    ]);
+    let world = World::new_for_test();
+    workload.add_to_world(&world).unwrap();
+    assert_eq!(
+        Schedule::registered(&world, "Conditions"),
+        Schedule {
+            parallel: vec![steps(&["b", "c"]), steps(&["a"])],
+            sequential: steps(&["b", "c", "a"]),
+        }
+    );
+
+    world.run_workload("Conditions").unwrap();
+
+    let runs = [&A_RUNS, &B_RUNS, &C_RUNS].map(|runs| runs.load(Ordering::Relaxed));
+    assert_eq!(runs, [1, 0, 1]);
 }
