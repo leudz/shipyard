@@ -2,6 +2,7 @@ use super::pending::read_a;
 use super::*;
 use crate::error;
 use crate::iter::IntoIter;
+use crate::scheduler::IntoWorkloadSystem;
 use crate::scheduler::info::WorkloadInfo;
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -137,6 +138,374 @@ fn clone() {
     assert!(!evaluated::<A>(&world));
 }
 
+/// Always fails with a `MissingComponent`, its workload stops with it.
+fn fails() -> Result<(), error::SystemError> {
+    Err(error::MissingComponent {
+        id: crate::EntityId::dead(),
+        name: "fails",
+    }
+    .into())
+}
+
+/// Returns `true` when running the workload `name` fails with a system's custom error.
+fn custom_error(world: &World, name: &'static str) -> bool {
+    match world.run_workload(name) {
+        Ok(()) => false,
+        Err(error) => error.custom_error().is_some(),
+    }
+}
+
+/// Returns the label of the system that stopped a workload and the error it returned.
+///
+/// ### Panics
+///
+/// When the workload didn't stop because of a system's error.
+fn system_failure(
+    result: Result<(), error::RunWorkload>,
+) -> (Box<dyn Label>, Box<dyn core::error::Error + Send + Sync>) {
+    match result {
+        Err(error::RunWorkload::Run((label, error::Run::Custom(returned)))) => {
+            (label, returned.into_inner())
+        }
+        other => panic!("a system should have returned an error: {other:?}"),
+    }
+}
+
+/// Returns the name of the `MissingComponent` held by `returned`, `None` if it holds another error.
+fn missing_name(
+    returned: &(dyn core::error::Error + Send + Sync + 'static),
+) -> Option<&'static str> {
+    returned
+        .downcast_ref::<error::MissingComponent>()
+        .map(|missing| missing.name)
+}
+
+/// Asserts that a function without views returning an error stops its registered workload,
+/// the error names `fails` and holds what it returned.
+#[test]
+fn return_error() {
+    let world = World::new_for_test();
+    Workload::new("fails")
+        .with_system(fails)
+        .add_to_world(&world)
+        .unwrap();
+
+    let (label, returned) = system_failure(world.run_workload("fails"));
+
+    assert!(*label == *fails.as_label());
+    assert_eq!(missing_name(&*returned), Some("fails"));
+}
+
+/// Asserts that a function without views returning an error stops its built workload.
+#[test]
+fn return_error_built() {
+    let world = World::new_for_test();
+    let (workload, _) = Workload::new("fails").with_system(fails).build().unwrap();
+
+    let (label, returned) = system_failure(workload.run_with_world(&world));
+
+    assert!(*label == *fails.as_label());
+    assert_eq!(missing_name(&*returned), Some("fails"));
+}
+
+/// Fails with a `MissingComponent` while borrowing `Usize`.
+fn fails_with_view(_: View<'_, Usize>) -> Result<(), error::SystemError> {
+    Err(error::MissingComponent {
+        id: crate::EntityId::dead(),
+        name: "fails_with_view",
+    }
+    .into())
+}
+
+/// Asserts that a function with views returning an error stops its registered workload.
+#[test]
+fn return_error_views() {
+    let world = World::new_for_test();
+    Workload::new("fails")
+        .with_system(fails_with_view)
+        .add_to_world(&world)
+        .unwrap();
+
+    let (label, returned) = system_failure(world.run_workload("fails"));
+
+    assert!(*label == *fails_with_view.as_label());
+    assert_eq!(missing_name(&*returned), Some("fails_with_view"));
+}
+
+/// Asserts that a function with views returning an error stops its built workload.
+#[test]
+fn return_error_views_built() {
+    let world = World::new_for_test();
+    let (workload, _) = Workload::new("fails")
+        .with_system(fails_with_view)
+        .build()
+        .unwrap();
+
+    let (label, returned) = system_failure(workload.run_with_world(&world));
+
+    assert!(*label == *fails_with_view.as_label());
+    assert_eq!(missing_name(&*returned), Some("fails_with_view"));
+}
+
+/// Asserts that functions returning `Ok(())`, with and without views, let their workload succeed.
+#[test]
+fn return_ok() {
+    fn succeeds() -> Result<(), error::SystemError> {
+        Ok(())
+    }
+
+    fn succeeds_with_view(_: View<'_, Usize>) -> Result<(), error::SystemError> {
+        Ok(())
+    }
+
+    let world = World::new_for_test();
+    Workload::new("succeeds")
+        .with_system(succeeds)
+        .with_system(succeeds_with_view)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(world.run_workload("succeeds").is_ok());
+}
+
+/// Asserts that a function returning an alias of `Result<(), SystemError>` stops its workload.
+#[test]
+fn return_alias() {
+    type Fallible = Result<(), error::SystemError>;
+
+    fn aliased() -> Fallible {
+        Err(error::MissingComponent {
+            id: crate::EntityId::dead(),
+            name: "aliased",
+        }
+        .into())
+    }
+
+    let world = World::new_for_test();
+    Workload::new("aliased")
+        .with_system(aliased)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(custom_error(&world, "aliased"));
+}
+
+/// Asserts that a `Result` with another error type is dropped, its workload succeeds.
+#[test]
+fn return_other_error() {
+    fn other_error() -> Result<(), error::MissingComponent> {
+        Err(error::MissingComponent {
+            id: crate::EntityId::dead(),
+            name: "other_error",
+        })
+    }
+
+    let world = World::new_for_test();
+    Workload::new("other")
+        .with_system(other_error)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(world.run_workload("other").is_ok());
+}
+
+/// Asserts that a `Result` with a `SystemError` but another success type is dropped,
+/// its workload succeeds.
+#[test]
+fn return_non_unit() {
+    fn non_unit() -> Result<u32, error::SystemError> {
+        Err(error::MissingComponent {
+            id: crate::EntityId::dead(),
+            name: "non_unit",
+        }
+        .into())
+    }
+
+    let world = World::new_for_test();
+    Workload::new("non_unit")
+        .with_system(non_unit)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(world.run_workload("non_unit").is_ok());
+}
+
+/// Wraps a `Result<(), SystemError>`, it converts into one but isn't one.
+struct Wrapper(Result<(), error::SystemError>);
+
+impl From<Wrapper> for Result<(), error::SystemError> {
+    fn from(wrapper: Wrapper) -> Self {
+        wrapper.0
+    }
+}
+
+/// Asserts that a type converting into `Result<(), SystemError>` is dropped, its workload succeeds.
+#[test]
+fn return_wrapper() {
+    fn wrapper() -> Wrapper {
+        Wrapper(fails())
+    }
+
+    let world = World::new_for_test();
+    Workload::new("wrapper")
+        .with_system(wrapper)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(world.run_workload("wrapper").is_ok());
+}
+
+/// Adds one to its counter when dropped.
+struct Dropped(Arc<AtomicUsize>);
+
+impl Drop for Dropped {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// Asserts that a returned value is dropped once per run.
+#[test]
+fn return_dropped() {
+    let drops = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let system_drops = drops.clone();
+    Workload::new("dropped")
+        .with_system(move || Dropped(system_drops.clone()))
+        .add_to_world(&world)
+        .unwrap();
+
+    world.run_workload("dropped").unwrap();
+    world.run_workload("dropped").unwrap();
+
+    assert_eq!(drops.load(Ordering::SeqCst), 2);
+}
+
+/// Asserts that a fallible system whose views can't be borrowed doesn't run,
+/// the workload returns the borrow error.
+#[test]
+fn return_borrow_failure() {
+    let ran = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    world.add_unique(Usize(0));
+    let system_ran = ran.clone();
+    Workload::new("borrow")
+        .with_system(
+            move |_: UniqueView<'_, Usize>| -> Result<(), error::SystemError> {
+                system_ran.fetch_add(1, Ordering::SeqCst);
+
+                Ok(())
+            },
+        )
+        .add_to_world(&world)
+        .unwrap();
+
+    let result = {
+        let _usize = world.borrow::<UniqueViewMut<'_, Usize>>().unwrap();
+
+        world.run_workload("borrow")
+    };
+
+    assert!(matches!(
+        result,
+        Err(error::RunWorkload::Run((_, error::Run::GetStorage(_))))
+    ));
+    assert_eq!(ran.load(Ordering::SeqCst), 0);
+}
+
+/// Asserts that `fails` stops two workloads using it through different builder paths,
+/// the plain function first.
+#[test]
+fn fallible_across() {
+    let world = World::new_for_test();
+    Workload::new("first")
+        .with_system(fails)
+        .add_to_world(&world)
+        .unwrap();
+    Workload::new("second")
+        .with_system(fails.tag("second"))
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(custom_error(&world, "first"));
+    assert!(custom_error(&world, "second"));
+}
+
+/// Asserts that `fails` stops two workloads using it through different builder paths,
+/// the converted system first.
+#[test]
+fn fallible_across_converted_first() {
+    let world = World::new_for_test();
+    Workload::new("first")
+        .with_system(fails.into_workload_system().unwrap())
+        .add_to_world(&world)
+        .unwrap();
+    Workload::new("second")
+        .with_system(fails)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(custom_error(&world, "first"));
+    assert!(custom_error(&world, "second"));
+}
+
+/// Asserts that a workload stops with `fails`' error when its first occurrence is skipped.
+#[test]
+fn fallible_together_skipped_first() {
+    let world = World::new_for_test();
+    Workload::new("both")
+        .with_system(fails.run_if(|| false))
+        .with_system(fails)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(custom_error(&world, "both"));
+}
+
+/// Asserts that a workload stops with `fails`' error when its last occurrence is skipped.
+#[test]
+fn fallible_together_skipped_last() {
+    let world = World::new_for_test();
+    Workload::new("both")
+        .with_system(fails)
+        .with_system(fails.run_if(|| false))
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(custom_error(&world, "both"));
+}
+
+/// Asserts that each occurrence of `fails` keeps its own condition:
+/// with both skipped, the workload succeeds.
+#[test]
+fn fallible_together_skipped() {
+    let world = World::new_for_test();
+    Workload::new("both")
+        .with_system(fails.run_if(|| false))
+        .with_system(fails.skip_if(|| true))
+        .add_to_world(&world)
+        .unwrap();
+
+    assert!(world.run_workload("both").is_ok());
+}
+
+/// Ordered after `fails` in `fallible_label_order`.
+fn later() {}
+
+/// Asserts that ordering after `fails` applies to all its occurrences, whatever their builder path.
+#[test]
+fn fallible_label_order() {
+    let workload = Workload::new("order")
+        .with_system(later.after_all(fails))
+        .with_system(fails)
+        .with_system(fails.into_workload_system().unwrap());
+
+    assert_eq!(
+        Schedule::built(workload).parallel,
+        vec![steps(&["fails", "fails"]), steps(&["later"])]
+    );
+}
+
 /// Returns a system adding one to `target`.
 ///
 /// Every call returns the same closure type, only the captured counter differs.
@@ -146,6 +515,48 @@ fn counting(target: &Arc<AtomicUsize>) -> impl Fn() + Send + Sync + 'static {
     move || {
         target.fetch_add(1, Ordering::SeqCst);
     }
+}
+
+/// Asserts that two captures of the same closure type in one workload both run the first capture.
+///
+/// A world keeps one instance per callable type and adapter, the first one registered.
+#[test]
+fn capture_first_within() {
+    let world = World::new_for_test();
+    let first = Arc::new(AtomicUsize::new(0));
+    let second = Arc::new(AtomicUsize::new(0));
+    Workload::new("")
+        .with_system(counting(&first))
+        .with_system(counting(&second))
+        .add_to_world(&world)
+        .unwrap();
+
+    world.run_default_workload().unwrap();
+
+    assert_eq!(first.load(Ordering::SeqCst), 2);
+    assert_eq!(second.load(Ordering::SeqCst), 0);
+}
+
+/// Asserts that a workload registering another capture of a closure type
+/// already registered by an earlier workload runs the earlier capture.
+#[test]
+fn capture_first_across() {
+    let world = World::new_for_test();
+    let first = Arc::new(AtomicUsize::new(0));
+    let second = Arc::new(AtomicUsize::new(0));
+    Workload::new("first")
+        .with_system(counting(&first))
+        .add_to_world(&world)
+        .unwrap();
+    Workload::new("second")
+        .with_system(counting(&second))
+        .add_to_world(&world)
+        .unwrap();
+
+    world.run_workload("second").unwrap();
+
+    assert_eq!(first.load(Ordering::SeqCst), 1);
+    assert_eq!(second.load(Ordering::SeqCst), 0);
 }
 
 /// Borrows `Usize` with insertion tracking, `Usize` isn't tracked by default.

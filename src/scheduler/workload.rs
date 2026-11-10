@@ -13,8 +13,7 @@ use crate::scheduler::info::{DedupedLabels, TypeInfo, WorkloadInfo};
 use crate::scheduler::label::WorkloadLabel;
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIf};
 use crate::scheduler::{
-    AsLabel, Batches, IntoWorkload, IntoWorkloadSystem, IntoWorkloadTrySystem, Label, Scheduler,
-    WorkloadSystem,
+    AsLabel, Batches, IntoWorkload, IntoWorkloadSystem, Label, Scheduler, WorkloadSystem,
 };
 use crate::unique::UniqueStorage;
 use crate::world::World;
@@ -24,11 +23,7 @@ use core::any::TypeId;
 // macro not module
 use alloc::vec;
 use alloc::vec::Vec;
-#[cfg(not(feature = "std"))]
-use core::any::Any;
 use core::any::type_name;
-#[cfg(feature = "std")]
-use std::error::Error;
 
 /// Used to create a [`Workload`].
 ///
@@ -315,125 +310,90 @@ impl Workload {
     ///
     /// world.run_default_workload();
     /// ```
+    ///
+    /// ### Return value
+    ///
+    /// A system can return any type, the value is dropped.\
+    /// The exception is exactly `Result<(), SystemError>`, or an alias of it: an `Err` stops the workload
+    /// and is returned as [`RunWorkload::Run`](error::RunWorkload::Run).\
+    /// Any other type is dropped, including other `Result`s, use `?` to convert their error into a [`SystemError`](error::SystemError).
+    ///
+    /// ```
+    /// use shipyard::error::SystemError;
+    /// use shipyard::{Component, IntoIter, View, Workload, World};
+    ///
+    /// #[derive(Component)]
+    /// struct Health(u32);
+    ///
+    /// fn check(healths: View<Health>) -> Result<(), SystemError> {
+    ///     if healths.iter().any(|health| health.0 == 0) {
+    ///         return Err("a health reached zero".into());
+    ///     }
+    ///
+    ///     Ok(())
+    /// }
+    ///
+    /// let mut world = World::new();
+    ///
+    /// world.add_entity(Health(0));
+    ///
+    /// Workload::new("Check")
+    ///     .with_system(check)
+    ///     .add_to_world(&world)
+    ///     .unwrap();
+    ///
+    /// let error = world.run_workload("Check").unwrap_err();
+    ///
+    /// assert_eq!(
+    ///     error.custom_error().unwrap().to_string(),
+    ///     "a health reached zero"
+    /// );
+    /// ```
+    ///
+    /// ### Shared instance
+    ///
+    /// A world registers each function type once, the first time a workload containing it is added.\
+    /// Every later occurrence of that type runs this first instance.\
+    /// This matters for closures: different captures of the same closure type all run the first one.
+    ///
+    /// ```
+    /// use shipyard::{Workload, World};
+    /// use std::sync::Arc;
+    /// use std::sync::atomic::{AtomicU32, Ordering};
+    ///
+    /// // Every call returns the same closure type, only the captured counter differs.
+    /// fn counting(count: &Arc<AtomicU32>) -> impl Fn() + Send + Sync + 'static {
+    ///     let count = count.clone();
+    ///
+    ///     move || {
+    ///         count.fetch_add(1, Ordering::Relaxed);
+    ///     }
+    /// }
+    ///
+    /// let world = World::new();
+    /// let first = Arc::new(AtomicU32::new(0));
+    /// let second = Arc::new(AtomicU32::new(0));
+    ///
+    /// Workload::new("first")
+    ///     .with_system(counting(&first))
+    ///     .add_to_world(&world)
+    ///     .unwrap();
+    /// Workload::new("second")
+    ///     .with_system(counting(&second))
+    ///     .add_to_world(&world)
+    ///     .unwrap();
+    ///
+    /// world.run_workload("second").unwrap();
+    ///
+    /// // "second" ran the closure registered by "first".
+    /// assert_eq!(first.load(Ordering::Relaxed), 1);
+    /// assert_eq!(second.load(Ordering::Relaxed), 0);
+    /// ```
+    ///
+    /// To give each occurrence its own data, store it in the [`World`], in a unique for example.
     #[track_caller]
     pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(mut self, system: S) -> Workload {
         let mut system = system.into_workload_system().unwrap();
-        system.unique_id += self.systems.len();
-
-        self.systems.push(system);
-
-        self
-    }
-    /// Adds a fallible system to the workload being created.
-    /// The workload's execution will stop if any error is encountered.
-    ///
-    /// ### Example:
-    /// ```
-    /// use shipyard::{Component, EntitiesViewMut, Get, IntoIter, View, ViewMut, Workload, World};
-    /// use shipyard::error::MissingComponent;
-    ///
-    /// #[derive(Component, Clone, Copy)]
-    /// struct U32(u32);
-    ///
-    /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct USIZE(usize);
-    ///
-    /// fn add(mut usizes: ViewMut<USIZE>, u32s: View<U32>) {
-    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
-    ///         x.0 += y.0 as usize;
-    ///     }
-    /// }
-    ///
-    /// fn check(usizes: View<USIZE>) -> Result<(), MissingComponent> {
-    ///     for (id, i) in usizes.iter().with_id() {
-    ///         assert!(usizes.get(id)? == i);
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    ///
-    /// let mut world = World::new();
-    ///
-    /// world.add_entity((USIZE(0), U32(1)));
-    /// world.add_entity((USIZE(2), U32(3)));
-    /// world.add_entity((USIZE(4), U32(5)));
-    ///
-    /// Workload::new("Add & Check")
-    ///     .with_system(add)
-    ///     .with_try_system(check)
-    ///     .add_to_world(&world)
-    ///     .unwrap();
-    ///
-    /// world.run_default_workload();
-    /// ```
-    #[track_caller]
-    #[cfg(feature = "std")]
-    pub fn with_try_system<
-        B,
-        Ok,
-        Err: 'static + Into<Box<dyn Error + Send + Sync>>,
-        R: Into<Result<Ok, Err>>,
-        S: IntoWorkloadTrySystem<B, R>,
-    >(
-        mut self,
-        system: S,
-    ) -> Self {
-        let mut system = system.into_workload_try_system::<Ok, Err>().unwrap();
-        system.unique_id += self.systems.len();
-
-        self.systems.push(system);
-
-        self
-    }
-    /// Adds a fallible system to the workload being created.
-    /// The workload's execution will stop if any error is encountered.
-    ///
-    /// ### Example:
-    /// ```
-    /// use shipyard::{EntitiesViewMut, Get, IntoIter, IntoWithId, View, ViewMut, Workload, World};
-    /// use shipyard::error::MissingComponent;
-    ///
-    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
-    ///         *x += y as usize;
-    ///     }
-    /// }
-    ///
-    /// fn check(usizes: View<usize>) -> Result<(), MissingComponent> {
-    ///     for (id, i) in usizes.iter().with_id() {
-    ///         assert!(usizes.get(id)? == i);
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    ///
-    /// let mut world = World::new();
-    ///
-    /// world.add_entity((0usize, 1u32));
-    /// world.add_entity((2usize, 3u32));
-    /// world.add_entity((4usize, 5u32));
-    ///
-    /// Workload::new("Add & Check")
-    ///     .with_system(add)
-    ///     .with_try_system(check)
-    ///     .add_to_world(&world)
-    ///     .unwrap();
-    ///
-    /// world.run_default_workload();
-    /// ```
-    #[track_caller]
-    #[cfg(not(feature = "std"))]
-    pub fn with_try_system<
-        B,
-        Ok,
-        Err: 'static + Send + Any,
-        R: Into<Result<Ok, Err>>,
-        S: IntoWorkloadTrySystem<B, R>,
-    >(
-        mut self,
-        system: S,
-    ) -> Self {
-        let mut system = system.into_workload_try_system::<Ok, Err>().unwrap();
         system.unique_id += self.systems.len();
 
         self.systems.push(system);

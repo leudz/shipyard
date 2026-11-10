@@ -106,9 +106,9 @@ We'll conclude this guide by allowing the `Player` to win.
 
 ```rust,noplaypen
 use shipyard::{
-    AllStoragesViewMut, Component, EntitiesView, EntitiesViewMut, IntoIter, IntoWithId,
-    IntoWorkload, IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut, View,
-    ViewMut, Workload, World,
+    error::SystemError, AllStoragesViewMut, Component, EntitiesView, EntitiesViewMut, IntoIter,
+    IntoWithId, IntoWorkload, SparseSet, Unique, UniqueView, UniqueViewMut, View, ViewMut,
+    Workload, World,
 };
 
 async fn main() {
@@ -140,7 +140,7 @@ impl std::fmt::Display for GameOver {
         std::fmt::Debug::fmt(self, f)
     }
 }
-impl std::error::Error for GameOver {}
+impl core::error::Error for GameOver {}
 
 fn main_loop() -> Workload {
     (
@@ -151,7 +151,7 @@ fn main_loop() -> Workload {
         spawn,
         collision,
         clean_up,
-        check_game_over.into_workload_try_system().unwrap(),
+        check_game_over,
         render,
     )
         .into_workload()
@@ -175,11 +175,11 @@ fn collision(
     // No more Ok(())
 }
 
-fn check_game_over(player: UniqueView<Player>, v_friends: View<Friend>) -> Result<(), GameOver> {
+fn check_game_over(player: UniqueView<Player>, v_friends: View<Friend>) -> Result<(), SystemError> {
     if player.square.size < INIT_SIZE {
-        Err(GameOver::Defeat)
+        Err(GameOver::Defeat.into())
     } else if v_friends.is_empty() {
-        Err(GameOver::Victory)
+        Err(GameOver::Victory.into())
     } else {
         Ok(())
     }
@@ -192,7 +192,8 @@ You would usually have smaller [`Workload`](https://docs.rs/shipyard/latest/ship
 Apart from organization, [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html)s are automatically run across multiple threads, which can usually boost performance.
 
 The last touch is to handle `check_game_over`'s return value.\
-We use [`into_workload_try_system`](https://docs.rs/shipyard/latest/shipyard/scheduler/trait.IntoWorkloadTrySystem.html#tymethod.into_workload_try_system) to explicitly inform the [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) that this system might return something, but we don't handle it anywhere.
+A [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) drops what its systems return, except for `Result<(), SystemError>`: an error stops the [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) and is returned by [`run_workload`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run_workload).\
+That's why `check_game_over` converts `GameOver` into a [`SystemError`](https://docs.rs/shipyard/latest/shipyard/error/struct.SystemError.html) instead of returning it as is, a `Result<(), GameOver>` would be dropped.
 
 ```rust,noplaypen
 async fn main() {

@@ -232,15 +232,16 @@ fn shared_regroup() {
 /// leaves no storage borrowed, and that the next run's entry regroup takes care of the set.
 #[test]
 fn failure() {
-    fn fail() -> Result<(), error::MissingComponent> {
+    fn fail() -> Result<(), error::SystemError> {
         Err(error::MissingComponent {
             id: crate::EntityId::dead(),
             name: "",
-        })
+        }
+        .into())
     }
 
     let world = two_sets();
-    let workload = Workload::new("").with_system(read_a).with_try_system(fail);
+    let workload = Workload::new("").with_system(read_a).with_system(fail);
     let workload = prepare(workload, &world);
     assert_eq!(
         workload.batches.parallel[0],

@@ -178,19 +178,20 @@ fn system_error() {
         entities: EntitiesViewMut<'_>,
         a: ViewMut<'_, A>,
         b: ViewMut<'_, B>,
-    ) -> Result<(), error::MissingComponent> {
+    ) -> Result<(), error::SystemError> {
         add_ab(entities, a, b);
 
         Err(error::MissingComponent {
             id: crate::EntityId::dead(),
             name: "",
-        })
+        }
+        .into())
     }
 
     let world = world();
     let failing = Workload::new("")
         .with_system(read_a)
-        .with_try_system(add_ab_then_fail);
+        .with_system(add_ab_then_fail);
     let failing = prepare(failing, &world);
     let reading = prepare(Workload::new("").with_system(read_a), &world);
 

@@ -112,17 +112,21 @@ fn workload_merge_skip_if() {
     assert_eq!(world.borrow::<UniqueView<'_, Usize>>().unwrap().0, 1);
 }
 
-#[test]
-fn try_system_run_if() {
-    fn try_sys() -> Result<(), error::MissingComponent> {
-        Err(error::MissingComponent {
-            id: crate::EntityId::dead(),
-            name: "",
-        })
-    }
+/// Always returns a custom error.
+fn fails() -> Result<(), error::SystemError> {
+    Err(error::MissingComponent {
+        id: crate::EntityId::dead(),
+        name: "",
+    })?;
 
+    Ok(())
+}
+
+/// Asserts that a fallible system whose condition is true returns its error.
+#[test]
+fn fallible_run_if() {
     let (workload, _) = Workload::new("")
-        .with_try_system(try_sys.into_workload_try_system().unwrap().run_if(|| true))
+        .with_system(fails.run_if(|| true))
         .build()
         .unwrap();
 
@@ -136,6 +140,19 @@ fn try_system_run_if() {
             .custom_error()
             .is_some()
     );
+}
+
+/// Asserts that a fallible system whose condition is false doesn't run, so its workload succeeds.
+#[test]
+fn fallible_skipped() {
+    let (workload, _) = Workload::new("")
+        .with_system(fails.run_if(|| false))
+        .build()
+        .unwrap();
+
+    let world = World::new_for_test();
+
+    assert!(workload.run_with_world(&world).is_ok());
 }
 
 /// Returns how converting `condition` into a system condition went, `Ok(())` when it was accepted.

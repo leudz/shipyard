@@ -1131,3 +1131,40 @@ fn sequential_duplicate() {
 
     let _ = (first, second).into_sequential_workload();
 }
+
+/// Always returns a custom error.
+fn fails() -> Result<(), error::SystemError> {
+    Err(error::MissingComponent {
+        id: crate::EntityId::dead(),
+        name: "fails",
+    }
+    .into())
+}
+
+/// Asserts that a workload made from a tuple containing a fallible system stops with its error.
+#[test]
+fn tuple_fallible() {
+    fn other() {}
+
+    let (workload, _) = (other, fails).into_workload().build().unwrap();
+    let world = World::new_for_test();
+
+    let result = workload.run_with_world(&world);
+
+    assert!(result.err().unwrap().custom_error().is_some());
+}
+
+/// Asserts that a sequential workload stops at a failing system, the system after it doesn't run.
+#[test]
+fn sequential_failure() {
+    let ran = alloc::sync::Arc::new(core::sync::atomic::AtomicBool::new(false));
+    let system_ran = ran.clone();
+    let after = move || system_ran.store(true, core::sync::atomic::Ordering::SeqCst);
+    let (workload, _) = (fails, after).into_sequential_workload().build().unwrap();
+    let world = World::new_for_test();
+
+    let result = workload.run_with_world(&world);
+
+    assert!(result.err().unwrap().custom_error().is_some());
+    assert!(!ran.load(core::sync::atomic::Ordering::SeqCst));
+}

@@ -3,7 +3,6 @@ pub mod info;
 mod into_workload;
 mod into_workload_run_if;
 mod into_workload_system;
-mod into_workload_try_system;
 mod label;
 mod system;
 mod system_modificator;
@@ -12,7 +11,6 @@ mod workload_modificator;
 
 pub use into_workload::{IntoSequentialWorkload, IntoWorkload};
 pub use into_workload_system::IntoWorkloadSystem;
-pub use into_workload_try_system::IntoWorkloadTrySystem;
 pub use label::{AsLabel, Label};
 pub use system::WorkloadSystem;
 pub use system_modificator::SystemModificator;

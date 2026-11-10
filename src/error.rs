@@ -620,6 +620,9 @@ impl Display for Run {
 
 /// Error returned by a system.
 ///
+/// A system returning `Result<(), SystemError>` stops its workload when it returns an error,
+/// see [`Workload::with_system`](crate::Workload::with_system).
+///
 /// Any error that is `Send + Sync + 'static` converts into it, so `?` can be used on any of them.
 ///
 /// ```

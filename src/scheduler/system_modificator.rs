@@ -120,81 +120,94 @@ pub trait SystemModificator<B, R> {
 
 pub struct Nothing;
 
-impl<F> SystemModificator<Nothing, ()> for F
-where
-    F: 'static + Send + Sync + Fn(),
-{
-    #[track_caller]
-    fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
-        let system = self.into_workload_system().unwrap();
+/// Implements `SystemModificator` for functions without views returning `$ret`.
+///
+/// It's limited to the return types systems use,
+/// a generic return type would include functions returning a `Workload`, which use `WorkloadModificator`.
+macro_rules! impl_system_modificator_without_views {
+    ($ret: ty) => {
+        // With `()`, the bound reads `Fn() -> ()`.
+        #[allow(clippy::unused_unit)]
+        impl<F> SystemModificator<Nothing, $ret> for F
+        where
+            F: 'static + Send + Sync + Fn() -> $ret,
+        {
+            #[track_caller]
+            fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
+                let system = self.into_workload_system().unwrap();
 
-        system.run_if(run_if)
-    }
-    #[track_caller]
-    fn skip_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
-        let mut run_if = run_if.into_workload_run_if().unwrap();
+                system.run_if(run_if)
+            }
+            #[track_caller]
+            fn skip_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
+                let mut run_if = run_if.into_workload_run_if().unwrap();
 
-        run_if.system_fn = Box::new(move |world| (run_if.system_fn)(world).map(Not::not));
+                run_if.system_fn = Box::new(move |world| (run_if.system_fn)(world).map(Not::not));
 
-        self.run_if(run_if)
-    }
-    #[track_caller]
-    fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
+                self.run_if(run_if)
+            }
+            #[track_caller]
+            fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = self.into_workload_system().unwrap();
 
-        system.before_all.add(other);
+                system.before_all.add(other);
 
-        system
-    }
-    #[track_caller]
-    fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
+                system
+            }
+            #[track_caller]
+            fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = self.into_workload_system().unwrap();
 
-        system.after_all.add(other);
+                system.after_all.add(other);
 
-        system
-    }
-    #[track_caller]
-    fn display_name<T>(self, name: impl AsLabel<T>) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
+                system
+            }
+            #[track_caller]
+            fn display_name<T>(self, name: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = self.into_workload_system().unwrap();
 
-        system.display_name = name.as_label();
+                system.display_name = name.as_label();
 
-        system
-    }
-    #[track_caller]
-    fn tag<T>(self, tag: impl AsLabel<T>) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
+                system
+            }
+            #[track_caller]
+            fn tag<T>(self, tag: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = self.into_workload_system().unwrap();
 
-        system.tags.push(tag.as_label());
+                system.tags.push(tag.as_label());
 
-        system
-    }
-    #[track_caller]
-    fn require_in_workload<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
+                system
+            }
+            #[track_caller]
+            fn require_in_workload<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = self.into_workload_system().unwrap();
 
-        system.require_in_workload.add(other);
+                system.require_in_workload.add(other);
 
-        system
-    }
-    #[track_caller]
-    fn require_before<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
+                system
+            }
+            #[track_caller]
+            fn require_before<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = self.into_workload_system().unwrap();
 
-        system.require_before.add(other);
+                system.require_before.add(other);
 
-        system
-    }
-    #[track_caller]
-    fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
+                system
+            }
+            #[track_caller]
+            fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = self.into_workload_system().unwrap();
 
-        system.require_after.add(other);
+                system.require_after.add(other);
 
-        system
-    }
+                system
+            }
+        }
+    };
 }
+
+impl_system_modificator_without_views!(());
+impl_system_modificator_without_views!(Result<(), error::SystemError>);
 
 impl SystemModificator<WorkloadSystem, ()> for WorkloadSystem {
     #[track_caller]
