@@ -235,11 +235,13 @@ impl Workload {
     fn propagate(&mut self) {
         for system in &mut self.systems {
             if let Some(workload_run_if) = &self.run_if {
+                // Each system gets its own copy of the condition, cloning gives it its own tracking cursor.
+                // We keep that copy across runs, so it sees the changes since this system's last evaluation.
                 let workload_fn = workload_run_if.system_fn.clone();
                 system.run_if = match system.run_if.take() {
                     None => Some(workload_fn.to_non_clone()),
                     Some(system_run_if) => Some(Box::new(move |world| {
-                        Ok(workload_fn.clone().run(world)? && (system_run_if)(world)?)
+                        Ok(workload_fn.run(world)? && (system_run_if)(world)?)
                     })),
                 };
                 system

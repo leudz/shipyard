@@ -458,3 +458,227 @@ fn tracking_built_workload() {
     workload.run_with_world(&world).unwrap();
     assert_eq!(world.borrow::<UniqueView<'_, U32>>().unwrap().0, 1);
 }
+
+/// Adds one to the `U16` unique.
+fn count_u16(mut count: UniqueViewMut<'_, U16>) {
+    count.0 += 1;
+}
+
+/// Returns a world tracking `Usize` insertion, with `U32` and `U16` uniques at 0.
+fn cursor_world() -> World {
+    let mut world = World::new_for_test();
+    world.track_insertion::<Usize>();
+    world.add_unique(U32(0));
+    world.add_unique(U16(0));
+
+    world
+}
+
+/// Runs the default workload three times: after an insertion, without one, after another one.
+///
+/// Returns how many times `body` and `count_u16` ran so far, after each run.
+fn cursor_runs(world: &mut World) -> Vec<(u32, u16)> {
+    let mut counts = Vec::new();
+
+    for insert in [true, false, true] {
+        if insert {
+            world.add_entity(Usize(0));
+        }
+        world.run_default_workload().unwrap();
+
+        let first = world.borrow::<UniqueView<'_, U32>>().unwrap().0;
+        let second = world.borrow::<UniqueView<'_, U16>>().unwrap().0;
+        counts.push((first, second));
+    }
+
+    counts
+}
+
+/// Asserts that a workload's condition on insertion tracking lets all its systems run after each insertion,
+/// and none without one.
+#[test]
+fn cursor_top_level() {
+    let mut world = cursor_world();
+    Workload::new("")
+        .with_system(body)
+        .with_system(count_u16)
+        .run_if(inserted)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (1, 1), (2, 2)]);
+}
+
+/// Asserts that a nested workload's constant condition lets all its systems run every time.
+#[test]
+fn cursor_constant() {
+    let mut world = cursor_world();
+    let child = Workload::new("child")
+        .with_system(body)
+        .with_system(count_u16)
+        .run_if(|| true);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (2, 2), (3, 3)]);
+}
+
+/// Does nothing with the `U32` unique, a parent's unrelated work.
+fn unrelated(_: View<'_, U32>) {}
+
+/// Asserts that a nested workload's condition on insertion tracking lets all its systems run
+/// after each insertion, like the same condition on a top-level workload.
+#[test]
+fn cursor_nested() {
+    let mut world = cursor_world();
+    let child = Workload::new("child")
+        .with_system(body)
+        .with_system(count_u16)
+        .run_if(inserted);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (1, 1), (2, 2)]);
+}
+
+/// Asserts that a nested workload's condition on insertion tracking lets both its systems run
+/// after each insertion, with a barrier between them.
+#[test]
+fn cursor_nested_barrier() {
+    let mut world = cursor_world();
+    let child = Workload::new("child")
+        .with_system(body)
+        .with_barrier()
+        .with_system(count_u16)
+        .run_if(inserted);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (1, 1), (2, 2)]);
+}
+
+/// Asserts that a nested workload's condition on insertion tracking lets all its systems run
+/// after each insertion, next to unrelated parent work.
+#[test]
+fn cursor_nested_unrelated() {
+    let mut world = cursor_world();
+    let child = Workload::new("child")
+        .with_system(body)
+        .with_system(count_u16)
+        .run_if(inserted);
+    Workload::new("")
+        .with_system(unrelated)
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (1, 1), (2, 2)]);
+}
+
+/// Asserts that a nested workload's condition on insertion tracking lets all its systems run
+/// after each insertion, and none without one, when each system has its own condition.
+#[test]
+fn cursor_nested_combined() {
+    let mut world = cursor_world();
+    let child = Workload::new("child")
+        .with_system(body.run_if(|| true))
+        .with_system(count_u16.run_if(|| true))
+        .run_if(inserted);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (1, 1), (2, 2)]);
+}
+
+/// Asserts that a nested workload's condition on insertion tracking, chained after another condition,
+/// lets all its systems run after each insertion.
+#[test]
+fn cursor_nested_chained() {
+    let mut world = cursor_world();
+    let child = Workload::new("child")
+        .with_system(body)
+        .with_system(count_u16)
+        .run_if(|| true)
+        .run_if(inserted);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (1, 1), (2, 2)]);
+}
+
+/// Asserts that a nested workload's `skip_if` on insertion tracking skips all its systems
+/// after each insertion, and runs them all without one.
+#[test]
+fn cursor_nested_skip_if() {
+    let mut world = cursor_world();
+    let child = Workload::new("child")
+        .with_system(body)
+        .with_system(count_u16)
+        .skip_if(inserted);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(0, 0), (1, 1), (1, 1)]);
+}
+
+/// Asserts that a workload's condition on insertion tracking, nested two levels deep,
+/// lets all its systems run after each insertion.
+#[test]
+fn cursor_nested_deep() {
+    let mut world = cursor_world();
+    let grandchild = Workload::new("grandchild")
+        .with_system(body)
+        .with_system(count_u16)
+        .run_if(inserted);
+    let child = Workload::new("child").with_workload(grandchild);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+
+    assert_eq!(cursor_runs(&mut world), [(1, 1), (1, 1), (2, 2)]);
+}
+
+/// Asserts that a system condition skipped by its nested workload's false condition
+/// sees the insertion made while it was skipped, once the workload's condition is true.
+#[test]
+fn cursor_skipped_window() {
+    use alloc::sync::Arc;
+    use core::sync::atomic::{AtomicBool, Ordering};
+
+    let mut world = cursor_world();
+    let open = Arc::new(AtomicBool::new(false));
+    let gate = {
+        let open = open.clone();
+        move || open.load(Ordering::Relaxed)
+    };
+    let child = Workload::new("child")
+        .with_system(body.run_if(inserted))
+        .run_if(gate);
+    Workload::new("")
+        .with_workload(child)
+        .add_to_world(&world)
+        .unwrap();
+    let mut runs = Vec::new();
+
+    world.add_entity(Usize(0));
+    world.run_default_workload().unwrap();
+    runs.push(world.borrow::<UniqueView<'_, U32>>().unwrap().0);
+    open.store(true, Ordering::Relaxed);
+    world.run_default_workload().unwrap();
+    runs.push(world.borrow::<UniqueView<'_, U32>>().unwrap().0);
+
+    assert_eq!(runs, [0, 1]);
+}

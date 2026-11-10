@@ -7,7 +7,6 @@ use crate::storage::StorageId;
 use crate::tracking::TrackingTimestamp;
 use crate::world::World;
 use alloc::boxed::Box;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
@@ -130,6 +129,31 @@ into_workload_run_if![
     (EE, 30) (FF, 31)
 ];
 
+/// A workload condition's last run.
+///
+/// Cloning it gives a cursor that hasn't run yet: each system a workload condition is propagated to
+/// tracks the changes since its own last evaluation.
+struct Cursor(AtomicU64);
+
+impl Cursor {
+    fn new() -> Cursor {
+        Cursor(AtomicU64::new(0))
+    }
+
+    /// Moves the cursor to `current` and returns its previous position.
+    fn advance(&self, current: TrackingTimestamp) -> TrackingTimestamp {
+        // Closures call this method instead of using the atomic directly,
+        // that way they capture the whole `Cursor` and cloning them goes through its `Clone`.
+        TrackingTimestamp::new(self.0.swap(current.get(), Ordering::Acquire))
+    }
+}
+
+impl Clone for Cursor {
+    fn clone(&self) -> Cursor {
+        Cursor::new()
+    }
+}
+
 pub trait IntoWorkloadRunIf<B> {
     fn into_workload_run_if(self) -> Result<WorkloadRunIf, error::InvalidSystem>;
 }
@@ -172,11 +196,11 @@ macro_rules! impl_into_workload_run_if {
                     $type::enable_tracking(&mut tracking_to_enable);
                 )+
 
-                let last_run = Arc::new(AtomicU64::new(0));
+                let cursor = Cursor::new();
                 Ok(WorkloadRunIf {
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
-                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
+                        let last_run = cursor.advance(current);
                         Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
                     }),
                     borrow_constraints: borrows,
