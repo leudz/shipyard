@@ -11,7 +11,7 @@ use crate::all_storages::{AllStorages, StorageMaps};
 use crate::component::{Component, Unique};
 use crate::scheduler::info::{DedupedLabels, TypeInfo, WorkloadInfo};
 use crate::scheduler::label::WorkloadLabel;
-use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
+use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIf};
 use crate::scheduler::{
     AsLabel, Batches, IntoWorkload, IntoWorkloadSystem, IntoWorkloadTrySystem, Label, Scheduler,
     WorkloadSystem,
@@ -132,7 +132,7 @@ pub struct Workload {
     pub(super) name: Box<dyn Label>,
     pub(super) tags: Vec<Box<dyn Label>>,
     pub(super) systems: Vec<WorkloadSystem>,
-    pub(super) run_if: Option<Box<dyn WorkloadRunIfFn>>,
+    pub(super) run_if: Option<WorkloadRunIf>,
     pub(super) before_all: DedupedLabels,
     pub(super) after_all: DedupedLabels,
     pub(super) overwritten_name: bool,
@@ -234,14 +234,21 @@ impl Workload {
     /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
     fn propagate(&mut self) {
         for system in &mut self.systems {
-            system.run_if = match (system.run_if.take(), self.run_if.clone()) {
-                (None, None) => None,
-                (None, Some(run_if)) => Some(run_if.to_non_clone()),
-                (Some(run_if), None) => Some(run_if),
-                (Some(system_run_if), Some(workload_run_if)) => Some(Box::new(move |world| {
-                    Ok(workload_run_if.clone().run(world)? && (system_run_if)(world)?)
-                })),
-            };
+            if let Some(workload_run_if) = &self.run_if {
+                let workload_fn = workload_run_if.system_fn.clone();
+                system.run_if = match system.run_if.take() {
+                    None => Some(workload_fn.to_non_clone()),
+                    Some(system_run_if) => Some(Box::new(move |world| {
+                        Ok(workload_fn.clone().run(world)? && (system_run_if)(world)?)
+                    })),
+                };
+                system
+                    .run_if_borrow_constraints
+                    .extend(workload_run_if.borrow_constraints.iter().cloned());
+                system
+                    .tracking_to_enable
+                    .extend(workload_run_if.tracking_to_enable.iter().copied());
+            }
 
             system.tags.extend(self.tags.iter().cloned());
 

@@ -143,8 +143,13 @@ pub(super) fn create_workload(
         return Err(err);
     }
 
+    // The top-level condition isn't propagated to the systems, so we collect its tracking here.
+    if let Some(workload_run_if) = &workload_run_if {
+        tracking_to_enable.extend(workload_run_if.tracking_to_enable.iter().copied());
+    }
+
     let mut batches = Batches {
-        workload_run_if,
+        workload_run_if: workload_run_if.map(|workload_run_if| workload_run_if.system_fn),
         ..Default::default()
     };
 
@@ -319,6 +324,8 @@ fn insert_systems_in_scheduler(
                     display_name,
                     system_fn,
                     borrow_constraints,
+                    // Conditions don't take part in scheduling yet.
+                    run_if_borrow_constraints: _,
                     mut tracking_to_enable,
                     generator,
                     run_if,

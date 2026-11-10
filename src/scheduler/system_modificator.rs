@@ -2,6 +2,7 @@ use crate::borrow::{BorrowInfo, WorldBorrow};
 use crate::component::{Component, Unique};
 use crate::error;
 use crate::scheduler::into_workload_run_if::IntoRunIf;
+use crate::scheduler::system::RunIf;
 use crate::scheduler::{AsLabel, IntoWorkloadSystem, WorkloadSystem};
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
@@ -125,12 +126,9 @@ where
 {
     #[track_caller]
     fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
-        let mut system = self.into_workload_system().unwrap();
-        let run_if = run_if.into_workload_run_if().unwrap();
+        let system = self.into_workload_system().unwrap();
 
-        system.run_if = Some(run_if.system_fn);
-
-        system
+        system.run_if(run_if)
     }
     #[track_caller]
     fn skip_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
@@ -201,15 +199,22 @@ where
 impl SystemModificator<WorkloadSystem, ()> for WorkloadSystem {
     #[track_caller]
     fn run_if<RunB, Run: IntoRunIf<RunB>>(mut self, run_if: Run) -> WorkloadSystem {
-        let run_if = run_if.into_workload_run_if().unwrap();
+        let RunIf {
+            system_fn,
+            mut borrow_constraints,
+            mut tracking_to_enable,
+        } = run_if.into_workload_run_if().unwrap();
 
         self.run_if = if let Some(prev_run_if) = self.run_if {
             Some(Box::new(move |world| {
-                Ok((prev_run_if)(world)? && (run_if.system_fn)(world)?)
+                Ok((prev_run_if)(world)? && (system_fn)(world)?)
             }))
         } else {
-            Some(run_if.system_fn)
+            Some(system_fn)
         };
+        self.run_if_borrow_constraints
+            .append(&mut borrow_constraints);
+        self.tracking_to_enable.append(&mut tracking_to_enable);
 
         self
     }
@@ -275,12 +280,9 @@ macro_rules! impl_into_workload_system {
 
             #[track_caller]
             fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
-                let run_if = run_if.into_workload_run_if().unwrap();
+                let system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
-                system.run_if = Some(run_if.system_fn);
-
-                system
+                system.run_if(run_if)
             }
             #[track_caller]
             fn skip_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {

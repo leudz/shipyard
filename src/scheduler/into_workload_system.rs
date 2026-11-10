@@ -52,6 +52,7 @@ where
             before: Vec::new(),
             unique_id: 0,
             run_if: None,
+            run_if_borrow_constraints: Vec::new(),
             require_in_workload: DedupedLabels::new(),
             require_before: DedupedLabels::new(),
             require_after: DedupedLabels::new(),
@@ -167,6 +168,7 @@ macro_rules! impl_into_workload_system {
                         TypeId::of::<Func>()
                     }),
                     run_if: None,
+                    run_if_borrow_constraints: Vec::new(),
                     require_in_workload: DedupedLabels::new(),
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),

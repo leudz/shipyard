@@ -2,7 +2,7 @@ use crate::all_storages::AllStorages;
 use crate::borrow::{BorrowInfo, Mutability, WorldBorrow};
 use crate::error;
 use crate::scheduler::TypeInfo;
-use crate::scheduler::system::{RunIf, WorkloadRunIfFn};
+use crate::scheduler::system::{RunIf, WorkloadRunIf};
 use crate::storage::StorageId;
 use crate::tracking::TrackingTimestamp;
 use crate::world::World;
@@ -24,6 +24,8 @@ where
     fn into_workload_run_if(self) -> Result<RunIf, error::InvalidSystem> {
         Ok(RunIf {
             system_fn: Box::new(move |_: &World| Ok((self)())),
+            borrow_constraints: Vec::new(),
+            tracking_to_enable: Vec::new(),
         })
     }
 }
@@ -88,6 +90,11 @@ macro_rules! impl_into_workload_run_if {
 
                 validate_borrows(&borrows)?;
 
+                let mut tracking_to_enable = Vec::new();
+                $(
+                    $type::enable_tracking(&mut tracking_to_enable);
+                )+
+
                 let last_run = AtomicU64::new(0);
                 Ok(RunIf {
                     system_fn: Box::new(move |world: &World| {
@@ -95,6 +102,8 @@ macro_rules! impl_into_workload_run_if {
                         let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
                         Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
                     }),
+                    borrow_constraints: borrows,
+                    tracking_to_enable,
                 })
             }
         }
@@ -122,15 +131,19 @@ into_workload_run_if![
 ];
 
 pub trait IntoWorkloadRunIf<B> {
-    fn into_workload_run_if(self) -> Result<Box<dyn WorkloadRunIfFn>, error::InvalidSystem>;
+    fn into_workload_run_if(self) -> Result<WorkloadRunIf, error::InvalidSystem>;
 }
 
 impl<F> IntoWorkloadRunIf<Nothing> for F
 where
     F: 'static + Send + Sync + Clone + Fn() -> bool,
 {
-    fn into_workload_run_if(self) -> Result<Box<dyn WorkloadRunIfFn>, error::InvalidSystem> {
-        Ok(Box::new(move |_: &World| Ok((self)())))
+    fn into_workload_run_if(self) -> Result<WorkloadRunIf, error::InvalidSystem> {
+        Ok(WorkloadRunIf {
+            system_fn: Box::new(move |_: &World| Ok((self)())),
+            borrow_constraints: Vec::new(),
+            tracking_to_enable: Vec::new(),
+        })
     }
 }
 
@@ -146,7 +159,7 @@ macro_rules! impl_into_workload_run_if {
                 Fn($($type),+) -> bool
                 + Fn($($type::WorldView<'a>),+) -> bool {
 
-            fn into_workload_run_if(self) -> Result<Box<dyn WorkloadRunIfFn>, error::InvalidSystem> {
+            fn into_workload_run_if(self) -> Result<WorkloadRunIf, error::InvalidSystem> {
                 let mut borrows = Vec::new();
                 $(
                     $type::borrow_info(&mut borrows);
@@ -154,12 +167,21 @@ macro_rules! impl_into_workload_run_if {
 
                 validate_borrows(&borrows)?;
 
+                let mut tracking_to_enable = Vec::new();
+                $(
+                    $type::enable_tracking(&mut tracking_to_enable);
+                )+
+
                 let last_run = Arc::new(AtomicU64::new(0));
-                Ok(Box::new(move |world: &World| {
-                    let current = world.get_current();
-                    let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
-                    Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
-                }))
+                Ok(WorkloadRunIf {
+                    system_fn: Box::new(move |world: &World| {
+                        let current = world.get_current();
+                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
+                        Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
+                    }),
+                    borrow_constraints: borrows,
+                    tracking_to_enable,
+                })
             }
         }
     }

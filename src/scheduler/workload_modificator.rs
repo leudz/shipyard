@@ -113,12 +113,9 @@ impl WorkloadModificator for Workload {
     fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(mut self, run_if: Run) -> Workload {
         let run_if = run_if.into_workload_run_if().unwrap();
 
-        self.run_if = if let Some(prev_run_if) = self.run_if.take() {
-            Some(Box::new(move |world: &World| {
-                Ok(prev_run_if.run(world)? && run_if.run(world)?)
-            }))
-        } else {
-            Some(run_if)
+        self.run_if = match self.run_if.take() {
+            Some(prev_run_if) => Some(prev_run_if.and(run_if)),
+            None => Some(run_if),
         };
 
         self
@@ -147,14 +144,12 @@ impl WorkloadModificator for Workload {
     fn skip_if<RunB, Run: IntoWorkloadRunIf<RunB>>(mut self, should_skip: Run) -> Self {
         let mut should_skip = should_skip.into_workload_run_if().unwrap();
 
-        should_skip = Box::new(move |world: &World| should_skip.run(world).map(Not::not));
+        let skip = should_skip.system_fn;
+        should_skip.system_fn = Box::new(move |world: &World| skip.run(world).map(Not::not));
 
-        self.run_if = if let Some(prev_run_if) = self.run_if.take() {
-            Some(Box::new(move |world: &World| {
-                Ok(prev_run_if.run(world)? && should_skip.run(world)?)
-            }))
-        } else {
-            Some(should_skip)
+        self.run_if = match self.run_if.take() {
+            Some(prev_run_if) => Some(prev_run_if.and(should_skip)),
+            None => Some(should_skip),
         };
 
         self

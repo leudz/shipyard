@@ -43,7 +43,9 @@ pub struct WorkloadSystem {
     pub system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
     /// access information
     pub borrow_constraints: Vec<TypeInfo>,
-    /// Generates the tracking to enable for this system's views
+    /// Access information of the system's conditions, kept apart from `borrow_constraints`.
+    pub run_if_borrow_constraints: Vec<TypeInfo>,
+    /// Generates the tracking to enable for this system's views and its conditions' views
     pub tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
     /// Generates constraints and system type id
     pub generator: Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>,
@@ -75,9 +77,37 @@ impl Extend<WorkloadSystem> for Workload {
     }
 }
 
+/// A system condition, with what it borrows and the tracking its views need.
 #[allow(clippy::type_complexity)]
 pub struct RunIf {
     pub(crate) system_fn: Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>,
+    pub(crate) borrow_constraints: Vec<TypeInfo>,
+    pub(crate) tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+}
+
+/// A workload condition, with what it borrows and the tracking its views need.
+#[derive(Clone)]
+#[allow(clippy::type_complexity)]
+pub struct WorkloadRunIf {
+    pub(crate) system_fn: Box<dyn WorkloadRunIfFn>,
+    pub(crate) borrow_constraints: Vec<TypeInfo>,
+    pub(crate) tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+}
+
+impl WorkloadRunIf {
+    /// Combines both conditions, `other` only runs when `self` returns `true`.
+    pub(crate) fn and(mut self, mut other: WorkloadRunIf) -> WorkloadRunIf {
+        let first = self.system_fn;
+        let second = other.system_fn;
+
+        self.system_fn = Box::new(move |world: &World| Ok(first.run(world)? && second.run(world)?));
+        self.borrow_constraints
+            .append(&mut other.borrow_constraints);
+        self.tracking_to_enable
+            .append(&mut other.tracking_to_enable);
+
+        self
+    }
 }
 
 pub trait WorkloadRunIfFn: Send + Sync + 'static {
