@@ -4,7 +4,10 @@
 
 use core::error::Error;
 use core::fmt::{Display, Formatter};
+use shipyard::advanced::StorageId;
 use shipyard::error::{self, SystemError};
+use shipyard::scheduler::Label;
+use shipyard::{Component, View, ViewMut, Workload, World, track};
 
 /// Error implementing only the core trait.
 #[derive(Debug, PartialEq)]
@@ -146,4 +149,190 @@ fn core_serde_errors() {
             &mut serde_json::Deserializer<serde_json::de::StrRead<'static>>,
         >,
     >();
+}
+
+/// Asserts that `Run` and `RunWorkload` can be sent and shared between threads.
+#[test]
+fn run_errors_send_sync() {
+    send_sync::<error::Run>();
+    send_sync::<error::RunWorkload>();
+}
+
+/// Returns the error of the system `"system"` returning `Typed(value)`.
+fn custom(value: u32) -> error::RunWorkload {
+    let label: Box<dyn Label> = Box::new("system");
+
+    error::RunWorkload::Run((label, error::Run::from_custom(Typed(value))))
+}
+
+/// Asserts that a system's custom error is the source of its `Run`, itself the source of the workload error.
+#[test]
+fn custom_chain() {
+    let failure = custom(1);
+
+    let run = failure.source().unwrap().downcast_ref::<error::Run>();
+    let typed = run.unwrap().source().unwrap().downcast_ref::<Typed>();
+
+    assert_eq!(typed, Some(&Typed(1)));
+}
+
+/// Asserts that `custom_error` returns the system's error.
+#[test]
+fn custom_error() {
+    let typed = custom(2).custom_error().unwrap().downcast::<Typed>();
+
+    assert_eq!(typed.ok(), Some(Box::new(Typed(2))));
+}
+
+/// Asserts that a custom view's error is the source of its `GetStorage`.
+#[test]
+fn get_storage_custom() {
+    let get_storage = error::GetStorage::from_custom(Typed(3));
+
+    assert_eq!(
+        get_storage.source().unwrap().downcast_ref::<Typed>(),
+        Some(&Typed(3))
+    );
+}
+
+/// Asserts that a failed regroup's `GetStorage` is the source of the workload error,
+/// and its borrow error is the source of the `GetStorage`.
+#[test]
+fn regroup_chain() {
+    let failure = error::RunWorkload::Regroup(error::GetStorage::Entities(error::Borrow::Unique));
+
+    let get_storage = failure
+        .source()
+        .unwrap()
+        .downcast_ref::<error::GetStorage>();
+    let borrow = get_storage
+        .unwrap()
+        .source()
+        .unwrap()
+        .downcast_ref::<error::Borrow>();
+
+    assert_eq!(borrow, Some(&error::Borrow::Unique));
+}
+
+/// Component the workloads below borrow.
+struct Value;
+
+impl Component for Value {
+    type Tracking = track::Untracked;
+}
+
+/// Reads `Value`.
+fn read(_: View<'_, Value>) {}
+
+/// Returns the error of a workload reading `Value` while it's exclusively borrowed.
+fn borrowed() -> error::RunWorkload {
+    let world = World::builder()
+        .with_custom_lock::<parking_lot::RawRwLock>()
+        .build();
+    Workload::new("read")
+        .with_system(read)
+        .add_to_world(&world)
+        .unwrap();
+    let _value = world.borrow::<ViewMut<'_, Value>>().unwrap();
+
+    world.run_workload("read").unwrap_err()
+}
+
+/// Asserts that a workload failing to borrow a storage has the chain
+/// `RunWorkload` -> `Run` -> `GetStorage` -> `Borrow`, and that the borrow error is the last link.
+#[test]
+fn borrow_chain() {
+    let failure = borrowed();
+
+    let run = failure.source().unwrap().downcast_ref::<error::Run>();
+    let get_storage = run
+        .unwrap()
+        .source()
+        .unwrap()
+        .downcast_ref::<error::GetStorage>();
+    let borrow = get_storage
+        .unwrap()
+        .source()
+        .unwrap()
+        .downcast_ref::<error::Borrow>();
+
+    assert_eq!(borrow, Some(&error::Borrow::Shared));
+    assert!(borrow.unwrap().source().is_none());
+}
+
+/// Asserts that a workload failing to borrow a storage has no custom error.
+#[test]
+fn borrow_custom_error() {
+    assert!(borrowed().custom_error().is_none());
+}
+
+/// Asserts that the variants without an underlying cause have no source.
+#[test]
+fn leaves() {
+    let missing = error::GetStorage::MissingStorage {
+        name: None,
+        id: StorageId::of::<Value>(),
+    };
+    let tracking = error::GetStorage::TrackingNotEnabled {
+        name: None,
+        id: StorageId::of::<Value>(),
+        tracking: "Insertion",
+    };
+
+    assert!(missing.source().is_none());
+    assert!(tracking.source().is_none());
+    assert!(error::RunWorkload::Scheduler.source().is_none());
+    assert!(error::RunWorkload::MissingWorkload.source().is_none());
+}
+
+/// Asserts that a workload error converts into an `anyhow::Error`, which walks the whole chain.
+#[test]
+fn anyhow_chain() {
+    let failure: anyhow::Error = borrowed().into();
+
+    assert_eq!(failure.chain().count(), 4);
+    assert_eq!(
+        failure.root_cause().downcast_ref::<error::Borrow>(),
+        Some(&error::Borrow::Shared)
+    );
+}
+
+/// Asserts that a custom error's `Display` only shows each level, `Debug` the whole message.
+#[test]
+fn custom_formatting() {
+    let failure = custom(4);
+    let run = failure.source().unwrap();
+
+    assert_eq!(
+        [
+            format!("{failure}"),
+            format!("{run}"),
+            format!("{failure:?}")
+        ],
+        [
+            "system failed.",
+            "The system returned an error.",
+            "system failed: run failed with a custom error, Typed(4).",
+        ]
+    );
+}
+
+/// Asserts that a borrow error's `Display` only shows each level, `Debug` the whole message.
+#[test]
+fn borrow_formatting() {
+    let failure = error::Run::GetStorage(error::GetStorage::Entities(error::Borrow::Unique));
+    let get_storage = failure.source().unwrap();
+
+    assert_eq!(
+        [
+            format!("{failure}"),
+            format!("{get_storage}"),
+            format!("{failure:?}")
+        ],
+        [
+            "Couldn't access a storage.",
+            "Cannot borrow Entities storage.",
+            "Cannot mutably borrow Entities storage while it's already borrowed.",
+        ]
+    );
 }

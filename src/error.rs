@@ -78,24 +78,13 @@ pub enum GetStorage {
         tracking: &'static str,
     },
     /// Error returned by a custom view.
-    #[cfg(feature = "std")]
-    Custom(Box<dyn Error + Send + Sync>),
-    /// Error returned by a custom view.
-    #[cfg(not(feature = "std"))]
-    Custom(Box<dyn core::any::Any + Send>),
+    Custom(Box<dyn Error + Send + Sync + 'static>),
 }
 
 impl GetStorage {
-    #[cfg(feature = "std")]
-    #[allow(missing_docs)]
-    pub fn from_custom<E: Into<Box<dyn Error + Send + Sync>>>(error: E) -> GetStorage {
+    /// Wraps an error returned by a custom view.
+    pub fn from_custom<E: Into<Box<dyn Error + Send + Sync + 'static>>>(error: E) -> GetStorage {
         GetStorage::Custom(error.into())
-    }
-
-    #[cfg(not(feature = "std"))]
-    #[allow(missing_docs)]
-    pub fn from_custom<E: core::any::Any + Send>(error: E) -> GetStorage {
-        GetStorage::Custom(Box::new(error))
     }
 
     /// The error for a failed borrow of the `S` storage.
@@ -154,7 +143,17 @@ impl PartialEq for GetStorage {
 
 impl Eq for GetStorage {}
 
-impl Error for GetStorage {}
+impl Error for GetStorage {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            GetStorage::AllStoragesBorrow(borrow)
+            | GetStorage::StorageBorrow { borrow, .. }
+            | GetStorage::Entities(borrow) => Some(borrow),
+            GetStorage::Custom(error) => Some(&**error),
+            GetStorage::MissingStorage { .. } | GetStorage::TrackingNotEnabled { .. } => None,
+        }
+    }
+}
 
 impl Debug for GetStorage {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
@@ -211,7 +210,22 @@ impl Debug for GetStorage {
 
 impl Display for GetStorage {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, f)
+        // Variants with a source only describe their own level, the source describes the cause.
+        // `Debug` keeps the whole message.
+        match self {
+            GetStorage::AllStoragesBorrow(_) => f.write_str("Cannot borrow AllStorages."),
+            GetStorage::StorageBorrow {
+                name: Some(name), ..
+            } => f.write_fmt(format_args!("Cannot borrow {} storage.", name)),
+            GetStorage::StorageBorrow { name: None, id, .. } => {
+                f.write_fmt(format_args!("Cannot borrow {:?} storage.", id))
+            }
+            GetStorage::Entities(_) => f.write_str("Cannot borrow Entities storage."),
+            GetStorage::Custom(_) => f.write_str("A custom view failed."),
+            GetStorage::MissingStorage { .. } | GetStorage::TrackingNotEnabled { .. } => {
+                Debug::fmt(self, f)
+            }
+        }
     }
 }
 
@@ -486,25 +500,24 @@ pub enum RunWorkload {
 }
 
 impl RunWorkload {
-    /// Helper function to get back a custom error.
-    #[cfg(feature = "std")]
-    pub fn custom_error(self) -> Option<Box<dyn Error + Send + Sync>> {
+    /// Returns the error a system returned, `None` for any other failure.
+    pub fn custom_error(self) -> Option<Box<dyn Error + Send + Sync + 'static>> {
         match self {
-            RunWorkload::Run((_, Run::Custom(error))) => Some(error),
-            _ => None,
-        }
-    }
-    /// Helper function to get back a custom error.
-    #[cfg(not(feature = "std"))]
-    pub fn custom_error(self) -> Option<Box<dyn core::any::Any + Send>> {
-        match self {
-            RunWorkload::Run((_, Run::Custom(error))) => Some(error),
+            RunWorkload::Run((_, Run::Custom(error))) => Some(error.into_inner()),
             _ => None,
         }
     }
 }
 
-impl Error for RunWorkload {}
+impl Error for RunWorkload {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            RunWorkload::Run((_, run)) => Some(run),
+            RunWorkload::Regroup(get_storage) => Some(get_storage),
+            RunWorkload::Scheduler | RunWorkload::MissingWorkload => None,
+        }
+    }
+}
 
 impl Debug for RunWorkload {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
@@ -525,7 +538,15 @@ impl Debug for RunWorkload {
 
 impl Display for RunWorkload {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, f)
+        // Variants with a source only describe their own level, the source describes the cause.
+        // `Debug` keeps the whole message.
+        match self {
+            RunWorkload::Run((system_name, _)) => {
+                f.write_fmt(format_args!("{:?} failed.", system_name))
+            }
+            RunWorkload::Regroup(_) => f.write_str("Workload regroup failed."),
+            RunWorkload::Scheduler | RunWorkload::MissingWorkload => Debug::fmt(self, f),
+        }
     }
 }
 
@@ -538,11 +559,7 @@ pub enum Run {
     /// Failed to borrow one of the storage.
     GetStorage(GetStorage),
     /// Error returned by the system.
-    #[cfg(feature = "std")]
-    Custom(Box<dyn Error + Send + Sync>),
-    /// Error returned by the system.
-    #[cfg(not(feature = "std"))]
-    Custom(Box<dyn core::any::Any + Send>),
+    Custom(SystemError),
 }
 
 impl From<GetStorage> for Run {
@@ -552,15 +569,9 @@ impl From<GetStorage> for Run {
 }
 
 impl Run {
-    #[cfg(feature = "std")]
-    #[allow(missing_docs)]
-    pub fn from_custom<E: Into<Box<dyn Error + Send + Sync>>>(error: E) -> Run {
-        Run::Custom(error.into())
-    }
-    #[cfg(not(feature = "std"))]
-    #[allow(missing_docs)]
-    pub fn from_custom<E: core::any::Any + Send>(error: E) -> Run {
-        Run::Custom(Box::new(error))
+    /// Wraps an error returned by a system.
+    pub fn from_custom<E: Into<Box<dyn Error + Send + Sync + 'static>>>(error: E) -> Run {
+        Run::Custom(SystemError::from(error))
     }
 }
 
@@ -575,7 +586,15 @@ impl PartialEq for Run {
     }
 }
 
-impl Error for Run {}
+impl Error for Run {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Run::GetStorage(get_storage) => Some(get_storage),
+            // We skip `SystemError`, it's only a wrapper.
+            Run::Custom(error) => Some(error.as_error()),
+        }
+    }
+}
 
 impl Debug for Run {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
@@ -590,7 +609,12 @@ impl Debug for Run {
 
 impl Display for Run {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, f)
+        // Both variants have a source, we only describe this level, the source describes the cause.
+        // `Debug` keeps the whole message.
+        match self {
+            Run::GetStorage(_) => f.write_str("Couldn't access a storage."),
+            Run::Custom(_) => f.write_str("The system returned an error."),
+        }
     }
 }
 
