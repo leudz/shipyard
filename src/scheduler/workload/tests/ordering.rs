@@ -260,6 +260,31 @@ fn before_after_borrow_conflict() {
     assert_eq!(batches.sequential, &[System(0), System(1), System(0)]);
 }
 
+/// Asserts that an `after_all` label no other system has doesn't opt a system out of implicit ordering,
+/// so the writer stays between the two readers.
+#[test]
+fn after_all_absent() {
+    fn read(_: View<'_, U32>) {}
+    fn write(_: ViewMut<'_, U32>) {}
+
+    let (workload, _) = (read, write.after_all("not present"), read)
+        .into_workload()
+        .rename("")
+        .build()
+        .unwrap();
+
+    let batches = &workload.batches;
+    assert_eq!(
+        batches.parallel,
+        &[
+            (None, vec![System(0)]),
+            (None, vec![System(1)]),
+            (None, vec![System(0)])
+        ]
+    );
+    assert_eq!(batches.sequential, &[System(0), System(1), System(0)]);
+}
+
 #[test]
 fn contains() {
     fn type_name_of<T: 'static>(_: &T) -> &'static str {

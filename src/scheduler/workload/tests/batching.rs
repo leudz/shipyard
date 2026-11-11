@@ -723,3 +723,255 @@ fn schedule_names() {
     assert_eq!(expected.batch("read_u32"), 0);
     assert_eq!(expected.count("write_usize"), (2, 2));
 }
+
+/// Asserts that a reader following both writers stays strictly after the second one,
+/// even though it borrows an unrelated storage.
+#[test]
+fn release_after_both() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(write_x1.after_all(start))
+        .with_system(write_x2.after_all(start))
+        .with_system(read_y.after_all(write_x1).after_all(write_x2));
+
+    let schedule = Schedule::built(workload);
+
+    assert_eq!(
+        schedule.parallel,
+        vec![
+            steps(&["start"]),
+            steps(&["write_x1"]),
+            steps(&["write_x2"]),
+            steps(&["read_y"]),
+        ]
+    );
+}
+
+/// Asserts that a diamond keeps its join strictly after both branches,
+/// and the branches share a batch since they borrow different storages.
+#[test]
+fn release_diamond() {
+    fn start() {}
+    fn left(_: ViewMut<'_, Usize>) {}
+    fn right(_: ViewMut<'_, U32>) {}
+    fn join(_: View<'_, U16>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(left.after_all(start))
+        .with_system(right.after_all(start))
+        .with_system(join.after_all(left).after_all(right));
+
+    let schedule = Schedule::built(workload);
+
+    assert_eq!(
+        schedule.parallel,
+        vec![
+            steps(&["start"]),
+            steps(&["left", "right"]),
+            steps(&["join"]),
+        ]
+    );
+}
+
+/// Asserts that a barrier keeps a reader of an unrelated storage after the second writer,
+/// even though the reader only names the first writer.
+#[test]
+fn release_barrier() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(write_x1.after_all(start))
+        .with_system(write_x2.after_all(start))
+        .with_barrier()
+        .with_system(read_y.after_all(write_x1));
+
+    let schedule = Schedule::built(workload);
+
+    assert!(schedule.batch("read_y") > schedule.batch("write_x2"));
+}
+
+/// Asserts that a ready reader declared before the conflicting writers joins the first batch.
+#[test]
+fn ready_reader_first() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(read_y.after_all(start))
+        .with_system(write_x1.after_all(start))
+        .with_system(write_x2.after_all(start));
+
+    let schedule = Schedule::built(workload);
+
+    assert_eq!(
+        schedule.parallel,
+        vec![
+            steps(&["start"]),
+            steps(&["read_y", "write_x1"]),
+            steps(&["write_x2"]),
+        ]
+    );
+}
+
+/// Asserts that a ready reader declared between the conflicting writers joins the first batch.
+#[test]
+fn ready_reader_middle() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(write_x1.after_all(start))
+        .with_system(read_y.after_all(start))
+        .with_system(write_x2.after_all(start));
+
+    let schedule = Schedule::built(workload);
+
+    assert_eq!(
+        schedule.parallel,
+        vec![
+            steps(&["start"]),
+            steps(&["write_x1", "read_y"]),
+            steps(&["write_x2"]),
+        ]
+    );
+}
+
+/// Asserts that a ready reader of the writers' storage never shares a batch with either writer.
+#[test]
+fn ready_reader_conflicting() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_x(_: View<'_, Usize>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(write_x1.after_all(start))
+        .with_system(write_x2.after_all(start))
+        .with_system(read_x.after_all(start));
+
+    let schedule = Schedule::built(workload);
+
+    assert_ne!(schedule.batch("read_x"), schedule.batch("write_x1"));
+    assert_ne!(schedule.batch("read_x"), schedule.batch("write_x2"));
+}
+
+/// Asserts that a reader following the second writer stays strictly after it,
+/// even though it borrows an unrelated storage.
+#[test]
+fn ready_reader_after_second() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(write_x1.after_all(start))
+        .with_system(write_x2.after_all(start))
+        .with_system(read_y.after_all(write_x2));
+
+    let schedule = Schedule::built(workload);
+
+    assert!(schedule.batch("read_y") > schedule.batch("write_x2"));
+}
+
+/// Asserts that implicit ordering keeps a later unrelated reader after both writers
+/// in the sequential order, and never in an earlier batch than the second writer.
+///
+/// Without `after_all` the reader gets a soft edge to `write_x2`: it may share its batch,
+/// but moving it next to `write_x1` would run it before its sequential predecessor.
+#[test]
+fn ready_reader_implicit() {
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(write_x1)
+        .with_system(write_x2)
+        .with_system(read_y);
+
+    let schedule = Schedule::built(workload);
+
+    assert_eq!(
+        schedule.sequential,
+        steps(&["write_x1", "write_x2", "read_y"])
+    );
+    assert!(schedule.batch("read_y") >= schedule.batch("write_x2"));
+}
+
+/// Asserts that a reader waiting only on the first of two conflicting writers
+/// joins the second writer's batch.
+///
+/// The reader borrows an unrelated storage and has no edge to the second writer,
+/// so once the first writer's batch is done nothing keeps it out of the next one.
+#[test]
+fn release_after_writer() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(write_x1.after_all(start))
+        .with_system(write_x2.after_all(start))
+        .with_system(read_y.after_all(write_x1));
+
+    let schedule = Schedule::built(workload);
+
+    assert_eq!(
+        schedule.parallel,
+        vec![
+            steps(&["start"]),
+            steps(&["write_x1"]),
+            steps(&["write_x2", "read_y"]),
+        ]
+    );
+}
+
+/// Asserts that a reader ready alongside two conflicting writers joins the first writer's batch,
+/// rather than waiting for the second writer's.
+///
+/// All three only follow `start`, and the reader borrows an unrelated storage.
+#[test]
+fn ready_reader_last() {
+    fn start() {}
+    fn write_x1(_: ViewMut<'_, Usize>) {}
+    fn write_x2(_: ViewMut<'_, Usize>) {}
+    fn read_y(_: View<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(start)
+        .with_system(write_x1.after_all(start))
+        .with_system(write_x2.after_all(start))
+        .with_system(read_y.after_all(start));
+
+    let schedule = Schedule::built(workload);
+
+    assert_eq!(
+        schedule.parallel,
+        vec![
+            steps(&["start"]),
+            steps(&["write_x1", "read_y"]),
+            steps(&["write_x2"]),
+        ]
+    );
+}

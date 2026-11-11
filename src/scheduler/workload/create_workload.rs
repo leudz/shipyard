@@ -10,9 +10,9 @@ use crate::scheduler::{
 };
 use crate::world::World;
 use alloc::boxed::Box;
+use alloc::collections::VecDeque;
 use alloc::format;
 // use alloc::string::String;
-use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::hash::Hash;
@@ -136,6 +136,7 @@ pub(super) fn create_workload(
     } = builder;
 
     propagate_barriers(&mut to_be_placed_systems, barriers);
+    remove_absent_labels(&mut to_be_placed_systems);
     propagate_implicit_hard_ordering(&mut to_be_placed_systems);
     propagate_implicit_soft_ordering(&mut to_be_placed_systems);
     map_before_all_to_after(&mut to_be_placed_systems);
@@ -479,6 +480,30 @@ fn propagate_barriers(to_be_placed_systems: &mut [ToBePlacedSystem], barriers: V
     }
 }
 
+/// Removes the `before_all` and `after_all` labels no other system of the workload has.
+///
+/// These labels can't order anything, a system with only those keeps its implicit ordering.
+fn remove_absent_labels(to_be_placed_systems: &mut [ToBePlacedSystem]) {
+    for i in 0..to_be_placed_systems.len() {
+        let mut before_all = core::mem::take(&mut to_be_placed_systems[i].before_all);
+        let mut after_all = core::mem::take(&mut to_be_placed_systems[i].after_all);
+
+        let is_present = |label: &dyn Label| {
+            to_be_placed_systems
+                .iter()
+                .enumerate()
+                .any(|(j, other_system)| {
+                    j != i && other_system.tags.iter().any(|tag| **tag == *label)
+                })
+        };
+        before_all.retain(|label| is_present(&**label));
+        after_all.retain(|label| is_present(&**label));
+
+        to_be_placed_systems[i].before_all = before_all;
+        to_be_placed_systems[i].after_all = after_all;
+    }
+}
+
 /// Translate the implicit ordering's rules to tags and after constraints.
 fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem]) {
     for i in (1..to_be_placed_systems.len()).rev() {
@@ -635,152 +660,36 @@ fn map_before_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
 
 /// Move systems around until all constraints are satisfied.
 ///
-/// Use Kahn's algorithm to find a topological ordering.
+/// Use Kahn's algorithm to find a topological ordering, one batch at a time.
 fn order_systems(
     to_be_placed_systems: &mut Vec<ToBePlacedSystem>,
     batches: &mut Batches,
 ) -> Result<Vec<BatchInfo>, error::AddWorkload> {
-    if to_be_placed_systems.is_empty() {
-        return Ok(Vec::new());
-    }
-
     for system in &mut *to_be_placed_systems {
         system.after_info = system.hard_after.clone();
     }
 
-    let mut constraint_free_systems = alloc::collections::VecDeque::new();
-
-    // Create a list with systems without constraints.
+    // Systems free of constraints can go in the batch being filled.
     // That can be the first system in the workload or systems
     // that do not borrow any component.
-    constraint_free_systems.extend(to_be_placed_systems.extract_if(.., |system| {
+    let mut ready = VecDeque::new();
+    ready.extend(to_be_placed_systems.extract_if(.., |system| {
         system.hard_after.is_empty() && system.soft_after.is_empty()
     }));
 
-    let mut batches_info = vec![BatchInfo {
-        systems: (None, Vec::new()),
-        regroups: Vec::new(),
-    }];
-    batches.parallel.push((None, Vec::new()));
-    batches.parallel_run_if.push((usize::MAX, Vec::new()));
-    batches.parallel_occurrences.push((usize::MAX, Vec::new()));
-    let mut latest_batch = &mut batches.parallel[0];
-    let mut latest_batch_run_if = &mut batches.parallel_run_if[0];
-    let mut latest_batch_occurrences = &mut batches.parallel_occurrences[0];
-    let mut latest_batch_info = &mut batches_info[0];
-    let mut latest_batch_footprints = BatchFootprints::default();
-    // Occurrences placed since we last released hard edges.
-    let mut placed = Vec::new();
-    loop {
-        while let Some(mut system) = constraint_free_systems.pop_front() {
-            batches.sequential.push(Step::System(system.index));
-            batches.sequential_occurrences.push(system.occurrence);
+    let mut batches_info = Vec::new();
+    while !ready.is_empty() {
+        let placed = fill_batch(&mut ready, to_be_placed_systems, batches, &mut batches_info);
 
-            let conflict = check_can_go_in_parallel_batch(&latest_batch_footprints, &system);
-            if conflict.is_some() {
-                batches.parallel.push((None, Vec::new()));
-                batches.parallel_run_if.push((usize::MAX, Vec::new()));
-                batches.parallel_occurrences.push((usize::MAX, Vec::new()));
-                batches_info.push(BatchInfo {
-                    systems: (None, Vec::new()),
-                    regroups: Vec::new(),
-                });
-                system.confict = conflict;
-
-                latest_batch = batches.parallel.last_mut().unwrap();
-                latest_batch_run_if = batches.parallel_run_if.last_mut().unwrap();
-                latest_batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
-                latest_batch_info = batches_info.last_mut().unwrap();
-                latest_batch_footprints = BatchFootprints::default();
-            }
-
-            // A condition needing the calling thread takes its system along, they run together.
-            let is_single_system = system.footprint.iter().any(|constraint| {
-                !constraint.thread_safe || constraint.storage_id == TypeId::of::<AllStorages>()
-            });
-
-            if is_single_system {
-                latest_batch_footprints.single = Some((system.index, system.footprint));
-                latest_batch.0 = Some(Step::System(system.index));
-                latest_batch_occurrences.0 = system.occurrence;
-                latest_batch_info.systems.0 = Some(SystemInfo {
-                    name: format!("{:?}", system.display_name),
-                    borrow: system.borrow_constraints,
-                    conflict: system.confict,
-                    after: system.after_info.0,
-                    after_all: system.after_all_info,
-                    before_all: system.before_all_info,
-                    unique_id: system.index,
-                });
-            } else {
-                latest_batch_footprints
-                    .others
-                    .push((system.index, system.footprint));
-                latest_batch.1.push(Step::System(system.index));
-                latest_batch_occurrences.1.push(system.occurrence);
-                latest_batch_info.systems.1.push(SystemInfo {
-                    name: format!("{:?}", system.display_name),
-                    borrow: system.borrow_constraints,
-                    conflict: system.confict,
-                    after: system.after_info.0,
-                    after_all: system.after_all_info,
-                    before_all: system.before_all_info,
-                    unique_id: system.index,
-                });
-            }
-
-            let run_if_index = if let Some(run_if) = system.run_if {
-                batches.systems_run_if.push(run_if);
-
-                batches.systems_run_if.len() - 1
-            } else {
-                usize::MAX
-            };
-
-            batches.sequential_run_if.push(run_if_index);
-            if is_single_system {
-                latest_batch_run_if.0 = run_if_index;
-            } else {
-                latest_batch_run_if.1.push(run_if_index);
-            }
-
-            constraint_free_systems.extend(to_be_placed_systems.extract_if(.., |other_system| {
-                // We remove constraints to the system we just remove
-                other_system.soft_after.remove(system.occurrence);
-
-                other_system.hard_after.is_empty() && other_system.soft_after.is_empty()
-            }));
-
-            placed.push(system.occurrence);
-        }
-
-        constraint_free_systems.extend(to_be_placed_systems.extract_if(.., |other_system| {
-            // We remove constraints to the systems we just removed
+        // The batch is closed, the systems waiting on its systems can go in the next one.
+        // They come after the systems that didn't fit in the batch.
+        ready.extend(to_be_placed_systems.extract_if(.., |other_system| {
             other_system
                 .hard_after
                 .retain(|occurrence| !placed.contains(&occurrence));
 
             other_system.hard_after.is_empty() && other_system.soft_after.is_empty()
         }));
-
-        if constraint_free_systems.is_empty() {
-            break;
-        } else {
-            batches.parallel.push((None, Vec::new()));
-            batches.parallel_run_if.push((usize::MAX, Vec::new()));
-            batches.parallel_occurrences.push((usize::MAX, Vec::new()));
-            batches_info.push(BatchInfo {
-                systems: (None, Vec::new()),
-                regroups: Vec::new(),
-            });
-            placed.clear();
-
-            latest_batch = batches.parallel.last_mut().unwrap();
-            latest_batch_run_if = batches.parallel_run_if.last_mut().unwrap();
-            latest_batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
-            latest_batch_info = batches_info.last_mut().unwrap();
-            latest_batch_footprints = BatchFootprints::default();
-        }
     }
 
     if !to_be_placed_systems.is_empty() {
@@ -795,6 +704,109 @@ fn order_systems(
     }
 
     Ok(batches_info)
+}
+
+/// Opens a batch and places every system of `ready` that fits in it, in order.
+///
+/// Placing a system frees the systems only waiting on it in the sequential order,
+/// they're tried for the same batch.\
+/// The systems that conflict with the batch are left in `ready`, in order.
+///
+/// Returns the occurrences placed in the batch.
+fn fill_batch(
+    ready: &mut VecDeque<ToBePlacedSystem>,
+    to_be_placed_systems: &mut Vec<ToBePlacedSystem>,
+    batches: &mut Batches,
+    batches_info: &mut Vec<BatchInfo>,
+) -> Vec<usize> {
+    batches.parallel.push((None, Vec::new()));
+    batches.parallel_run_if.push((usize::MAX, Vec::new()));
+    batches.parallel_occurrences.push((usize::MAX, Vec::new()));
+    batches_info.push(BatchInfo {
+        systems: (None, Vec::new()),
+        regroups: Vec::new(),
+    });
+
+    let mut footprints = BatchFootprints::default();
+    let mut conflicting = VecDeque::new();
+    let mut placed = Vec::new();
+    while let Some(mut system) = ready.pop_front() {
+        // A system can't join a batch that already conflicts with it, the batch only grows.
+        // So we set it aside for the next batch and keep trying the others.
+        if let Some(conflict) = check_can_go_in_parallel_batch(&footprints, &system) {
+            system.confict = Some(conflict);
+            conflicting.push_back(system);
+
+            continue;
+        }
+
+        ready.extend(to_be_placed_systems.extract_if(.., |other_system| {
+            other_system.soft_after.remove(system.occurrence);
+
+            other_system.hard_after.is_empty() && other_system.soft_after.is_empty()
+        }));
+
+        placed.push(system.occurrence);
+        place_system(system, &mut footprints, batches, batches_info);
+    }
+
+    *ready = conflicting;
+
+    placed
+}
+
+/// Adds `system` to the last batch, and after every placed system in the sequential order.
+fn place_system(
+    system: ToBePlacedSystem,
+    footprints: &mut BatchFootprints,
+    batches: &mut Batches,
+    batches_info: &mut [BatchInfo],
+) {
+    let run_if_index = if let Some(run_if) = system.run_if {
+        batches.systems_run_if.push(run_if);
+
+        batches.systems_run_if.len() - 1
+    } else {
+        usize::MAX
+    };
+
+    batches.sequential.push(Step::System(system.index));
+    batches.sequential_occurrences.push(system.occurrence);
+    batches.sequential_run_if.push(run_if_index);
+
+    let info = SystemInfo {
+        name: format!("{:?}", system.display_name),
+        borrow: system.borrow_constraints,
+        conflict: system.confict,
+        after: system.after_info.0,
+        after_all: system.after_all_info,
+        before_all: system.before_all_info,
+        unique_id: system.index,
+    };
+
+    let batch = batches.parallel.last_mut().unwrap();
+    let batch_run_if = batches.parallel_run_if.last_mut().unwrap();
+    let batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
+    let batch_info = batches_info.last_mut().unwrap();
+
+    // A condition needing the calling thread takes its system along, they run together.
+    let is_single_system = system.footprint.iter().any(|constraint| {
+        !constraint.thread_safe || constraint.storage_id == TypeId::of::<AllStorages>()
+    });
+
+    if is_single_system {
+        footprints.single = Some((system.index, system.footprint));
+        batch.0 = Some(Step::System(system.index));
+        batch_run_if.0 = run_if_index;
+        batch_occurrences.0 = system.occurrence;
+        batch_info.systems.0 = Some(info);
+    } else {
+        footprints.others.push((system.index, system.footprint));
+        batch.1.push(Step::System(system.index));
+        batch_run_if.1.push(run_if_index);
+        batch_occurrences.1.push(system.occurrence);
+        batch_info.systems.1.push(info);
+    }
 }
 
 /// The footprints of the systems in the batch being filled, with their callable index.
