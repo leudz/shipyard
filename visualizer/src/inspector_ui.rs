@@ -11,8 +11,8 @@ use crate::map_ui::MapPanel;
 use crate::scene::{Highlighting, SceneRect};
 use dioxus::prelude::*;
 use shipyard::borrow::Mutability;
-use shipyard::scheduler::info::RegroupTrigger;
 use std::collections::HashMap;
+use visualizer::explain::regroup_purpose;
 use visualizer::inspectors::{Inspector, InspectorAction, OpenPanel, Record};
 use visualizer::model::{ComponentId, Dataset, OccurrenceId, OperationId, RegroupId, SystemId};
 use visualizer::names::storage_kind;
@@ -314,14 +314,7 @@ fn regroup_details(
     let workload = &dataset.workload(workload).label;
     let regroup = dataset.regroup(regroup);
     // The export only says why the workload placed it, not what ran or changed before it.
-    let trigger = match regroup.trigger {
-        RegroupTrigger::Entry => {
-            "Entry: prepares these storages for changes made outside the workload."
-        }
-        RegroupTrigger::Pending => {
-            "Pending: placed after systems borrowing one of these storages exclusively."
-        }
-    };
+    let trigger = regroup_purpose(regroup.trigger);
     let chips = regroup
         .borrows
         .iter()

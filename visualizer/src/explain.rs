@@ -1,29 +1,92 @@
-//! The words explaining a link: why its blocked operation couldn't run in the batch of its blocker.
+//! What explains a link: why its blocked operation couldn't run in the batch of its blocker.
 //!
-//! Every reason the dataset has is listed, grouped by kind.
+//! Every reason the dataset has is listed, each in a few words with a sentence for details.
 
 use crate::conflicts::{is_all_storages, Reason};
 use crate::facts::Access;
-use crate::model::{Dataset, OperationId};
+use crate::model::{ComponentId, Dataset, OperationId};
 use crate::names::unique_labels;
 use shipyard::borrow::Mutability;
 use shipyard::scheduler::info::{OrderingOrigin, RegroupTrigger};
 
-/// What a link's tooltip says.
+/// What a link's tooltip shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Explanation {
-    /// Names both ends.
-    pub title: String,
-    /// Kinds of reasons, only the ones with reasons, always in the same order.
-    pub groups: Vec<Group>,
-    /// What the ends are, when they're regroups.
-    pub notes: Vec<String>,
+    /// The whole explanation in one sentence, naming both ends.
+    pub summary: String,
+    pub blocker: End,
+    pub blocked: End,
+    /// The storages both ends borrow in ways they can't share.
+    pub borrows: Vec<BorrowRow>,
+    /// Why the blocked one is ordered after the blocker.
+    pub ordering: Vec<Tag>,
+    /// Both need the calling thread.
+    pub thread: Option<Tag>,
+}
+
+/// One end of a link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct End {
+    /// The system's label, or `Regroup` and its storages.
+    pub name: String,
+    /// A regroup's storages' labels, empty for systems.
+    pub storages: Vec<String>,
+    pub is_regroup: bool,
+    pub batch: usize,
+    /// What a regroup does, see [`regroup_purpose`].
+    pub purpose: Option<&'static str>,
+}
+
+/// A storage both ends borrow, and how each does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BorrowRow {
+    /// One storage, or two when an end borrows `AllStorages`: the blocker's then the blocked one's.
+    pub storages: Vec<Storage>,
+    /// How both ends borrow it, in a sentence.
+    pub detail: String,
+    pub blocker: Vec<Mark>,
+    pub blocked: Vec<Mark>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group {
-    pub heading: &'static str,
-    pub lines: Vec<String>,
+pub struct Storage {
+    pub label: String,
+    /// The component it is, to inspect it. `None` for storages no component has.
+    pub component: Option<ComponentId>,
+}
+
+/// One way an end borrows a storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Mark {
+    pub mutability: Mutability,
+    /// The borrow is the condition's, not the system's.
+    pub condition: bool,
+}
+
+impl Mark {
+    /// `EX` or `SH`, as the highlight marks borrows.
+    pub fn label(self) -> &'static str {
+        match self.mutability {
+            Mutability::Exclusive => "EX",
+            Mutability::Shared => "SH",
+        }
+    }
+}
+
+/// A few words, and the sentence they stand for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tag {
+    pub short: String,
+    pub detail: String,
+}
+
+impl Tag {
+    fn new(short: impl Into<String>, detail: impl Into<String>) -> Tag {
+        Tag {
+            short: short.into(),
+            detail: detail.into(),
+        }
+    }
 }
 
 /// Explains why `blocked` couldn't run alongside `blocker`, with `reasons` from
@@ -34,7 +97,7 @@ pub fn explain(
     blocked: OperationId,
     reasons: &[Reason],
 ) -> Explanation {
-    let title = format!(
+    let summary = format!(
         "{} can't run alongside {}",
         dataset.operation_label(blocked),
         dataset.operation_label(blocker)
@@ -42,71 +105,122 @@ pub fn explain(
 
     let mut borrows = Vec::new();
     let mut ordering = Vec::new();
-    let mut thread = Vec::new();
+    let mut thread = None;
     for reason in reasons {
         match reason {
             Reason::Borrow {
                 blocker: blocker_access,
                 blocked: blocked_access,
-            } => borrows.push(borrow_line(dataset, blocker_access, blocked_access)),
-            Reason::Ordering(origin) => ordering.push(ordering_line(origin)),
-            Reason::ThreadSlot => thread.push(
-                "Both need the calling thread, a batch only has one slot for it.".to_string(),
-            ),
-        }
-    }
-
-    let groups = [
-        ("Borrows", borrows),
-        ("Ordering", ordering),
-        ("Thread", thread),
-    ]
-    .into_iter()
-    .filter(|(_, lines)| !lines.is_empty())
-    .map(|(heading, lines)| Group { heading, lines })
-    .collect();
-
-    let mut notes = Vec::new();
-    for operation in [blocker, blocked] {
-        if let OperationId::Regroup(regroup) = operation {
-            let label = dataset.operation_label(operation);
-            let trigger = match dataset.regroup(regroup).trigger {
-                RegroupTrigger::Entry => {
-                    "an entry regroup, it prepares its storages for changes made outside the workload"
-                }
-                RegroupTrigger::Pending => {
-                    "a pending regroup, placed after systems borrowing its storages exclusively"
-                }
-            };
-            notes.push(format!("{label} is {trigger}."));
+            } => borrows.push(borrow_row(dataset, blocker_access, blocked_access)),
+            Reason::Ordering(origin) => ordering.push(ordering_tag(origin)),
+            Reason::ThreadSlot => {
+                thread = Some(Tag::new(
+                    "calling thread",
+                    "Both need the calling thread, a batch only has one slot for it.",
+                ))
+            }
         }
     }
 
     Explanation {
-        title,
-        groups,
-        notes,
+        summary,
+        blocker: end(dataset, blocker),
+        blocked: end(dataset, blocked),
+        borrows,
+        ordering,
+        thread,
     }
 }
 
-/// `A: exclusive by the blocker, shared in the blocked one's condition`.
-fn borrow_line(dataset: &Dataset, blocker: &Access, blocked: &Access) -> String {
-    // Both accesses are of the same storage, except when one is `AllStorages`.
-    let storages = if blocker.storage == blocked.storage {
-        storage_label(dataset, &blocker.storage)
-    } else {
-        format!(
-            "{} and {}",
-            storage_label(dataset, &blocker.storage),
-            storage_label(dataset, &blocked.storage)
-        )
-    };
+fn end(dataset: &Dataset, operation: OperationId) -> End {
+    let (_, batch) = dataset.location(operation);
 
-    format!(
-        "{storages}: {} by the blocker, {} by the blocked one",
+    match operation {
+        OperationId::System(occurrence) => End {
+            name: dataset
+                .system(dataset.occurrence(occurrence).system)
+                .label
+                .clone(),
+            storages: Vec::new(),
+            is_regroup: false,
+            batch,
+            purpose: None,
+        },
+        OperationId::Regroup(regroup) => End {
+            name: format!("Regroup {}", dataset.regroup_label(regroup)),
+            storages: dataset
+                .regroup(regroup)
+                .borrows
+                .iter()
+                .map(|borrow| dataset.component(borrow.component).label.clone())
+                .collect(),
+            is_regroup: true,
+            batch,
+            purpose: Some(regroup_purpose(dataset.regroup(regroup).trigger)),
+        },
+    }
+}
+
+/// What a regroup does, depending on why the workload added it.
+pub fn regroup_purpose(trigger: RegroupTrigger) -> &'static str {
+    match trigger {
+        RegroupTrigger::Entry => "Restores the group after changes made outside the workload.",
+        RegroupTrigger::Pending => "Restores the group after exclusive borrows.",
+    }
+}
+
+fn borrow_row(dataset: &Dataset, blocker: &Access, blocked: &Access) -> BorrowRow {
+    // Both accesses are of the same storage, except when one is `AllStorages`.
+    let storages: Vec<Storage> = if blocker.storage == blocked.storage {
+        vec![storage(dataset, &blocker.storage)]
+    } else {
+        vec![
+            storage(dataset, &blocker.storage),
+            storage(dataset, &blocked.storage),
+        ]
+    };
+    let labels: Vec<&str> = storages
+        .iter()
+        .map(|storage| storage.label.as_str())
+        .collect();
+    let labels = labels.join(", ");
+    let all_storages = if is_all_storages(&blocker.storage) || is_all_storages(&blocked.storage) {
+        " AllStorages borrows every storage."
+    } else {
+        ""
+    };
+    let detail = format!(
+        "{labels}: {} by the blocker, {} by the blocked one.{all_storages}",
         access(blocker),
         access(blocked)
-    )
+    );
+
+    BorrowRow {
+        storages,
+        detail,
+        blocker: marks(blocker),
+        blocked: marks(blocked),
+    }
+}
+
+/// How an access borrows: its body's borrow, then its condition's.
+fn marks(access: &Access) -> Vec<Mark> {
+    let body = access.body.map(|mutability| Mark {
+        mutability,
+        condition: false,
+    });
+    let condition = access.condition.map(|mutability| Mark {
+        mutability,
+        condition: true,
+    });
+
+    match (body, condition) {
+        (None, None) => vec![Mark {
+            mutability: access.mutability,
+            condition: false,
+        }],
+        (body, condition) => body.into_iter().chain(condition).collect(),
+    }
 }
 
 /// How an access borrows, saying when it's a condition's.
@@ -126,44 +240,59 @@ fn access(access: &Access) -> String {
     }
 }
 
-/// The storage's component label, or a short label for storages no component has.
-fn storage_label(dataset: &Dataset, storage: &str) -> String {
-    if is_all_storages(storage) {
-        return "AllStorages (every storage)".to_string();
-    }
-
+/// The storage's component, labelled like it, or a short label for storages no component has.
+fn storage(dataset: &Dataset, storage: &str) -> Storage {
     let component = dataset
         .components
         .iter()
-        .find(|component| component.name == storage);
+        .position(|component| component.name == storage)
+        .map(ComponentId);
+    let label = if is_all_storages(storage) {
+        "AllStorages".to_string()
+    } else {
+        match component {
+            Some(component) => dataset.component(component).label.clone(),
+            None => unique_labels(&[storage]).remove(0),
+        }
+    };
 
-    match component {
-        Some(component) => component.label.clone(),
-        None => unique_labels(&[storage]).remove(0),
-    }
+    Storage { label, component }
 }
 
-fn ordering_line(origin: &OrderingOrigin) -> String {
+fn ordering_tag(origin: &OrderingOrigin) -> Tag {
     match origin {
-        OrderingOrigin::Implicit => {
-            "Added earlier to the workload, with a borrow they can't share.".to_string()
+        OrderingOrigin::Implicit => Tag::new(
+            "added earlier",
+            "Added earlier to the workload, with a borrow they can't share.",
+        ),
+        OrderingOrigin::Barrier => Tag::new("barrier", "A barrier separates them."),
+        OrderingOrigin::BeforeAll(label) => Tag::new(
+            format!("before_all {label}"),
+            format!("The blocker is before_all {label}."),
+        ),
+        OrderingOrigin::AfterAll(label) => Tag::new(
+            format!("after_all {label}"),
+            format!("The blocked one is after_all {label}."),
+        ),
+        OrderingOrigin::Sequential => Tag::new(
+            "sequential",
+            "They're consecutive steps of a sequential workload.",
+        ),
+        OrderingOrigin::Before => {
+            Tag::new("before", "The blocker's before list names the blocked one.")
         }
-        OrderingOrigin::Barrier => "A barrier separates them.".to_string(),
-        OrderingOrigin::BeforeAll(label) => format!("The blocker is before_all {label}."),
-        OrderingOrigin::AfterAll(label) => format!("The blocked one is after_all {label}."),
-        OrderingOrigin::Sequential => {
-            "They're consecutive steps of a sequential workload.".to_string()
-        }
-        OrderingOrigin::Before => "The blocker's before list names the blocked one.".to_string(),
-        OrderingOrigin::Regroup => {
-            "The blocked one borrows storages the blocker regroups.".to_string()
-        }
-        OrderingOrigin::Writes => {
-            "The blocked regroup moves storages the blocker may have changed.".to_string()
-        }
-        OrderingOrigin::Borrows => {
-            "The blocked regroup moves storages the blocker borrows.".to_string()
-        }
+        OrderingOrigin::Regroup => Tag::new(
+            "regroup",
+            "The blocked one borrows storages the blocker regroups.",
+        ),
+        OrderingOrigin::Writes => Tag::new(
+            "writes",
+            "The blocked regroup moves storages the blocker may have changed.",
+        ),
+        OrderingOrigin::Borrows => Tag::new(
+            "borrows",
+            "The blocked regroup moves storages the blocker borrows.",
+        ),
     }
 }
 
@@ -211,17 +340,25 @@ mod tests {
         explain(dataset, blocker, blocked, reasons)
     }
 
-    fn lines<'a>(explanation: &'a Explanation, heading: &str) -> Vec<&'a str> {
-        explanation
-            .groups
-            .iter()
-            .find(|group| group.heading == heading)
-            .map(|group| group.lines.iter().map(String::as_str).collect())
-            .unwrap_or_default()
+    fn shorts(tags: &[Tag]) -> Vec<&str> {
+        tags.iter().map(|tag| tag.short.as_str()).collect()
     }
 
-    /// Asserts that a pair with a borrow conflict and two ordering origins lists all three, grouped,
-    /// and names both ends.
+    fn details(tags: &[Tag]) -> Vec<&str> {
+        tags.iter().map(|tag| tag.detail.as_str()).collect()
+    }
+
+    const EX: Mark = Mark {
+        mutability: Mutability::Exclusive,
+        condition: false,
+    };
+    const SH: Mark = Mark {
+        mutability: Mutability::Shared,
+        condition: false,
+    };
+
+    /// Asserts that a pair with a borrow conflict and two ordering origins lists all three, and
+    /// names both ends.
     #[test]
     fn several_origins() {
         let dataset = load(json!([
@@ -234,24 +371,44 @@ mod tests {
         let explanation = explanation(&dataset, sys(0), sys(1));
 
         assert_eq!(
-            explanation.title,
+            explanation.summary,
             "read (batch 1) can't run alongside write (batch 0)"
         );
         assert_eq!(
-            lines(&explanation, "Borrows"),
-            ["A: exclusive by the blocker, shared by the blocked one"]
+            (explanation.blocker.name.as_str(), explanation.blocker.batch),
+            ("write", 0)
         );
         assert_eq!(
-            lines(&explanation, "Ordering"),
+            (explanation.blocked.name.as_str(), explanation.blocked.batch),
+            ("read", 1)
+        );
+        assert_eq!(
+            explanation.borrows,
+            [BorrowRow {
+                storages: vec![Storage {
+                    label: "A".to_string(),
+                    component: Some(ComponentId(0)),
+                }],
+                detail: "A: exclusive by the blocker, shared by the blocked one.".to_string(),
+                blocker: vec![EX],
+                blocked: vec![SH],
+            }]
+        );
+        assert_eq!(
+            shorts(&explanation.ordering),
+            ["added earlier", "before_all Label(first)"]
+        );
+        assert_eq!(
+            details(&explanation.ordering),
             [
                 "Added earlier to the workload, with a borrow they can't share.",
                 "The blocker is before_all Label(first)."
             ]
         );
-        assert!(explanation.notes.is_empty());
+        assert_eq!(explanation.thread, None);
     }
 
-    /// Asserts that a condition's borrow is described as the condition's.
+    /// Asserts that a condition's borrow is marked as the condition's.
     #[test]
     fn condition_access() {
         let dataset = load(json!([
@@ -261,9 +418,17 @@ mod tests {
 
         let explanation = explanation(&dataset, sys(0), sys(1));
 
+        let row = &explanation.borrows[0];
         assert_eq!(
-            lines(&explanation, "Borrows"),
-            ["A: exclusive by the blocker, shared in its condition by the blocked one"]
+            row.blocked,
+            [Mark {
+                mutability: Mutability::Shared,
+                condition: true
+            }]
+        );
+        assert_eq!(
+            row.detail,
+            "A: exclusive by the blocker, shared in its condition by the blocked one."
         );
     }
 
@@ -283,14 +448,12 @@ mod tests {
 
         let explanation = explanation(&dataset, sys(0), sys(1));
 
-        assert_eq!(
-            lines(&explanation, "Thread"),
-            ["Both need the calling thread, a batch only has one slot for it."]
-        );
-        assert!(lines(&explanation, "Borrows").is_empty());
+        assert_eq!(explanation.thread.unwrap().short, "calling thread");
+        assert!(explanation.borrows.is_empty());
     }
 
-    /// Asserts that `AllStorages` is named as reaching every storage, next to the other storage.
+    /// Asserts that `AllStorages` is named next to the other storage, its detail saying it reaches
+    /// every storage.
     #[test]
     fn all_storages() {
         let all = std::any::type_name::<shipyard::all_storages::AllStorages>();
@@ -301,14 +464,18 @@ mod tests {
 
         let explanation = explanation(&dataset, sys(0), sys(1));
 
+        let row = &explanation.borrows[0];
+        let labels: Vec<&str> = row.storages.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(labels, ["AllStorages", "B"]);
         assert_eq!(
-            lines(&explanation, "Borrows"),
-            ["AllStorages (every storage) and B: exclusive by the blocker, shared by the blocked one"]
+            row.detail,
+            "AllStorages, B: exclusive by the blocker, shared by the blocked one. AllStorages \
+             borrows every storage."
         );
     }
 
-    /// Asserts that regroup ends are described by their trigger, and the regroup origins worded
-    /// without claiming changes happened.
+    /// Asserts that regroup ends are named by their storages and say what they do, and the regroup origins
+    /// worded without claiming changes happened.
     #[test]
     fn regroups() {
         let regroup = |id: usize, trigger: &str, after: Value| {
@@ -333,15 +500,25 @@ mod tests {
         let first = explanation(&dataset, entry, writer);
         let second = explanation(&dataset, writer, pending);
 
+        assert_eq!(first.blocker.name, "Regroup A");
+        assert_eq!(first.blocker.storages, ["A"]);
+        assert!(first.blocker.is_regroup);
         assert_eq!(
-            lines(&first, "Ordering"),
+            first.blocker.purpose,
+            Some("Restores the group after changes made outside the workload.")
+        );
+        assert_eq!(first.blocked.purpose, None);
+        assert_eq!(
+            details(&first.ordering),
             ["The blocked one borrows storages the blocker regroups."]
         );
-        assert!(first.notes[0].contains("an entry regroup"));
         assert_eq!(
-            lines(&second, "Ordering"),
+            second.blocked.purpose,
+            Some("Restores the group after exclusive borrows.")
+        );
+        assert_eq!(
+            details(&second.ordering),
             ["The blocked regroup moves storages the blocker may have changed."]
         );
-        assert!(second.notes[0].contains("a pending regroup"));
     }
 }

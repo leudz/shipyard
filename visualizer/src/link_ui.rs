@@ -7,11 +7,14 @@
 //! Nothing here moves the camera, the user pans to what a cue points to.
 
 use crate::dom;
-use crate::scene::SceneRect;
+use crate::floating::{click_point, Openings};
+use crate::scene::{tile_id, SceneRect};
 use dioxus::prelude::*;
+use shipyard::borrow::Mutability;
 use visualizer::camera::Camera;
 use visualizer::conflicts::VisibleLinks;
-use visualizer::explain::explain;
+use visualizer::explain::{explain, End, Explanation, Mark, Storage};
+use visualizer::inspectors::Record;
 use visualizer::layout::WorkloadLayout;
 use visualizer::links::{self, Cue, Route, Side, View};
 use visualizer::model::OperationId;
@@ -21,8 +24,9 @@ use visualizer::state::{Action, AppState};
 /// A revealed `(blocker, blocked)` pair.
 pub type Pair = (OperationId, OperationId);
 
-/// The id of the explanation, links and cues describe themselves with it.
 const TOOLTIP_ID: &str = "link-tooltip";
+/// The id of the explanation's sentences, links and cues describe themselves with them.
+const TEXT_ID: &str = "link-tooltip-text";
 const TOOLTIP_WIDTH: f64 = 340.0;
 /// Space kept between the explanation and the scene's edges, and below or above its link.
 const TOOLTIP_MARGIN: f64 = 12.0;
@@ -94,6 +98,7 @@ pub fn LinkLayer(
     top: f64,
     focus: LinkFocus,
 ) -> Element {
+    let openings = use_context::<Openings>();
     // Routes only change with the layout or the revealed links, not while panning.
     let routes = use_memo(move || {
         let layout = layout.read();
@@ -135,7 +140,7 @@ pub fn LinkLayer(
         return rsx! {};
     };
     let dataset = &loaded.dataset;
-    let describedby = |pair: Pair| (explained == Some(pair)).then_some(TOOLTIP_ID);
+    let describedby = |pair: Pair| (explained == Some(pair)).then_some(TEXT_ID);
 
     rsx! {
         svg { class: "link-layer",
@@ -248,20 +253,145 @@ pub fn LinkLayer(
                             // Wheel and drag gestures over it are for it, not the scene.
                             onpointerdown: move |event| event.stop_propagation(),
                             onwheel: move |event| event.stop_propagation(),
-                            p { class: "link-tooltip-title", "{explanation.title}" }
-                            for group in explanation.groups {
-                                div { class: "link-tooltip-group",
-                                    h4 { "{group.heading}" }
-                                    ul {
-                                        for line in group.lines {
-                                            li { "{line}" }
-                                        }
-                                    }
-                                }
-                            }
-                            for note in explanation.notes {
-                                p { class: "link-tooltip-note", "{note}" }
-                            }
+                            {explanation_view(state, openings, pair, explanation)}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The ends of the link, then one row per kind of reason, each in a few words. Hovering a part
+/// shows its full sentence, and clicking a storage inspects it. Links and cues are described by
+/// the sentences instead, only the storage buttons are left for screen readers to reach.
+fn explanation_view(
+    state: Signal<AppState>,
+    openings: Openings,
+    pair: Pair,
+    explanation: Explanation,
+) -> Element {
+    let ends = [&explanation.blocker, &explanation.blocked];
+    let purposes = ends.into_iter().filter_map(|end| {
+        let purpose = end.purpose?;
+
+        Some(format!("{}: {purpose}", end.name))
+    });
+    let details = std::iter::once(format!("{}.", explanation.summary))
+        .chain(purposes)
+        .chain(explanation.borrows.iter().map(|row| row.detail.clone()))
+        .chain(explanation.ordering.iter().map(|tag| tag.detail.clone()))
+        .chain(explanation.thread.iter().map(|tag| tag.detail.clone()));
+    let text = details.collect::<Vec<_>>().join(" ");
+
+    rsx! {
+        p { id: TEXT_ID, class: "visually-hidden", "{text}" }
+        div { class: "link-ends", aria_hidden: "true",
+            {end_view(&explanation.blocker)}
+            span { class: "link-ends-arrow", "──▶" }
+            {end_view(&explanation.blocked)}
+        }
+        div { class: "link-reasons",
+            for row in explanation.borrows {
+                span { class: "link-storages",
+                    for (index, storage) in row.storages.into_iter().enumerate() {
+                        if index > 0 {
+                            span { aria_hidden: "true", ", " }
+                        }
+                        {storage_view(state, openings, pair, storage, &row.detail)}
+                    }
+                }
+                span { class: "link-marks", aria_hidden: "true", title: "{row.detail}",
+                    {marks_view(&row.blocker)}
+                    span { class: "link-marks-arrow", "▶" }
+                    {marks_view(&row.blocked)}
+                }
+            }
+            if !explanation.ordering.is_empty() {
+                span { class: "link-label", aria_hidden: "true", "order" }
+                span { class: "link-tags", aria_hidden: "true",
+                    for tag in explanation.ordering {
+                        span { class: "link-tag", title: "{tag.detail}", "{tag.short}" }
+                    }
+                }
+            }
+            if let Some(tag) = explanation.thread {
+                span { class: "link-label", aria_hidden: "true", "thread" }
+                span { class: "link-tags", aria_hidden: "true",
+                    span { class: "link-tag", title: "{tag.detail}", "{tag.short}" }
+                }
+            }
+        }
+    }
+}
+
+/// An end's name with its batch. A system's is in the systems' color, a regroup's says it's one
+/// in its own color then lists its storages in the components' color, and what it does on hover.
+fn end_view(end: &End) -> Element {
+    let kind = if end.is_regroup { "regroup" } else { "system" };
+
+    rsx! {
+        span { class: "link-end", "data-kind": kind,
+            span { class: "link-end-name", title: end.purpose,
+                if end.is_regroup {
+                    span { class: "link-end-kind", "Regroup" }
+                    " "
+                    span { class: "link-end-storages", {end.storages.join(" + ")} }
+                } else {
+                    "{end.name}"
+                }
+            }
+            span { class: "link-end-batch", "batch {end.batch}" }
+        }
+    }
+}
+
+/// A storage's label, a button inspecting it when it's a component.
+fn storage_view(
+    state: Signal<AppState>,
+    openings: Openings,
+    pair: Pair,
+    storage: Storage,
+    detail: &str,
+) -> Element {
+    let Some(component) = storage.component else {
+        return rsx! {
+            span { class: "link-storage", aria_hidden: "true", title: "{detail}", "{storage.label}" }
+        };
+    };
+
+    rsx! {
+        button {
+            class: "link-storage",
+            r#type: "button",
+            title: "{detail}",
+            // Inspecting deselects the tile, the links and this explanation go with it. Leaving the
+            // inspector returns to the blocked tile.
+            onclick: move |event| {
+                let pointer = click_point(&event);
+                let action = Action::Inspect(Record::Component(component));
+                openings.open(state, action, pointer, Some(tile_id(pair.1)));
+            },
+            "{storage.label}"
+        }
+    }
+}
+
+/// `EX` and `SH` chips, colored like the highlight's.
+fn marks_view(marks: &[Mark]) -> Element {
+    rsx! {
+        for mark in marks.iter().copied() {
+            {
+                let class = match mark.mutability {
+                    Mutability::Exclusive => "link-mark exclusive",
+                    Mutability::Shared => "link-mark shared",
+                };
+
+                rsx! {
+                    span { class,
+                        "{mark.label()}"
+                        if mark.condition {
+                            small { "cond" }
                         }
                     }
                 }

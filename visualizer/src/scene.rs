@@ -15,7 +15,6 @@ use crate::{count, dom};
 use dioxus::html::geometry::WheelDelta;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
-use shipyard::scheduler::info::RegroupTrigger;
 use std::collections::HashMap;
 use std::rc::Rc;
 use visualizer::camera::{self, Camera, ZOOM_STEP};
@@ -731,13 +730,21 @@ fn TileTooltip(
     };
 
     let dataset = &loaded.dataset;
-    let full_name = full_name(dataset, operation);
+    // A system's full name, a regroup's kind then its storages' labels: their full names are
+    // in the inspector.
+    let name = match operation {
+        OperationId::System(_) => full_name(dataset, operation),
+        OperationId::Regroup(regroup) => format!("Regroup · {}", dataset.regroup_label(regroup)),
+    };
     let detail = match operation {
         OperationId::System(occurrence) => dataset
             .occurrence(occurrence)
             .thread_bound
             .then_some("Thread-bound slot"),
-        OperationId::Regroup(regroup) => Some(trigger_name(dataset.regroup(regroup).trigger)),
+        OperationId::Regroup(regroup) => dataset
+            .regroup(regroup)
+            .thread_bound
+            .then_some("Thread-bound slot"),
     };
     let camera = camera();
     let bottom = WORKLOAD_TOP + tile.bounds.y * camera.zoom - TOOLTIP_GAP;
@@ -759,7 +766,7 @@ fn TileTooltip(
             class: "tile-tooltip",
             aria_hidden: "true",
             style: "{horizontal} top: {bottom}px;",
-            "{full_name}"
+            "{name}"
             if let Some(detail) = detail {
                 " · {detail}"
             }
@@ -1335,13 +1342,6 @@ fn full_name(dataset: &Dataset, operation: OperationId) -> String {
     }
 }
 
-fn trigger_name(trigger: RegroupTrigger) -> &'static str {
-    match trigger {
-        RegroupTrigger::Entry => "Entry regroup",
-        RegroupTrigger::Pending => "Pending regroup",
-    }
-}
-
 /// How many systems and regroups a batch's tiles are, regroups only mentioned when there are some.
 fn tile_count(batch: &BatchLayout) -> String {
     let regroups = batch
@@ -1438,7 +1438,7 @@ pub fn access_mark(relation: Relation) -> Option<&'static str> {
     }
 }
 
-fn tile_id(operation: OperationId) -> String {
+pub fn tile_id(operation: OperationId) -> String {
     match operation {
         OperationId::System(occurrence) => format!("tile-{}", occurrence.0),
         OperationId::Regroup(regroup) => format!("regroup-tile-{}", regroup.0),
