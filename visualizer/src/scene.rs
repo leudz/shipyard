@@ -247,6 +247,10 @@ fn WorkloadView(
     let link_focus = LinkFocus {
         hovered: use_signal(|| None),
         focused: use_signal(|| None),
+        tooltip_hovered: use_signal(|| None),
+        tooltip_focused: use_signal(|| None),
+        dismissed: use_signal(|| None),
+        entries: use_signal(|| 0),
     };
     let mut drag = use_signal(|| None::<Drag>);
     // The links of the selection and the highlight. The conflict graph is built once per
@@ -520,6 +524,7 @@ fn WorkloadView(
             layout,
             camera,
             scene_rect,
+            link_focus,
         }
         Navigation {
             state,
@@ -702,7 +707,12 @@ fn TileTooltip(
     layout: Memo<Option<WorkloadLayout>>,
     camera: Memo<Camera>,
     scene_rect: Signal<Option<SceneRect>>,
+    link_focus: LinkFocus,
 ) -> Element {
+    // A link's explanation is showing, the two tooltips would cover each other.
+    if link_focus.explained().is_some() {
+        return rsx! {};
+    }
     let Some(operation) = hovered().or(focused()) else {
         return rsx! {};
     };

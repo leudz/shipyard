@@ -4,6 +4,7 @@
 
 pub mod camera;
 pub mod conflicts;
+pub mod explain;
 pub mod facts;
 #[cfg(test)]
 mod fixtures;

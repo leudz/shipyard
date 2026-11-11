@@ -147,6 +147,23 @@ pub fn focus_soon(id: &str) {
     ));
 }
 
+/// Waits `milliseconds`, with the page's timer so it works with every renderer.
+pub async fn sleep(milliseconds: u32) {
+    let script = format!(
+        "await new Promise((resolve) => setTimeout(resolve, {milliseconds})); return true;"
+    );
+
+    // Not answering only makes the wait shorter.
+    let _ = document::eval(&script).await;
+}
+
+/// Scrolls the element with `id` down by `dy` pixels, up when negative.
+pub fn scroll_by(id: &str, dy: f64) {
+    document::eval(&format!(
+        "document.getElementById({id:?})?.scrollBy({{ top: {dy} }});"
+    ));
+}
+
 /// Scrolls the element with `id` to `top` after the next frame, once new content rendered.
 pub fn scroll_top_soon(id: &str, top: f64) {
     document::eval(&format!(

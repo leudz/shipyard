@@ -627,6 +627,52 @@ a {
     cursor: default;
 }
 
+/* Reads like the tile tooltip, but takes the pointer so long explanations can be scrolled. */
+.link-tooltip {
+    position: absolute;
+    z-index: 5;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    overflow-y: auto;
+    font: 11px/15px var(--font-ui);
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    box-shadow: 0 4px 14px var(--shadow);
+    overscroll-behavior: contain;
+}
+
+.link-tooltip-title {
+    margin: 0 0 6px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.link-tooltip-group h4 {
+    margin: 6px 0 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.link-tooltip-group ul {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.link-tooltip-group li {
+    overflow-wrap: anywhere;
+}
+
+.link-tooltip-note {
+    margin: 6px 0 0;
+    color: var(--muted);
+}
+
 .link-cue.left {
     left: 4px;
 }
