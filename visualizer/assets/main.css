@@ -543,6 +543,28 @@ a {
     opacity: 0.4;
 }
 
+/* Regroups are added by the workload, a dashed outline sets them apart from systems. It's drawn
+   inside the border, so the selection, highlight and focus rings around the tile stay visible. */
+.system-tile.regroup-tile {
+    background-image: repeating-linear-gradient(
+        135deg,
+        transparent 0 6px,
+        var(--tint) 6px 8px
+    );
+    border-style: dashed;
+}
+
+.tile-kind {
+    font: 600 9px/15px var(--font-ui);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.system-tile.exclusive .tile-kind {
+    color: inherit;
+}
+
 .tile-access {
     position: absolute;
     top: 4px;

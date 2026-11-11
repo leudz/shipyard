@@ -14,13 +14,14 @@ use crate::{count, dom};
 use dioxus::html::geometry::WheelDelta;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
+use shipyard::scheduler::info::RegroupTrigger;
 use std::collections::HashMap;
 use std::rc::Rc;
 use visualizer::camera::{self, Camera, ZOOM_STEP};
 use visualizer::highlight::{Relation, Relations};
 use visualizer::inspectors::Record;
 use visualizer::layout::{layout_workload, BatchLayout, WorkloadLayout, TILE_WIDTH};
-use visualizer::model::{Dataset, OccurrenceId, OperationId, Workload, WorkloadId};
+use visualizer::model::{Dataset, OperationId, Workload, WorkloadId};
 use visualizer::overview;
 use visualizer::panels::{self, Point};
 use visualizer::state::{Action, AppState, Loaded};
@@ -112,8 +113,8 @@ pub fn entry_id(loaded: &Loaded) -> Option<String> {
     let workload = loaded.workspace.selected_workload?;
     let dataset = &loaded.dataset;
 
-    if let Some(OperationId::System(selected)) = loaded.workspace.selected {
-        if dataset.occurrence(selected).workload == workload {
+    if let Some(selected) = loaded.workspace.selected {
+        if dataset.location(selected).0 == workload {
             return Some(tile_id(selected));
         }
     }
@@ -122,7 +123,7 @@ pub fn entry_id(loaded: &Loaded) -> Option<String> {
         .workload(workload)
         .batches
         .iter()
-        .flat_map(|batch| batch.occurrences())
+        .flat_map(|batch| batch.operations())
         .next();
 
     Some(first.map_or(WORKLOAD_ID.to_string(), tile_id))
@@ -235,8 +236,8 @@ fn WorkloadView(
     let mut tile_heights = use_signal(|| None::<Vec<f64>>);
     // The tiles under the pointer and focused. We show the full name of the hovered one, or else
     // the focused one.
-    let hovered = use_signal(|| None::<OccurrenceId>);
-    let focused = use_signal(|| None::<OccurrenceId>);
+    let hovered = use_signal(|| None::<OperationId>);
+    let focused = use_signal(|| None::<OperationId>);
     let mut drag = use_signal(|| None::<Drag>);
 
     let camera = use_memo(move || {
@@ -291,7 +292,7 @@ fn WorkloadView(
         ))
     });
 
-    // An inspector asked to show an occurrence, we pan to its batch once we know where it is.
+    // An inspector asked to show an operation, we pan to its batch once we know where it is.
     use_effect(move || {
         let Some(framed_operation) = framing() else {
             return;
@@ -308,7 +309,7 @@ fn WorkloadView(
                     let tile = batch
                         .tiles
                         .iter()
-                        .find(|tile| OperationId::System(tile.occurrence) == framed_operation)?;
+                        .find(|tile| tile.operation == framed_operation)?;
                     Some((batch.bounds, tile.bounds))
                 });
             let Some((batch, tile)) = found else {
@@ -336,6 +337,11 @@ fn WorkloadView(
         .iter()
         .map(|batch| batch.occurrences().count())
         .sum();
+    let regroup_count: usize = workload_record
+        .batches
+        .iter()
+        .map(|batch| batch.regroups.len())
+        .sum();
 
     rsx! {
         // Focusable from script only, so leaving the search fields has somewhere to land.
@@ -349,7 +355,7 @@ fn WorkloadView(
                 span { "Workload" }
                 h2 { id: "workload-title", "{workload_record.label}" }
                 small {
-                    "{count(workload_record.batches.len(), \"batch\")} · {count(system_count, \"system\")}"
+                    "{count(workload_record.batches.len(), \"batch\")} · {operation_count(system_count, regroup_count)}"
                 }
             }
 
@@ -367,15 +373,15 @@ fn WorkloadView(
                     onmounted: move |_| async move {
                         tile_heights.set(Some(dom::child_heights(MEASURE_ID).await));
                     },
-                    for occurrence in workload_record.batches.iter().flat_map(|batch| batch.occurrences()) {
+                    for operation in workload_record.batches.iter().flat_map(|batch| batch.operations()) {
                         // The same element as in the scene, so the browser styles it the same.
                         button {
-                            key: "{occurrence.0}",
-                            class: "system-tile",
+                            key: "{tile_id(operation)}",
+                            class: tile_class(operation, false, None),
                             r#type: "button",
                             tabindex: "-1",
                             style: "width: {TILE_WIDTH}px;",
-                            {tile_content(dataset, occurrence)}
+                            {tile_content(dataset, operation)}
                         }
                     }
                 }
@@ -477,8 +483,8 @@ fn World(
     layout: Memo<Option<WorkloadLayout>>,
     camera: Memo<Camera>,
     selected: Memo<Option<OperationId>>,
-    hovered: Signal<Option<OccurrenceId>>,
-    focused: Signal<Option<OccurrenceId>>,
+    hovered: Signal<Option<OperationId>>,
+    focused: Signal<Option<OperationId>>,
     scene_rect: Signal<Option<SceneRect>>,
 ) -> Element {
     let Camera { x, zoom } = camera();
@@ -515,8 +521,8 @@ fn Batches(
     layout: Memo<Option<WorkloadLayout>>,
     camera: Memo<Camera>,
     selected: Memo<Option<OperationId>>,
-    mut hovered: Signal<Option<OccurrenceId>>,
-    mut focused: Signal<Option<OccurrenceId>>,
+    mut hovered: Signal<Option<OperationId>>,
+    mut focused: Signal<Option<OperationId>>,
     scene_rect: Signal<Option<SceneRect>>,
 ) -> Element {
     let openings = use_context::<Openings>();
@@ -545,42 +551,42 @@ fn Batches(
 
                 header { class: "batch-header",
                     h3 { id: "batch-{index}-title", "Batch {index}" }
-                    span { "{count(batch.tiles.len(), \"system\")}" }
+                    span { "{tile_count(batch)}" }
                 }
 
                 // Tiles come in display order, so reading and Tab order follow execution
                 // order even across columns.
                 for tile in &batch.tiles {
                     {
-                        let occurrence = tile.occurrence;
+                        let operation = tile.operation;
                         let bounds = tile.bounds;
-                        let is_selected = selected == Some(OperationId::System(occurrence));
-                        let relation = relations.as_ref().map(|relations| {
-                            relations.system(dataset.occurrence(occurrence).system)
-                        });
-                        let full_name = &dataset.system(dataset.occurrence(occurrence).system).name;
+                        let is_selected = selected == Some(operation);
+                        let relation = relations
+                            .as_ref()
+                            .map(|relations| relations.operation(dataset, operation));
+                        let full_name = full_name(dataset, operation);
 
                         rsx! {
                             button {
-                                key: "{occurrence.0}",
-                                id: tile_id(occurrence),
-                                class: tile_class(is_selected, relation),
+                                key: "{tile_id(operation)}",
+                                id: tile_id(operation),
+                                class: tile_class(operation, is_selected, relation),
                                 r#type: "button",
-                                aria_label: tile_name(dataset, occurrence, relation),
+                                aria_label: tile_name(dataset, operation, relation),
                                 "aria-description": "{full_name}",
                                 aria_current: is_selected.then_some("true"),
                                 style: "left: {bounds.x - batch.bounds.x}px; top: {bounds.y - batch.bounds.y}px; width: {bounds.width}px; height: {bounds.height}px;",
                                 onclick: move |event| {
                                     let pointer = click_point(&event);
-                                    let action = Action::SelectOperation(OperationId::System(occurrence));
-                                    openings.open(state, action, pointer, Some(tile_id(occurrence)));
+                                    let action = Action::SelectOperation(operation);
+                                    openings.open(state, action, pointer, Some(tile_id(operation)));
                                 },
                                 // Dragging from a tile doesn't pan, the press is for the tile.
                                 onpointerdown: move |event| event.stop_propagation(),
-                                onmouseenter: move |_| hovered.set(Some(occurrence)),
-                                onmouseleave: move |_| clear(hovered, occurrence),
+                                onmouseenter: move |_| hovered.set(Some(operation)),
+                                onmouseleave: move |_| clear(hovered, operation),
                                 onfocus: move |_| {
-                                    focused.set(Some(occurrence));
+                                    focused.set(Some(operation));
 
                                     // Tab can reach tiles outside the screen, we pan to show them.
                                     let Some(size) = *scene_rect.peek() else {
@@ -592,8 +598,8 @@ fn Batches(
                                         state.write().update(Action::SetCamera(revealed));
                                     }
                                 },
-                                onblur: move |_| clear(focused, occurrence),
-                                {tile_content(dataset, occurrence)}
+                                onblur: move |_| clear(focused, operation),
+                                {tile_content(dataset, operation)}
                                 if let Some(mark) = relation.and_then(access_mark) {
                                     span { class: "tile-access", aria_hidden: "true", "{mark}" }
                                 }
@@ -606,9 +612,9 @@ fn Batches(
     }
 }
 
-/// Clears `tile`, unless a tile other than `occurrence` replaced it since.
-fn clear(mut tile: Signal<Option<OccurrenceId>>, occurrence: OccurrenceId) {
-    if *tile.peek() == Some(occurrence) {
+/// Clears `tile`, unless a tile other than `operation` replaced it since.
+fn clear(mut tile: Signal<Option<OperationId>>, operation: OperationId) {
+    if *tile.peek() == Some(operation) {
         tile.set(None);
     }
 }
@@ -619,13 +625,13 @@ fn clear(mut tile: Signal<Option<OccurrenceId>>, occurrence: OccurrenceId) {
 #[component]
 fn TileTooltip(
     state: Signal<AppState>,
-    hovered: Signal<Option<OccurrenceId>>,
-    focused: Signal<Option<OccurrenceId>>,
+    hovered: Signal<Option<OperationId>>,
+    focused: Signal<Option<OperationId>>,
     layout: Memo<Option<WorkloadLayout>>,
     camera: Memo<Camera>,
     scene_rect: Signal<Option<SceneRect>>,
 ) -> Element {
-    let Some(occurrence) = hovered().or(focused()) else {
+    let Some(operation) = hovered().or(focused()) else {
         return rsx! {};
     };
     let layout = layout.read();
@@ -633,7 +639,7 @@ fn TileTooltip(
         .iter()
         .flat_map(|layout| &layout.batches)
         .flat_map(|batch| &batch.tiles)
-        .find(|tile| tile.occurrence == occurrence)
+        .find(|tile| tile.operation == operation)
     else {
         return rsx! {};
     };
@@ -642,8 +648,15 @@ fn TileTooltip(
         return rsx! {};
     };
 
-    let occurrence = loaded.dataset.occurrence(occurrence);
-    let system = loaded.dataset.system(occurrence.system);
+    let dataset = &loaded.dataset;
+    let full_name = full_name(dataset, operation);
+    let detail = match operation {
+        OperationId::System(occurrence) => dataset
+            .occurrence(occurrence)
+            .thread_bound
+            .then_some("Thread-bound slot"),
+        OperationId::Regroup(regroup) => Some(trigger_name(dataset.regroup(regroup).trigger)),
+    };
     let camera = camera();
     let bottom = WORKLOAD_TOP + tile.bounds.y * camera.zoom - TOOLTIP_GAP;
     // We line the tooltip up with the tile's left edge, or its right edge when a full width
@@ -664,9 +677,9 @@ fn TileTooltip(
             class: "tile-tooltip",
             aria_hidden: "true",
             style: "{horizontal} top: {bottom}px;",
-            "{system.name}"
-            if occurrence.thread_bound {
-                " · Thread-bound slot"
+            "{full_name}"
+            if let Some(detail) = detail {
+                " · {detail}"
             }
         }
     }
@@ -748,7 +761,7 @@ fn Navigation(
     mut state: Signal<AppState>,
     workload: WorkloadId,
     camera: Memo<Camera>,
-    measured: Memo<Option<HashMap<OccurrenceId, f64>>>,
+    measured: Memo<Option<HashMap<OperationId, f64>>>,
     layout: Memo<Option<WorkloadLayout>>,
     scene_rect: Signal<Option<SceneRect>>,
     mut navigation_height: Signal<f64>,
@@ -924,7 +937,7 @@ fn Overview(
                         let bounds = batch.bounds;
                         let tiles = batch.tiles.len();
                         let relations = relations.as_ref();
-                        let cue = batch_cue(dataset, relations, batch.tiles.iter().map(|tile| tile.occurrence));
+                        let cue = batch_cue(dataset, relations, batch.tiles.iter().map(|tile| tile.operation));
                         let on_screen = shown.contains(&index);
                         // `max` keeps empty workloads and batches from dividing by zero.
                         let height = BAR_BASE_HEIGHT + BAR_EXTRA_HEIGHT * (tiles as f64 / largest.max(1) as f64).sqrt();
@@ -935,7 +948,7 @@ fn Overview(
                         let digits = tiles.to_string().len() as f64;
                         let shows_count = span_width >= COUNT_MIN_WIDTH.max(digits * COUNT_DIGIT_WIDTH);
                         let place = if on_screen { ", on screen" } else { "" };
-                        let name = format!("Batch {index}, {}{}{place}", count(tiles, "system"), cue.description);
+                        let name = format!("Batch {index}, {}{}{place}", tile_count(batch), cue.description);
                         let mut class = String::from("overview-batch");
                         if on_screen {
                             class.push_str(" on-screen");
@@ -1046,9 +1059,9 @@ fn batch_tooltip(
 
     rsx! {
         div { class, aria_hidden: "true", style: "max-width: min(20rem, {room}px);",
-            div { class: "batch-tooltip-title", "Batch {index} · {count(tiles, \"system\")}" }
+            div { class: "batch-tooltip-title", "Batch {index} · {tile_count(batch)}" }
             for tile in batch.tiles.iter().take(BATCH_TOOLTIP_NAMES) {
-                div { key: "{tile.occurrence.0}", {tile_content(dataset, tile.occurrence)} }
+                div { key: "{tile_id(tile.operation)}", {tile_content(dataset, tile.operation)} }
             }
             if more > 0 {
                 div { class: "batch-tooltip-more", "+ {more} more" }
@@ -1067,12 +1080,12 @@ struct BatchCue {
     description: String,
 }
 
-/// The cue of a batch with `occurrences`: which of them the highlight marks, and how. A batch
+/// The cue of a batch with `operations`: which of them the highlight marks, and how. A batch
 /// with both exclusive and shared borrowers keeps both colors.
 fn batch_cue(
     dataset: &Dataset,
     relations: Option<&Relations>,
-    occurrences: impl Iterator<Item = OccurrenceId>,
+    operations: impl Iterator<Item = OperationId>,
 ) -> BatchCue {
     let none = BatchCue {
         class: "",
@@ -1084,8 +1097,8 @@ fn batch_cue(
     };
 
     let (mut target, mut exclusive, mut shared) = (0, 0, 0);
-    for occurrence in occurrences {
-        match relations.system(dataset.occurrence(occurrence).system) {
+    for operation in operations {
+        match relations.operation(dataset, operation) {
             Relation::Target => target += 1,
             Relation::Exclusive => exclusive += 1,
             Relation::Shared => shared += 1,
@@ -1141,12 +1154,12 @@ fn zoom_to(
     state.write().update(Action::SetCamera(next));
 }
 
-/// Pairs the workload's occurrences, in display order, with the heights measured in that order.
-fn measured_heights(workload: &Workload, tile_heights: &[f64]) -> HashMap<OccurrenceId, f64> {
+/// Pairs the workload's operations, in display order, with the heights measured in that order.
+fn measured_heights(workload: &Workload, tile_heights: &[f64]) -> HashMap<OperationId, f64> {
     workload
         .batches
         .iter()
-        .flat_map(|batch| batch.occurrences())
+        .flat_map(|batch| batch.operations())
         .zip(tile_heights.iter().copied())
         .collect()
 }
@@ -1157,7 +1170,7 @@ fn measured_heights(workload: &Workload, tile_heights: &[f64]) -> HashMap<Occurr
 /// Zooming out shrinks everything on screen, so the columns can hold more scene pixels.
 fn layout_at(
     workload: &Workload,
-    measured: &HashMap<OccurrenceId, f64>,
+    measured: &HashMap<OperationId, f64>,
     scene_height: f64,
     zoom: f64,
 ) -> WorkloadLayout {
@@ -1165,7 +1178,7 @@ fn layout_at(
 
     layout_workload(
         workload,
-        |occurrence| measured.get(&occurrence).copied().unwrap_or(f64::NAN),
+        |operation| measured.get(&operation).copied().unwrap_or(f64::NAN),
         available_height,
     )
 }
@@ -1180,26 +1193,106 @@ fn wheel_pixels(delta: WheelDelta, page_width: f64) -> (f64, f64) {
 }
 
 /// What a tile shows, the same in the scene and in the hidden copy we measure.
-fn tile_content(dataset: &Dataset, occurrence: OccurrenceId) -> Element {
-    let occurrence = dataset.occurrence(occurrence);
-    let system = dataset.system(occurrence.system);
+///
+/// A regroup says it's one, then lists its storages.
+fn tile_content(dataset: &Dataset, operation: OperationId) -> Element {
+    let (kind, label, thread_bound) = tile_text(dataset, operation);
 
     rsx! {
         span { class: "tile-label",
-            if occurrence.thread_bound {
+            if thread_bound {
                 span { class: "tile-mark", "◆ " }
             }
-            "{system.label}"
+            if let Some(kind) = kind {
+                span { class: "tile-kind", "{kind} " }
+            }
+            "{label}"
         }
     }
 }
 
-/// The tile's accessible name, with its batch since the same system can appear in several, and
-/// its relation to the highlight.
-fn tile_name(dataset: &Dataset, occurrence: OccurrenceId, relation: Option<Relation>) -> String {
-    let occurrence = dataset.occurrence(occurrence);
-    let label = &dataset.system(occurrence.system).label;
-    let slot = if occurrence.thread_bound {
+/// A tile's kind when it isn't a system, its label, and whether it runs on the world's thread.
+fn tile_text(dataset: &Dataset, operation: OperationId) -> (Option<&'static str>, String, bool) {
+    match operation {
+        OperationId::System(occurrence) => {
+            let occurrence = dataset.occurrence(occurrence);
+            let label = dataset.system(occurrence.system).label.clone();
+
+            (None, label, occurrence.thread_bound)
+        }
+        OperationId::Regroup(regroup) => {
+            let thread_bound = dataset.regroup(regroup).thread_bound;
+
+            (
+                Some("Regroup"),
+                dataset.regroup_label(regroup),
+                thread_bound,
+            )
+        }
+    }
+}
+
+/// The full names behind a tile: the system's, or every storage of a regroup.
+fn full_name(dataset: &Dataset, operation: OperationId) -> String {
+    match operation {
+        OperationId::System(occurrence) => {
+            let system = dataset.occurrence(occurrence).system;
+
+            dataset.system(system).name.clone()
+        }
+        OperationId::Regroup(regroup) => {
+            let names: Vec<&str> = dataset
+                .regroup(regroup)
+                .borrows
+                .iter()
+                .map(|borrow| dataset.component(borrow.component).name.as_str())
+                .collect();
+
+            names.join(", ")
+        }
+    }
+}
+
+fn trigger_name(trigger: RegroupTrigger) -> &'static str {
+    match trigger {
+        RegroupTrigger::Entry => "Entry regroup",
+        RegroupTrigger::Pending => "Pending regroup",
+    }
+}
+
+/// How many systems and regroups a batch's tiles are, regroups only mentioned when there are some.
+fn tile_count(batch: &BatchLayout) -> String {
+    let regroups = batch
+        .tiles
+        .iter()
+        .filter(|tile| matches!(tile.operation, OperationId::Regroup(_)))
+        .count();
+
+    operation_count(batch.tiles.len() - regroups, regroups)
+}
+
+fn operation_count(systems: usize, regroups: usize) -> String {
+    if regroups == 0 {
+        count(systems, "system")
+    } else {
+        format!(
+            "{} · {}",
+            count(systems, "system"),
+            count(regroups, "regroup")
+        )
+    }
+}
+
+/// The tile's accessible name, with its batch since the same system or storages can appear in
+/// several, and its relation to the highlight.
+fn tile_name(dataset: &Dataset, operation: OperationId, relation: Option<Relation>) -> String {
+    let (kind, label, thread_bound) = tile_text(dataset, operation);
+    let (_, batch) = dataset.location(operation);
+    let label = match kind {
+        Some(kind) => format!("{kind} {label}"),
+        None => label,
+    };
+    let slot = if thread_bound {
         ", thread-bound slot"
     } else {
         ""
@@ -1211,12 +1304,16 @@ fn tile_name(dataset: &Dataset, occurrence: OccurrenceId, relation: Option<Relat
         _ => "",
     };
 
-    format!("{label}{slot}, batch {}{highlight}", occurrence.batch)
+    format!("{label}{slot}, batch {batch}{highlight}")
 }
 
-/// A tile's classes: selected, and its relation to the highlight. Unrelated tiles are dimmed but
-/// stay reachable.
-fn tile_class(selected: bool, relation: Option<Relation>) -> String {
+/// A tile's classes: its kind, selected, and its relation to the highlight. Unrelated tiles are
+/// dimmed but stay reachable.
+fn tile_class(operation: OperationId, selected: bool, relation: Option<Relation>) -> String {
+    let kind = match operation {
+        OperationId::System(_) => "",
+        OperationId::Regroup(_) => " regroup-tile",
+    };
     let highlight = match relation {
         None => "",
         Some(Relation::Target) => " target",
@@ -1226,7 +1323,7 @@ fn tile_class(selected: bool, relation: Option<Relation>) -> String {
     };
     let selected = if selected { " selected" } else { "" };
 
-    format!("system-tile{selected}{highlight}")
+    format!("system-tile{kind}{selected}{highlight}")
 }
 
 /// The short access label of a borrow relation, `None` for other relations.
@@ -1238,6 +1335,9 @@ pub fn access_mark(relation: Relation) -> Option<&'static str> {
     }
 }
 
-fn tile_id(occurrence: OccurrenceId) -> String {
-    format!("tile-{}", occurrence.0)
+fn tile_id(operation: OperationId) -> String {
+    match operation {
+        OperationId::System(occurrence) => format!("tile-{}", occurrence.0),
+        OperationId::Regroup(regroup) => format!("regroup-tile-{}", regroup.0),
+    }
 }

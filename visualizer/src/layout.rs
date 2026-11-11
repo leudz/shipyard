@@ -1,12 +1,14 @@
-//! Where batches and system tiles go in the workload scene, in unzoomed scene pixels.
+//! Where batches and their tiles go in the workload scene, in unzoomed scene pixels.
+//!
+//! Systems and regroups both get a tile.
 //!
 //! Batches run left to right in execution order. Within a batch, tiles fill a column top to
 //! bottom and continue in a new column once the available height is used up. The browser decides
 //! how tall each tile is, we take the measured heights as input.
 
-use crate::model::{OccurrenceId, Workload};
+use crate::model::{OperationId, Workload};
 
-/// The width of a system tile, which is also the width tiles are measured at.
+/// The width of a tile, which is also the width tiles are measured at.
 pub const TILE_WIDTH: f64 = 240.0;
 /// The space above a batch's first tile, for its header.
 pub const BATCH_HEADER_HEIGHT: f64 = 44.0;
@@ -54,13 +56,13 @@ pub struct WorkloadLayout {
 pub struct BatchLayout {
     pub bounds: Rect,
     pub columns: usize,
-    /// The batch's occurrences in display order, see [`Batch::occurrences`](crate::model::Batch::occurrences).
+    /// The batch's operations in display order, see [`Batch::operations`](crate::model::Batch::operations).
     pub tiles: Vec<Tile>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tile {
-    pub occurrence: OccurrenceId,
+    pub operation: OperationId,
     pub column: usize,
     /// In scene coordinates, not relative to the batch.
     pub bounds: Rect,
@@ -68,12 +70,12 @@ pub struct Tile {
 
 /// Lays out `workload`'s batches and tiles.
 ///
-/// `tile_height` gives the measured height of an occurrence's tile, non-finite or non-positive
+/// `tile_height` gives the measured height of an operation's tile, non-finite or non-positive
 /// heights count as [`MIN_TILE_HEIGHT`]. Columns hold at most `available_height` of header and
 /// tiles, but at least one tile and never less than [`MIN_AVAILABLE_HEIGHT`].
 pub fn layout_workload(
     workload: &Workload,
-    tile_height: impl Fn(OccurrenceId) -> f64,
+    tile_height: impl Fn(OperationId) -> f64,
     available_height: f64,
 ) -> WorkloadLayout {
     let available_height = if available_height.is_finite() {
@@ -90,8 +92,8 @@ pub fn layout_workload(
         // How much of each column the tiles use, including the gap below each tile.
         let mut column_heights = vec![0.0];
 
-        for occurrence in batch.occurrences() {
-            let height = usable_height(tile_height(occurrence));
+        for operation in batch.operations() {
+            let height = usable_height(tile_height(operation));
 
             // A tile that doesn't fit starts the next column, unless its column is still empty:
             // a tile taller than the limit gets a column of its own instead of an endless loop.
@@ -102,7 +104,7 @@ pub fn layout_workload(
 
             let column = column_heights.len() - 1;
             tiles.push(Tile {
-                occurrence,
+                operation,
                 column,
                 bounds: Rect {
                     x: x + column as f64 * (TILE_WIDTH + COLUMN_GAP),
@@ -155,7 +157,19 @@ fn usable_height(measured: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Batch;
+    use crate::model::{Batch, OccurrenceId, RegroupId};
+
+    fn system(index: usize) -> OperationId {
+        OperationId::System(OccurrenceId(index))
+    }
+
+    /// The index of `operation`'s record, for height tables.
+    fn index(operation: OperationId) -> usize {
+        match operation {
+            OperationId::System(occurrence) => occurrence.0,
+            OperationId::Regroup(regroup) => regroup.0,
+        }
+    }
 
     /// A batch whose occurrences are numbered from `first`, the first one thread-bound if
     /// `thread_bound`.
@@ -241,7 +255,7 @@ mod tests {
         assert_eq!(layout.batches.len(), 3);
         assert!(layout.batches[1].tiles.is_empty());
         assert_eq!(layout.batches[1].columns, 1);
-        assert_eq!(layout.batches[2].tiles[0].occurrence, OccurrenceId(1));
+        assert_eq!(layout.batches[2].tiles[0].operation, system(1));
         assert_well_formed(&layout);
     }
 
@@ -256,15 +270,12 @@ mod tests {
 
         let layout = layout_workload(&workload, |_| 40.0, 500.0);
 
-        let occurrences: Vec<OccurrenceId> = layout.batches[0]
+        let operations: Vec<OperationId> = layout.batches[0]
             .tiles
             .iter()
-            .map(|t| t.occurrence)
+            .map(|t| t.operation)
             .collect();
-        assert_eq!(
-            occurrences,
-            [OccurrenceId(7), OccurrenceId(2), OccurrenceId(5)]
-        );
+        assert_eq!(operations, [system(7), system(2), system(5)]);
         assert_eq!(layout.batches[0].tiles[0].bounds.y, BATCH_HEADER_HEIGHT);
     }
 
@@ -287,7 +298,11 @@ mod tests {
     #[test]
     fn measured_heights() {
         let heights = [36.0, 59.5, 44.0];
-        let layout = layout_workload(&workload(vec![batch(0, 3, false)]), |o| heights[o.0], 500.0);
+        let layout = layout_workload(
+            &workload(vec![batch(0, 3, false)]),
+            |o| heights[index(o)],
+            500.0,
+        );
 
         let tiles = &layout.batches[0].tiles;
         assert_eq!(tiles[1].bounds.height, 59.5);
@@ -301,7 +316,11 @@ mod tests {
     #[test]
     fn tall_tile() {
         let heights = [40.0, 1000.0, 40.0];
-        let layout = layout_workload(&workload(vec![batch(0, 3, false)]), |o| heights[o.0], 200.0);
+        let layout = layout_workload(
+            &workload(vec![batch(0, 3, false)]),
+            |o| heights[index(o)],
+            200.0,
+        );
 
         let columns: Vec<usize> = layout.batches[0].tiles.iter().map(|t| t.column).collect();
         assert_eq!(columns, [0, 1, 2]);
@@ -314,7 +333,7 @@ mod tests {
         let heights = [f64::NAN, -5.0, f64::INFINITY, 0.0];
         let layout = layout_workload(
             &workload(vec![batch(0, 4, false)]),
-            |o| heights[o.0],
+            |o| heights[index(o)],
             f64::NAN,
         );
 
@@ -358,7 +377,7 @@ mod tests {
             batch(1003, 200, true),
         ]);
         // Heights between 36 and 96, varying from tile to tile.
-        let height = |o: OccurrenceId| 36.0 + (o.0 * 37 % 61) as f64;
+        let height = |o: OperationId| 36.0 + (index(o) * 37 % 61) as f64;
 
         let layout = layout_workload(&workload, height, 700.0);
 
@@ -378,10 +397,57 @@ mod tests {
 
         let first = &layout.batches[0].tiles[0];
         let repeat = &layout.batches[1].tiles[0];
-        assert_eq!(
-            (first.occurrence, repeat.occurrence),
-            (OccurrenceId(0), OccurrenceId(2))
-        );
+        assert_eq!((first.operation, repeat.operation), (system(0), system(2)));
         assert!(!overlap(&first.bounds, &repeat.bounds));
+    }
+
+    /// Asserts that a batch's regroups get tiles after its systems, in the same columns.
+    #[test]
+    fn mixed_batch() {
+        let mut mixed = batch(0, 2, true);
+        mixed.regroups = vec![RegroupId(0), RegroupId(1)];
+
+        let layout = layout_workload(&workload(vec![mixed]), |_| 40.0, 200.0);
+
+        let operations: Vec<OperationId> = layout.batches[0]
+            .tiles
+            .iter()
+            .map(|t| t.operation)
+            .collect();
+        assert_eq!(
+            operations,
+            [
+                system(0),
+                system(1),
+                OperationId::Regroup(RegroupId(0)),
+                OperationId::Regroup(RegroupId(1))
+            ]
+        );
+        assert_eq!(layout.batches[0].columns, 2);
+        assert_well_formed(&layout);
+    }
+
+    /// Asserts that a batch with only a regroup gets a tile of its measured height.
+    #[test]
+    fn regroup_only_batch() {
+        let mut regrouping = batch(0, 0, false);
+        regrouping.regroups = vec![RegroupId(3)];
+        let heights = |o: OperationId| match o {
+            OperationId::Regroup(_) => 75.0,
+            OperationId::System(_) => 40.0,
+        };
+
+        let layout = layout_workload(
+            &workload(vec![batch(0, 1, false), regrouping]),
+            heights,
+            500.0,
+        );
+
+        let tiles = &layout.batches[1].tiles;
+        assert_eq!(tiles.len(), 1);
+        assert_eq!(tiles[0].operation, OperationId::Regroup(RegroupId(3)));
+        assert_eq!(tiles[0].bounds.height, 75.0);
+        assert!(layout.batches[1].bounds.height >= BATCH_HEADER_HEIGHT + 75.0);
+        assert_well_formed(&layout);
     }
 }
