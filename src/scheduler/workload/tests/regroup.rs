@@ -81,6 +81,7 @@ fn footprint() {
         RegroupInfo {
             borrow: expected,
             trigger: RegroupTrigger::Entry,
+            occurrence: None,
         }
     );
 }

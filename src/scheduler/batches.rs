@@ -112,6 +112,7 @@ impl RegroupStep {
         RegroupInfo {
             borrow: self.borrow.clone(),
             trigger: self.trigger,
+            occurrence: todo!("step 4"),
         }
     }
 }

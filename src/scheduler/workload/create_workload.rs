@@ -773,6 +773,7 @@ fn place_system(system: ToBePlacedSystem, batches: &mut Batches, batches_info: &
         after_all: system.after_all_info,
         before_all: system.before_all_info,
         unique_id: system.index,
+        occurrence: todo!("step 4"),
     };
 
     let batch = batches.parallel.last_mut().unwrap();

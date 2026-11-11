@@ -5,6 +5,8 @@ use crate::borrow::Mutability;
 use crate::scheduler::info::{
     BatchInfo, BeforeAfterConstraint, Conflict, RegroupInfo, RegroupTrigger, SystemInfo,
 };
+#[cfg(feature = "serde1")]
+use crate::scheduler::info::{OccurrenceRef, OrderingOrigin, Predecessor};
 use crate::scheduler::system_modificator::SystemModificator;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
@@ -54,7 +56,8 @@ fn before_all() {
                     "System(shipyard::scheduler::workload::tests::info_tests::before_all::sys_a)"
                         .to_string()
             }],
-            unique_id: 1
+            unique_id: 1,
+            occurrence: None
         })
     );
     assert_eq!(systems0.next(), None);
@@ -70,7 +73,8 @@ fn before_all() {
             after: vec![1],
             after_all: vec![],
             before_all: vec![],
-            unique_id: 0
+            unique_id: 0,
+            occurrence: None
         })
     );
     assert_eq!(systems1.next(), None);
@@ -101,7 +105,8 @@ fn after_all() {
             after: vec![],
             after_all: vec![],
             before_all: vec![],
-            unique_id: 1
+            unique_id: 1,
+            occurrence: None
         })
     );
     assert_eq!(systems0.next(), None);
@@ -122,7 +127,8 @@ fn after_all() {
                         .to_string()
             }],
             before_all: vec![],
-            unique_id: 0
+            unique_id: 0,
+            occurrence: None
         })
     );
     assert_eq!(systems1.next(), None);
@@ -166,7 +172,8 @@ fn borrow() {
             after: vec![],
             after_all: vec![],
             before_all: vec![],
-            unique_id: 0
+            unique_id: 0,
+            occurrence: None
         })
     );
 
@@ -207,7 +214,8 @@ fn borrow() {
             after: vec![0],
             after_all: vec![],
             before_all: vec![],
-            unique_id: 1
+            unique_id: 1,
+            occurrence: None
         })
     );
 
@@ -240,7 +248,8 @@ fn borrow() {
             after: vec![1],
             after_all: vec![],
             before_all: vec![],
-            unique_id: 2
+            unique_id: 2,
+            occurrence: None
         })
     );
     assert_eq!(
@@ -271,7 +280,8 @@ fn borrow() {
             after: vec![1],
             after_all: vec![],
             before_all: vec![],
-            unique_id: 3
+            unique_id: 3,
+            occurrence: None
         })
     );
 }
@@ -320,6 +330,7 @@ fn regroup_borrow() {
         &[RegroupInfo {
             borrow: set,
             trigger: RegroupTrigger::Entry,
+            occurrence: None,
         }]
     );
     assert_eq!(batches_info[0].systems().count(), 0);
@@ -459,4 +470,36 @@ fn serde_without_regroups() {
 
     assert!(deserialized.batches_info[0].regroups.is_empty());
     assert_eq!(serde_json::to_string(&deserialized).unwrap(), json);
+}
+
+/// Asserts that a system reference and a regroup reference with the same number stay different through serde.
+#[cfg(feature = "serde1")]
+#[test]
+fn serde_references() {
+    let references = vec![OccurrenceRef::System(3), OccurrenceRef::Regroup(3)];
+
+    let json = serde_json::to_string(&references).unwrap();
+    let deserialized: Vec<OccurrenceRef> = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(deserialized, references);
+    assert_ne!(deserialized[0], deserialized[1]);
+}
+
+/// Asserts that a predecessor keeps all of its origins, labels included, through serde.
+#[cfg(feature = "serde1")]
+#[test]
+fn serde_several_origins() {
+    let predecessor = Predecessor {
+        occurrence: OccurrenceRef::System(1),
+        origins: vec![
+            OrderingOrigin::Implicit,
+            OrderingOrigin::BeforeAll("label".to_string()),
+            OrderingOrigin::Sequential,
+        ],
+    };
+
+    let json = serde_json::to_string(&predecessor).unwrap();
+    let deserialized: Predecessor = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(deserialized, predecessor);
 }
