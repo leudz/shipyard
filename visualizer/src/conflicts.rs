@@ -1,12 +1,14 @@
 //! Why an operation couldn't run in the batch right before its own.
 //!
 //! We compare each operation with every operation of the previous batch, using the scheduling facts
-//! of [`crate::facts`]. Every incompatibility is kept, not only the first one the scheduler found.
+//! of [`crate::facts`]. Every incompatibility is kept, not only the first one the scheduler found,
+//! along with the hard ordering edges coming from that batch.
 
 use crate::facts::{Access, OperationFacts};
 use crate::model::{Dataset, OperationId};
 use shipyard::borrow::Mutability;
-use std::collections::{BTreeMap, HashMap};
+use shipyard::scheduler::info::OrderingOrigin;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Why an operation couldn't share a batch with an operation of the previous batch.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -17,6 +19,8 @@ pub enum Reason {
     ///
     /// Either they're of the same storage and one is exclusive, or one is `AllStorages`.
     Borrow { blocker: Access, blocked: Access },
+    /// The blocker has to run in an earlier batch, for this reason.
+    Ordering(OrderingOrigin),
 }
 
 /// Every adjacent-batch blocker of a dataset, keyed by `(blocker, blocked)`.
@@ -38,10 +42,13 @@ impl ConflictGraph {
                     unreachable!("windows of two");
                 };
 
+                // A hard predecessor further back doesn't explain why the operation isn't one batch
+                // earlier, so we only look for predecessors among the previous batch's operations.
                 for blocked in batch.operations() {
                     for blocker in previous.operations() {
-                        let reasons =
-                            reasons(dataset.facts.get(blocker), dataset.facts.get(blocked));
+                        let blocked_facts = dataset.facts.get(blocked);
+                        let mut reasons = reasons(dataset.facts.get(blocker), blocked_facts);
+                        reasons.extend(ordering_reasons(blocker, blocked_facts));
 
                         graph.add(blocker, blocked, reasons);
                     }
@@ -84,12 +91,61 @@ impl ConflictGraph {
         self.incoming.get(&blocked).map_or(&[], Vec::as_slice)
     }
 
+    /// The links to show for `roots`: every blocker of each root.
+    ///
+    /// A regroup blocker also brings its own blockers, and so on through regroups,
+    /// that's what explains where the regroup is. System blockers aren't followed.
+    pub fn visible(&self, roots: impl IntoIterator<Item = OperationId>) -> VisibleLinks {
+        let mut links = VisibleLinks::default();
+        let mut expanded: BTreeSet<OperationId> = BTreeSet::new();
+        let mut pending: Vec<OperationId> = roots.into_iter().collect();
+
+        while let Some(blocked) = pending.pop() {
+            // Each blocker is in the previous batch, so following regroups always ends.
+            if !expanded.insert(blocked) {
+                continue;
+            }
+
+            for &blocker in self.blockers(blocked) {
+                links.pairs.insert((blocker, blocked));
+                links.endpoints.insert(blocker);
+                links.endpoints.insert(blocked);
+
+                if matches!(blocker, OperationId::Regroup(_)) {
+                    pending.push(blocker);
+                }
+            }
+        }
+
+        links
+    }
+
     /// Every `(blocker, blocked)` pair with its reasons, sorted by pair.
     pub fn edges(&self) -> impl Iterator<Item = ((OperationId, OperationId), &[Reason])> {
         self.edges
             .iter()
             .map(|(&pair, reasons)| (pair, reasons.as_slice()))
     }
+}
+
+/// The links [`ConflictGraph::visible`] reveals.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct VisibleLinks {
+    /// `(blocker, blocked)` pairs, each one arrow.
+    pub pairs: BTreeSet<(OperationId, OperationId)>,
+    /// Both ends of every pair.
+    pub endpoints: BTreeSet<OperationId>,
+}
+
+/// The hard ordering origins making `blocked` wait for `blocker`.
+fn ordering_reasons(blocker: OperationId, blocked: &OperationFacts) -> Vec<Reason> {
+    blocked
+        .predecessors
+        .iter()
+        .filter(|prerequisite| prerequisite.operation == blocker)
+        .flat_map(|prerequisite| prerequisite.origins.iter().cloned())
+        .map(Reason::Ordering)
+        .collect()
 }
 
 /// Every reason `blocked` can't run at the same time as `blocker`, sorted.
@@ -217,7 +273,7 @@ mod tests {
                 Reason::Borrow { blocker, blocked } => {
                     Some((blocker.storage.as_str(), blocked.storage.as_str()))
                 }
-                Reason::ThreadSlot => None,
+                Reason::ThreadSlot | Reason::Ordering(_) => None,
             })
             .collect()
     }
@@ -398,7 +454,8 @@ mod tests {
         assert_eq!(dataset.conflicts.edges().count(), 0);
     }
 
-    /// Asserts that a real export's conflict, a writer then a reader, comes out as one borrow edge.
+    /// Asserts that a real export's conflict, a writer then a reader, comes out as one edge
+    /// with the borrow and the implicit ordering.
     #[test]
     fn real_export() {
         use shipyard::{Component, View, ViewMut, World};
@@ -426,7 +483,9 @@ mod tests {
         let ((blocker, blocked), reasons) = edges[0];
         assert_eq!(dataset.location(blocker).1, 0);
         assert_eq!(dataset.location(blocked).1, 1);
-        assert_eq!(reasons.len(), 1);
+        assert_eq!(reasons.len(), 2);
+        assert!(matches!(reasons[0], Reason::Borrow { .. }));
+        assert_eq!(reasons[1], Reason::Ordering(OrderingOrigin::Implicit));
     }
 
     /// Asserts that a real system borrowing `AllStorages` is blocked by a writer with a disjoint storage.
@@ -455,5 +514,221 @@ mod tests {
         let edges: Vec<_> = dataset.conflicts.edges().collect();
         assert_eq!(edges.len(), 1);
         assert!(dataset.facts.get(edges[0].0 .1).thread_bound);
+    }
+
+    /// A system with occurrence `id`, no borrows, and `after` as its predecessors.
+    fn ordered(name: &str, id: usize, after: Value) -> Value {
+        let mut system = system(name, &[]);
+        system["occurrence"] = json!({
+            "id": id, "conditions": [], "footprint": [], "thread_bound": false, "after": after,
+        });
+
+        system
+    }
+
+    /// A regroup of `storage` with occurrence `id`.
+    fn ordered_regroup(id: usize, storage: &str) -> Value {
+        let mut regroup = regroup(storage);
+        regroup["occurrence"] = json!({"id": id, "thread_bound": false, "after": []});
+
+        regroup
+    }
+
+    /// A system with occurrence `id` borrowing `storage` exclusively.
+    fn writer(name: &str, id: usize, storage: &str) -> Value {
+        let mut system = system(name, &[(storage, "Exclusive")]);
+        system["occurrence"] = json!({
+            "id": id, "conditions": [], "thread_bound": false, "after": [],
+            "footprint": [{"name": storage, "mutability": "Exclusive", "thread_safe": true}],
+        });
+
+        system
+    }
+
+    /// Asserts that a real `before_all` makes an arrow from the system running first to the later one,
+    /// whichever system declared it.
+    #[test]
+    fn before_all_direction() {
+        use shipyard::scheduler::SystemModificator;
+        use shipyard::World;
+
+        fn first() {}
+        fn later() {}
+
+        let world = World::new();
+        shipyard::Workload::new("w")
+            .with_system(later)
+            .with_system(first.before_all(later))
+            .add_to_world(&world)
+            .unwrap();
+        let json = serde_json::to_vec(&world.workloads_info()).unwrap();
+
+        let dataset = crate::import::load_dataset(&json).unwrap();
+
+        let ((blocker, blocked), reasons) = dataset.conflicts.edges().next().unwrap();
+        let name = |operation| match operation {
+            OperationId::System(id) => {
+                let system = dataset.occurrence(id).system;
+                dataset.system(system).label.as_str()
+            }
+            OperationId::Regroup(_) => "regroup",
+        };
+        assert_eq!((name(blocker), name(blocked)), ("first", "later"));
+        assert!(matches!(
+            reasons,
+            [Reason::Ordering(OrderingOrigin::BeforeAll(_))]
+        ));
+    }
+
+    /// Asserts that barrier, implicit and sequential origins all become reasons of one arrow.
+    #[test]
+    fn ordering_origins() {
+        let dataset = load(json!({"w": [
+            batch(vec![ordered("a", 0, json!([]))]),
+            batch(vec![ordered("b", 1, json!([
+                {"occurrence": {"System": 0}, "origins": ["Implicit", "Barrier", "Sequential"]},
+            ]))]),
+        ]}));
+
+        assert_eq!(
+            dataset.conflicts.reasons(sys(0), sys(1)).unwrap(),
+            [
+                Reason::Ordering(OrderingOrigin::Implicit),
+                Reason::Ordering(OrderingOrigin::Barrier),
+                Reason::Ordering(OrderingOrigin::Sequential),
+            ]
+        );
+    }
+
+    /// Asserts that a borrow conflict and an ordering edge on the same pair make one arrow with both reasons.
+    #[test]
+    fn borrow_and_ordering() {
+        let mut later = writer("b", 1, "A");
+        later["occurrence"]["after"] =
+            json!([{"occurrence": {"System": 0}, "origins": [{"AfterAll": "a"}]}]);
+
+        let dataset = load(json!({"w": [batch(vec![writer("a", 0, "A")]), batch(vec![later])]}));
+
+        let reasons = dataset.conflicts.reasons(sys(0), sys(1)).unwrap();
+        assert_eq!(reasons.len(), 2);
+        assert!(matches!(reasons[0], Reason::Borrow { .. }));
+        assert_eq!(
+            reasons[1],
+            Reason::Ordering(OrderingOrigin::AfterAll("a".to_string()))
+        );
+        assert_eq!(dataset.conflicts.edges().count(), 1);
+    }
+
+    /// Asserts that consecutive operations without a conflict or a hard predecessor aren't linked,
+    /// the sequential order alone doesn't keep them apart.
+    #[test]
+    fn soft_only() {
+        let dataset = load(json!({"w": [
+            batch(vec![ordered("a", 0, json!([]))]),
+            batch(vec![ordered("b", 1, json!([]))]),
+        ]}));
+
+        assert_eq!(dataset.conflicts.edges().count(), 0);
+    }
+
+    /// Asserts that a hard predecessor two batches back isn't drawn, nor replaced by an operation of the previous batch.
+    #[test]
+    fn nonadjacent_predecessor() {
+        let dataset = load(json!({"w": [
+            batch(vec![ordered("a", 0, json!([]))]),
+            batch(vec![ordered("b", 1, json!([]))]),
+            batch(vec![ordered("c", 2, json!([{"occurrence": {"System": 0}, "origins": ["Barrier"]}]))]),
+        ]}));
+
+        assert_eq!(dataset.conflicts.edges().count(), 0);
+    }
+
+    /// Asserts that several roots show the union of their blockers, and the endpoints of every link.
+    #[test]
+    fn union() {
+        let dataset = load(json!({"w": [
+            batch(vec![writer("a", 0, "A"), writer("b", 1, "B")]),
+            batch(vec![writer("c", 2, "A"), writer("d", 3, "B")]),
+        ]}));
+
+        let links = dataset.conflicts.visible([sys(2), sys(3), sys(2)]);
+
+        assert_eq!(
+            links.pairs.into_iter().collect::<Vec<_>>(),
+            [(sys(0), sys(2)), (sys(1), sys(3))]
+        );
+        assert_eq!(
+            links.endpoints.into_iter().collect::<Vec<_>>(),
+            [sys(0), sys(1), sys(2), sys(3)]
+        );
+    }
+
+    /// Asserts that a root without blockers shows nothing, and that roots don't bring their successors.
+    #[test]
+    fn no_successors() {
+        let dataset = load(
+            json!({"w": [batch(vec![writer("a", 0, "A")]), batch(vec![writer("b", 1, "A")])]}),
+        );
+
+        assert_eq!(dataset.conflicts.visible([sys(0)]), VisibleLinks::default());
+    }
+
+    /// Asserts that a regroup blocker brings its own blockers, through a chain of regroups.
+    #[test]
+    fn regroup_expansion() {
+        let dataset = load(json!({"w": [
+            batch(vec![writer("a", 0, "A")]),
+            regroup_batch(vec![ordered_regroup(0, "A")]),
+            regroup_batch(vec![ordered_regroup(1, "A")]),
+            batch(vec![writer("b", 1, "A")]),
+        ]}));
+
+        let links = dataset.conflicts.visible([sys(1)]);
+
+        assert_eq!(
+            links.pairs.into_iter().collect::<Vec<_>>(),
+            [(sys(0), reg(0)), (reg(0), reg(1)), (reg(1), sys(1))]
+        );
+    }
+
+    /// Asserts that a system blocker isn't followed: only the root's own blockers show.
+    #[test]
+    fn stops_at_systems() {
+        let dataset = load(json!({"w": [
+            batch(vec![writer("a", 0, "A")]),
+            batch(vec![writer("b", 1, "A")]),
+            batch(vec![writer("c", 2, "A")]),
+        ]}));
+
+        let links = dataset.conflicts.visible([sys(2)]);
+
+        assert_eq!(
+            links.pairs.into_iter().collect::<Vec<_>>(),
+            [(sys(1), sys(2))]
+        );
+    }
+
+    /// Asserts that two appearances of one grouped system keep their own links.
+    #[test]
+    fn appearances() {
+        let dataset = load(json!({"w": [
+            batch(vec![writer("a", 0, "A")]),
+            batch(vec![writer("run", 1, "A")]),
+            batch(vec![writer("b", 2, "B")]),
+            batch(vec![writer("run", 3, "A")]),
+        ]}));
+        assert_eq!(
+            dataset.occurrence(OccurrenceId(1)).system,
+            dataset.occurrence(OccurrenceId(3)).system
+        );
+
+        let first = dataset.conflicts.visible([sys(1)]);
+        let second = dataset.conflicts.visible([sys(3)]);
+
+        assert_eq!(
+            first.pairs.into_iter().collect::<Vec<_>>(),
+            [(sys(0), sys(1))]
+        );
+        assert!(second.pairs.is_empty());
     }
 }
