@@ -413,6 +413,22 @@ impl Dataset {
         labels.join(" + ")
     }
 
+    /// What to call `operation` on its own: the system's label, or `Regroup` and its storages,
+    /// with the batch so repeated systems and regroups can be told apart.
+    pub fn operation_label(&self, operation: OperationId) -> String {
+        let (_, batch) = self.location(operation);
+
+        match operation {
+            OperationId::System(occurrence) => {
+                let system = self.system(self.occurrence(occurrence).system);
+                format!("{} (batch {batch})", system.label)
+            }
+            OperationId::Regroup(regroup) => {
+                format!("Regroup {} (batch {batch})", self.regroup_label(regroup))
+            }
+        }
+    }
+
     /// The workload and batch index `operation` runs in.
     pub fn location(&self, operation: OperationId) -> (WorkloadId, usize) {
         match operation {
@@ -817,6 +833,26 @@ mod tests {
 
         assert!(dataset.regroups[0].thread_bound);
         assert!(!dataset.regroups[1].thread_bound);
+    }
+
+    /// Asserts that operation labels name systems and regroups with their batch, so repeats differ.
+    #[test]
+    fn operation_labels() {
+        let regrouping = with_regroups(batch(None, vec![]), vec![regroup(&["B", "A"], "Pending")]);
+
+        let dataset = dataset(vec![(
+            "w",
+            vec![batch(None, vec![system("run", 0, &[])]), regrouping],
+        )]);
+
+        assert_eq!(
+            dataset.operation_label(OperationId::System(OccurrenceId(0))),
+            "run (batch 0)"
+        );
+        assert_eq!(
+            dataset.operation_label(OperationId::Regroup(RegroupId(0))),
+            "Regroup A + B (batch 1)"
+        );
     }
 
     /// Asserts that regroups don't change grouped systems or their borrowers.

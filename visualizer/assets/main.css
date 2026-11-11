@@ -553,6 +553,94 @@ a {
     );
     border-style: dashed;
 }
+/* An end of a shown link stays legible when the highlight dims it, keeping its own colors. */
+.system-tile.dimmed.link-end {
+    opacity: 1;
+}
+
+/* The ends of the hovered or focused link. A ring around the tile, so the selection, highlight
+   and focus styles of the tile itself stay as they are. */
+.system-tile.link-active::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border: 2px solid var(--text);
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+/* Over the tiles, under the tooltips and panels. Only the links and cues take the pointer. */
+.link-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.link-line {
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.5px;
+}
+
+.link-line.active {
+    stroke: var(--text);
+    stroke-width: 2.5px;
+}
+
+.link-arrow {
+    fill: var(--muted);
+}
+
+.link-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 12px;
+    pointer-events: stroke;
+}
+
+.link-hit:focus {
+    outline: none;
+}
+
+.link-hit:focus-visible {
+    stroke: var(--tint);
+}
+
+.link-cue {
+    position: absolute;
+    z-index: 3;
+    max-width: 14rem;
+    padding: 1px 6px;
+    overflow: hidden;
+    font: 11px/16px var(--font-mono);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--muted);
+    border-radius: 3px;
+    transform: translateY(-50%);
+    cursor: default;
+}
+
+.link-cue.left {
+    left: 4px;
+}
+
+.link-cue.right {
+    right: 4px;
+}
+
+.link-cue.active,
+.link-cue:focus-visible {
+    border-color: var(--text);
+    outline: 2px solid var(--accent);
+}
+
 
 .tile-kind {
     font: 600 9px/15px var(--font-ui);

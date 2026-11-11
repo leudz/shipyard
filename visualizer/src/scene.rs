@@ -9,6 +9,7 @@
 
 use crate::floating::{click_point, Openings};
 use crate::inspector_ui::InspectorLayer;
+use crate::link_ui::{LinkFocus, LinkLayer};
 use crate::search_ui::SearchPanel;
 use crate::{count, dom};
 use dioxus::html::geometry::WheelDelta;
@@ -18,6 +19,7 @@ use shipyard::scheduler::info::RegroupTrigger;
 use std::collections::HashMap;
 use std::rc::Rc;
 use visualizer::camera::{self, Camera, ZOOM_STEP};
+use visualizer::conflicts::VisibleLinks;
 use visualizer::highlight::{Relation, Relations};
 use visualizer::inspectors::Record;
 use visualizer::layout::{layout_workload, BatchLayout, WorkloadLayout, TILE_WIDTH};
@@ -242,7 +244,20 @@ fn WorkloadView(
     // the focused one.
     let hovered = use_signal(|| None::<OperationId>);
     let focused = use_signal(|| None::<OperationId>);
+    let link_focus = LinkFocus {
+        hovered: use_signal(|| None),
+        focused: use_signal(|| None),
+    };
     let mut drag = use_signal(|| None::<Drag>);
+    // The links of the selection and the highlight. The conflict graph is built once per
+    // dataset, this only looks it up.
+    let links = use_memo(move || {
+        let app = state.read();
+        app.loaded
+            .as_ref()
+            .map(|loaded| loaded.visible_links())
+            .unwrap_or_default()
+    });
 
     let camera = use_memo(move || {
         state
@@ -387,7 +402,7 @@ fn WorkloadView(
                         // The same element as in the scene, so the browser styles it the same.
                         button {
                             key: "{tile_id(operation)}",
-                            class: tile_class(operation, false, None),
+                            class: tile_class(operation, false, None, LinkMark::None),
                             r#type: "button",
                             tabindex: "-1",
                             style: "width: {TILE_WIDTH}px;",
@@ -483,10 +498,21 @@ fn WorkloadView(
                     hovered,
                     focused,
                     scene_rect,
+                    links,
+                    link_focus,
                 }
             }
         }
 
+        LinkLayer {
+            state,
+            links,
+            layout,
+            camera,
+            scene_rect,
+            top: WORKLOAD_TOP,
+            focus: link_focus,
+        }
         TileTooltip {
             state,
             hovered,
@@ -517,6 +543,8 @@ fn World(
     hovered: Signal<Option<OperationId>>,
     focused: Signal<Option<OperationId>>,
     scene_rect: Signal<Option<SceneRect>>,
+    links: Memo<VisibleLinks>,
+    link_focus: LinkFocus,
 ) -> Element {
     let Camera { x, zoom } = camera();
     let layout_size = layout
@@ -540,6 +568,8 @@ fn World(
                 hovered,
                 focused,
                 scene_rect,
+                links,
+                link_focus,
             }
         }
     }
@@ -555,8 +585,12 @@ fn Batches(
     mut hovered: Signal<Option<OperationId>>,
     mut focused: Signal<Option<OperationId>>,
     scene_rect: Signal<Option<SceneRect>>,
+    links: Memo<VisibleLinks>,
+    link_focus: LinkFocus,
 ) -> Element {
     let openings = use_context::<Openings>();
+    let links = links.read();
+    let active_link = link_focus.active();
     let Highlighting(relations) = use_context::<Highlighting>();
     let relations = relations.read();
     let layout = layout.read();
@@ -595,13 +629,20 @@ fn Batches(
                         let relation = relations
                             .as_ref()
                             .map(|relations| relations.operation(dataset, operation));
+                        let link = if active_link.is_some_and(|(blocker, blocked)| operation == blocker || operation == blocked) {
+                            LinkMark::Active
+                        } else if links.endpoints.contains(&operation) {
+                            LinkMark::End
+                        } else {
+                            LinkMark::None
+                        };
                         let full_name = full_name(dataset, operation);
 
                         rsx! {
                             button {
                                 key: "{tile_id(operation)}",
                                 id: tile_id(operation),
-                                class: tile_class(operation, is_selected, relation),
+                                class: tile_class(operation, is_selected, relation, link),
                                 r#type: "button",
                                 aria_label: tile_name(dataset, operation, relation),
                                 "aria-description": "{full_name}",
@@ -1338,9 +1379,24 @@ fn tile_name(dataset: &Dataset, operation: OperationId, relation: Option<Relatio
     format!("{label}{slot}, batch {batch}{highlight}")
 }
 
-/// A tile's classes: its kind, selected, and its relation to the highlight. Unrelated tiles are
-/// dimmed but stay reachable.
-fn tile_class(operation: OperationId, selected: bool, relation: Option<Relation>) -> String {
+/// How a tile takes part in the shown links.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinkMark {
+    None,
+    /// An end of a shown link, it stays legible even if the highlight would dim it.
+    End,
+    /// An end of the hovered or focused link.
+    Active,
+}
+
+/// A tile's classes: its kind, selected, its relation to the highlight, and its part in the
+/// shown links. Unrelated tiles are dimmed but stay reachable.
+fn tile_class(
+    operation: OperationId,
+    selected: bool,
+    relation: Option<Relation>,
+    link: LinkMark,
+) -> String {
     let kind = match operation {
         OperationId::System(_) => "",
         OperationId::Regroup(_) => " regroup-tile",
@@ -1354,7 +1410,13 @@ fn tile_class(operation: OperationId, selected: bool, relation: Option<Relation>
     };
     let selected = if selected { " selected" } else { "" };
 
-    format!("system-tile{kind}{selected}{highlight}")
+    let link = match link {
+        LinkMark::None => "",
+        LinkMark::End => " link-end",
+        LinkMark::Active => " link-end link-active",
+    };
+
+    format!("system-tile{kind}{selected}{highlight}{link}")
 }
 
 /// The short access label of a borrow relation, `None` for other relations.

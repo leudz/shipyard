@@ -17,6 +17,7 @@ mod dom;
 mod floating;
 mod import_ui;
 mod inspector_ui;
+mod link_ui;
 mod map_ui;
 mod scene;
 mod search_ui;
