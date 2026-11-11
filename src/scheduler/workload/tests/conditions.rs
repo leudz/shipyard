@@ -476,6 +476,313 @@ fn tracking_built_workload() {
     assert_eq!(world.borrow::<UniqueView<'_, U32>>().unwrap().0, 1);
 }
 
+/// Sets the `Usize` unique to 1.
+fn set_flag(mut flag: UniqueViewMut<'_, Usize>) {
+    flag.0 = 1;
+}
+
+/// Returns a world whose `Usize` unique starts at 0.
+fn flag_world() -> World {
+    let world = World::new_for_test();
+    world.add_unique(Usize(0));
+
+    world
+}
+
+/// Records values and counts runs, shared between a test and the systems or conditions it builds.
+#[derive(Clone, Default)]
+struct Probe {
+    seen: alloc::sync::Arc<std::sync::Mutex<Vec<usize>>>,
+}
+
+impl Probe {
+    fn record(&self, value: usize) {
+        self.seen.lock().unwrap().push(value);
+    }
+
+    fn seen(&self) -> Vec<usize> {
+        self.seen.lock().unwrap().clone()
+    }
+}
+
+/// Returns a body borrowing nothing, gated on the `Usize` unique being 1,
+/// with what its condition saw and how many times it ran.
+fn gated() -> (WorkloadSystem, Probe, Probe) {
+    let (condition_seen, body_runs) = (Probe::default(), Probe::default());
+    let condition = {
+        let condition_seen = condition_seen.clone();
+        move |flag: UniqueView<'_, Usize>| {
+            condition_seen.record(flag.0);
+            flag.0 == 1
+        }
+    };
+    let body = {
+        let body_runs = body_runs.clone();
+        move || body_runs.record(1)
+    };
+
+    (body.run_if(condition), condition_seen, body_runs)
+}
+
+/// Asserts that a condition gated on a flag set by a system it explicitly follows sees the flag set.
+#[test]
+fn timing_after_all() {
+    let world = flag_world();
+    let (gated, condition_seen, body_runs) = gated();
+    Workload::new("")
+        .with_system(set_flag)
+        .with_system(gated.after_all(set_flag))
+        .add_to_world(&world)
+        .unwrap();
+
+    world.run_default_workload().unwrap();
+
+    assert_eq!(
+        (condition_seen.seen(), body_runs.seen()),
+        (vec![1], vec![1])
+    );
+}
+
+/// Asserts that a condition gated on a flag set by a system before a barrier sees the flag set.
+#[test]
+fn timing_barrier() {
+    let world = flag_world();
+    let (gated, condition_seen, body_runs) = gated();
+    Workload::new("")
+        .with_system(set_flag)
+        .with_barrier()
+        .with_system(gated)
+        .add_to_world(&world)
+        .unwrap();
+
+    world.run_default_workload().unwrap();
+
+    assert_eq!(
+        (condition_seen.seen(), body_runs.seen()),
+        (vec![1], vec![1])
+    );
+}
+
+/// Asserts that a condition declared after a system setting the flag it reads sees the flag set:
+/// its system waits for that one, in the next batch.
+#[test]
+fn timing_read() {
+    let world = flag_world();
+    let (gated, condition_seen, body_runs) = gated();
+    let workload = Workload::new("").with_system(set_flag).with_system(gated);
+    let (scheduled, _) = workload.build().unwrap();
+    assert_eq!(
+        scheduled.batches.parallel,
+        &[(None, vec![System(0)]), (None, vec![System(1)])]
+    );
+
+    scheduled.run_with_world(&world).unwrap();
+
+    assert_eq!(
+        (condition_seen.seen(), body_runs.seen()),
+        (vec![1], vec![1])
+    );
+}
+
+/// Asserts that a system declared before a condition writing the flag doesn't see its write:
+/// the condition's system waits for that one, in the next batch.
+#[test]
+fn timing_write() {
+    let world = flag_world();
+    let reader_seen = Probe::default();
+    let reader = {
+        let reader_seen = reader_seen.clone();
+        move |flag: UniqueView<'_, Usize>| reader_seen.record(flag.0)
+    };
+    let writer = (|| {}).run_if(|mut flag: UniqueViewMut<'_, Usize>| {
+        flag.0 = 1;
+        true
+    });
+    let workload = Workload::new("").with_system(reader).with_system(writer);
+    let (scheduled, _) = workload.build().unwrap();
+    assert_eq!(
+        scheduled.batches.parallel,
+        &[(None, vec![System(0)]), (None, vec![System(1)])]
+    );
+
+    scheduled.run_with_world(&world).unwrap();
+
+    assert_eq!(reader_seen.seen(), vec![0]);
+}
+
+/// Returns a system borrowing nothing, whose condition sets the flag.
+fn flag_writer() -> WorkloadSystem {
+    (|| {}).run_if(|mut flag: UniqueViewMut<'_, Usize>| {
+        flag.0 = 1;
+        true
+    })
+}
+
+/// Returns a system borrowing nothing, whose condition records the flag.
+fn flag_reader(seen: &Probe) -> WorkloadSystem {
+    let seen = seen.clone();
+
+    (|| {}).run_if(move |flag: UniqueView<'_, Usize>| {
+        seen.record(flag.0);
+        true
+    })
+}
+
+/// Asserts that a condition reading the flag a previous condition writes sees it written,
+/// the two systems are in different batches.
+#[test]
+fn conditions_write_read() {
+    let world = flag_world();
+    let seen = Probe::default();
+    let workload = Workload::new("")
+        .with_system(flag_writer())
+        .with_system(flag_reader(&seen));
+    let (scheduled, _) = workload.build().unwrap();
+    assert_eq!(
+        scheduled.batches.parallel,
+        &[(None, vec![System(0)]), (None, vec![System(1)])]
+    );
+
+    scheduled.run_with_world(&world).unwrap();
+
+    assert_eq!(seen.seen(), vec![1]);
+}
+
+/// Asserts that a condition reading the flag a later condition writes doesn't see it written,
+/// the two systems are in different batches.
+#[test]
+fn conditions_read_write() {
+    let world = flag_world();
+    let seen = Probe::default();
+    let workload = Workload::new("")
+        .with_system(flag_reader(&seen))
+        .with_system(flag_writer());
+    let (scheduled, _) = workload.build().unwrap();
+    assert_eq!(
+        scheduled.batches.parallel,
+        &[(None, vec![System(0)]), (None, vec![System(1)])]
+    );
+
+    scheduled.run_with_world(&world).unwrap();
+
+    assert_eq!(seen.seen(), vec![0]);
+}
+
+/// Asserts that a condition can read a storage its own system writes,
+/// the condition is done before the system starts.
+#[test]
+fn condition_shares_body_storage() {
+    let world = flag_world();
+    let system = (|mut flag: UniqueViewMut<'_, Usize>| flag.0 += 1)
+        .run_if(|flag: UniqueView<'_, Usize>| flag.0 == 0);
+    let (scheduled, _) = Workload::new("").with_system(system).build().unwrap();
+
+    scheduled.run_with_world(&world).unwrap();
+
+    assert_eq!(world.borrow::<UniqueView<'_, Usize>>().unwrap().0, 1);
+}
+
+/// Asserts that every condition of a chain counts toward its system's conflicts,
+/// even one skipped because an earlier condition is `false`.
+#[test]
+fn chain_conflicts() {
+    fn read_flag(_: UniqueView<'_, Usize>) {}
+
+    let world = flag_world();
+    let chained = (|| {})
+        .run_if(|| false)
+        .run_if(|mut flag: UniqueViewMut<'_, Usize>| {
+            flag.0 = 1;
+            true
+        });
+    let workload = Workload::new("")
+        .with_system(read_flag)
+        .with_system(chained);
+    let (scheduled, _) = workload.build().unwrap();
+    assert_eq!(
+        scheduled.batches.parallel,
+        &[(None, vec![System(0)]), (None, vec![System(1)])]
+    );
+
+    scheduled.run_with_world(&world).unwrap();
+
+    assert_eq!(world.borrow::<UniqueView<'_, Usize>>().unwrap().0, 0);
+}
+
+/// Asserts that each occurrence of a system is scheduled with its own condition:
+/// the one whose condition reads the flag waits for `set_flag`, the other runs alongside it.
+#[test]
+fn occurrence_conditions() {
+    let world = flag_world();
+    let runs = Probe::default();
+    let counted = {
+        let runs = runs.clone();
+        move || runs.record(1)
+    };
+    let workload = Workload::new("")
+        .with_system(counted.clone().run_if(|| true))
+        .with_system(set_flag)
+        .with_system(counted.run_if(|flag: UniqueView<'_, Usize>| flag.0 == 1));
+    let (scheduled, _) = workload.build().unwrap();
+    assert_eq!(
+        scheduled.batches.parallel,
+        &[(None, vec![System(0), System(1)]), (None, vec![System(0)])]
+    );
+
+    scheduled.run_with_world(&world).unwrap();
+
+    assert_eq!(runs.seen(), vec![1, 1]);
+}
+
+/// Panics, its condition fails before it can run.
+fn guarded() {
+    panic!("the condition failed, its system shouldn't run");
+}
+
+/// Asserts that a condition failing to borrow its views stops the workload with an error naming
+/// its system, which doesn't run.
+#[test]
+fn condition_error() {
+    let world = World::new_for_test();
+    let (scheduled, _) = Workload::new("")
+        .with_system(guarded.run_if(|_: UniqueView<'_, U32>| true))
+        .build()
+        .unwrap();
+
+    let result = scheduled.run_with_world(&world);
+
+    let Err(error::RunWorkload::Run((label, error::Run::GetStorage(get_storage)))) = result else {
+        panic!("the condition should have failed to borrow: {result:?}");
+    };
+    assert!(*label == *guarded.as_label());
+    assert!(matches!(
+        get_storage,
+        error::GetStorage::MissingStorage { .. }
+    ));
+}
+
+/// Asserts that a system's workload info only lists its own borrows, not its condition's.
+#[test]
+fn info_borrow() {
+    fn read_u32(_: View<'_, U32>) {}
+
+    let (_, info) = Workload::new("")
+        .with_system(read_u32.run_if(|_: UniqueView<'_, Usize>| true))
+        .build()
+        .unwrap();
+
+    let borrow = &info.batches_info[0].systems.1[0].borrow;
+    assert_eq!(
+        borrow
+            .iter()
+            .map(|type_info| type_info.storage_id)
+            .collect::<Vec<_>>(),
+        vec![crate::storage::StorageId::of::<
+            crate::sparse_set::SparseSet<U32>,
+        >()]
+    );
+}
+
 /// Adds one to the `U16` unique.
 fn count_u16(mut count: UniqueViewMut<'_, U16>) {
     count.0 += 1;

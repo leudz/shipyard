@@ -24,10 +24,10 @@ fn single_immutable() {
             sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -57,10 +57,10 @@ fn single_mutable() {
             sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -92,10 +92,10 @@ fn multiple_immutable() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -127,10 +127,10 @@ fn multiple_mutable() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -162,10 +162,10 @@ fn multiple_mixed() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -191,10 +191,10 @@ fn multiple_mixed() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -233,10 +233,10 @@ fn append_optimizes_batches() {
             sequential: vec![System(0), System(1), System(2)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -267,10 +267,10 @@ fn all_storages() {
             sequential: vec![System(0)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -295,10 +295,10 @@ fn all_storages() {
             sequential: vec![System(0), System(0)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -324,10 +324,10 @@ fn all_storages() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -352,10 +352,10 @@ fn all_storages() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -399,10 +399,10 @@ fn non_send() {
             sequential: vec![System(0), System(0)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -432,10 +432,10 @@ fn non_send() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -460,10 +460,10 @@ fn non_send() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -488,10 +488,10 @@ fn non_send() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -521,10 +521,10 @@ fn non_send() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -556,10 +556,10 @@ fn unique_and_non_unique() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -584,10 +584,10 @@ fn empty_workload() {
             sequential: vec![],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -631,10 +631,10 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
             sequential: vec![System(0), System(1), System(2), System(3)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
     assert_eq!(&scheduler.default, &label);
@@ -674,10 +674,10 @@ fn non_send_distinct_storage() {
             sequential: vec![System(0), System(1)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
+            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),
-            grouped_writes: Vec::new(),
         })
     );
 }

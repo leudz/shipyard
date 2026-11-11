@@ -9,14 +9,12 @@
 //! can become write A -> read B -> regroup A+B -> read A. Placement must still
 //! keep that regroup apart from every system borrowing A or B.
 //!
-//! These are potential regroup steps. At execution, world::run_batches tracks
-//! which grouped storages were borrowed exclusively by systems that actually
-//! ran. Entry regroups always run; later steps run only when their set has
-//! pending writes. A successful regroup clears the whole set's pending writes.
+//! A system's conditions run with it, so the regroup also stays apart from conditions
+//! borrowing A or B. Conditions don't trigger regroups or set deadlines though.
 //!
-//! We can't tell what a system did with its mutable borrows, so we regroup
-//! even if it only changed component values. A skipped system doesn't require
-//! a regroup. Regroup itself checks whether anything needs moving.
+//! The plan is static: every regroup runs each time the workload reaches it,
+//! even when the systems before it were skipped or only changed component values.
+//! A regroup checks whether anything needs moving, a set without changes is cheap.
 
 use crate::all_storages::{AllStorages, Grouping};
 use crate::borrow::Mutability;
@@ -55,7 +53,6 @@ pub(super) fn prepare_regroups(
     }
 
     let user_batches = take_batches(batches, batches_info);
-    batches.grouped_writes = systems_writes(&user_batches, grouping);
 
     let mut planner = Planner::new(grouping);
     for batch in user_batches {
@@ -76,6 +73,10 @@ struct Job {
     run_if: usize,
     /// Occurrence of the system, see `Batches::parallel_occurrences`. `usize::MAX` for regroups.
     occurrence: usize,
+    /// What the system's conditions borrow, empty for regroups.
+    ///
+    /// A regroup can't run alongside them, but they don't trigger one.
+    conditions: Vec<TypeInfo>,
     kind: JobKind,
 }
 
@@ -90,7 +91,7 @@ enum JobKind {
 }
 
 impl Job {
-    /// Returns the storages the job borrows.
+    /// Returns the storages the job borrows directly, the ones triggering regroups.
     ///
     /// Conditions and accesses through `AllStorages` aren't part of it.
     fn borrow(&self) -> &[TypeInfo] {
@@ -100,9 +101,14 @@ impl Job {
         }
     }
 
-    /// Returns `true` if the job borrows one of `storages`.
+    /// Returns every storage the job borrows when it runs, its conditions' included.
+    fn accesses(&self) -> impl Iterator<Item = &TypeInfo> {
+        self.borrow().iter().chain(&self.conditions)
+    }
+
+    /// Returns `true` if the job or its conditions borrow one of `storages`.
     fn borrows_from(&self, storages: &[TypeInfo]) -> bool {
-        self.borrow().iter().any(|type_info| {
+        self.accesses().any(|type_info| {
             storages
                 .iter()
                 .any(|storage| storage.storage_id == type_info.storage_id)
@@ -140,12 +146,11 @@ impl Batch {
             return false;
         }
 
-        // A system borrowing `AllStorages` can reach any storage, it runs alone.
+        // A system or condition borrowing `AllStorages` can reach any storage, it runs alone.
         self.iter().all(|job| {
             !job.borrows_from(&regroup.borrow)
                 && job
-                    .borrow()
-                    .iter()
+                    .accesses()
                     .all(|type_info| type_info.storage_id != TypeId::of::<AllStorages>())
         })
     }
@@ -156,6 +161,7 @@ impl Batch {
             step: Step::Regroup(regroups.len()),
             run_if: usize::MAX,
             occurrence: usize::MAX,
+            conditions: Vec::new(),
             kind: JobKind::Regroup(regroup.info()),
         };
 
@@ -370,30 +376,6 @@ fn grouped_writes<'a>(
         .filter(|storage_id| set_index(grouping, storage_id).is_some())
 }
 
-/// Returns the grouped storages each system of `user_batches` leaves pending,
-/// indexed like the systems list.
-fn systems_writes(user_batches: &[Batch], grouping: &Grouping) -> Vec<Vec<StorageId>> {
-    let mut writes = Vec::new();
-
-    for job in user_batches.iter().flat_map(Batch::iter) {
-        let (Step::System(index), JobKind::System { info, .. }) = (job.step, &job.kind) else {
-            continue;
-        };
-
-        let storage_ids = grouped_writes(info, grouping).cloned().collect::<Vec<_>>();
-        if storage_ids.is_empty() {
-            continue;
-        }
-
-        if writes.len() <= index {
-            writes.resize(index + 1, Vec::new());
-        }
-        writes[index] = storage_ids;
-    }
-
-    writes
-}
-
 /// Adds `regroup` to the first batch of `own_batches` able to take it, or a new one.
 ///
 /// Sets are disjoint so their regroups can run in parallel,
@@ -468,6 +450,7 @@ fn take_batches(batches: &mut Batches, batches_info: &mut Vec<BatchInfo>) -> Vec
         step,
         run_if,
         occurrence,
+        conditions: batches.conditions_borrow[occurrence].clone(),
         kind: JobKind::System {
             info: Box::new(info),
             sequential: sequential_positions[occurrence],

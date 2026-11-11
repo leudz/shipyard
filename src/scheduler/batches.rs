@@ -3,7 +3,6 @@ use crate::borrow::Mutability;
 use crate::error;
 use crate::scheduler::info::{RegroupInfo, RegroupTrigger, TypeInfo};
 use crate::scheduler::system::WorkloadRunIfFn;
-use crate::storage::StorageId;
 use crate::world::World;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -27,14 +26,14 @@ pub(crate) struct Batches {
     pub(crate) sequential_run_if: Vec<usize>,
     /// Occurrence of each step of `sequential`, `usize::MAX` for regroups.
     pub(crate) sequential_occurrences: Vec<usize>,
+    /// What each occurrence's conditions borrow, indexed by occurrence.
+    ///
+    /// The regroup planner keeps regroups apart from them, they don't trigger regroups.
+    pub(crate) conditions_borrow: Vec<Vec<TypeInfo>>,
     pub(crate) workload_run_if: Option<Box<dyn WorkloadRunIfFn>>,
     pub(crate) systems_run_if: Vec<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>,
     /// The regroups `Step::Regroup` points to.
     pub(crate) regroups: Vec<RegroupStep>,
-    /// For each system, the grouped storages it leaves pending when it runs.
-    ///
-    /// Shorter than the systems list when the last ones don't leave any.
-    pub(crate) grouped_writes: Vec<Vec<StorageId>>,
 }
 
 /// A unit of work in a workload.
@@ -128,7 +127,6 @@ impl core::fmt::Debug for Batches {
             .field("parallel", &self.parallel)
             .field("sequential", &self.sequential)
             .field("regroups", &self.regroups)
-            .field("grouped_writes", &self.grouped_writes)
             .finish()
     }
 }
@@ -139,7 +137,6 @@ impl PartialEq for Batches {
         self.parallel == other.parallel
             && self.sequential == other.sequential
             && self.regroups == other.regroups
-            && self.grouped_writes == other.grouped_writes
     }
 }
 

@@ -135,8 +135,8 @@ fn regroups() {
     assert!(records[2].contains("clean=true"));
 }
 
-/// Asserts that a system skipped by its condition and the regroup it would have needed
-/// are traced as skipped.
+/// Asserts that a system skipped by its condition is traced as skipped,
+/// and that the regroup placed after it still runs.
 #[test]
 fn skipped() {
     let world = world();
@@ -150,6 +150,6 @@ fn skipped() {
     assert_eq!(records.len(), 3);
     assert!(records[0].contains("trigger=Entry"));
     assert!(records[1].starts_with("event message=skipped system"));
-    assert!(records[2].starts_with("event message=skipped regroup"));
+    assert!(records[2].starts_with("regroup"));
     assert!(records[2].contains("trigger=Pending"));
 }

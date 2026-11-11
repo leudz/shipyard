@@ -26,7 +26,16 @@ struct ToBePlacedSystem {
     /// Ordering edges (`soft_after`, `hard_after`, ...) point to occurrences.
     occurrence: usize,
     display_name: Box<dyn Label>,
+    /// What the system borrows, without its conditions.
+    ///
+    /// Workload info shows it and regroups are triggered by it.
     borrow_constraints: Vec<TypeInfo>,
+    /// What the system's conditions borrow.
+    conditions_borrow: Vec<TypeInfo>,
+    /// What the system and its conditions borrow, see [`footprint`].
+    ///
+    /// They're scheduled as one unit, conflicts and the calling-thread slot are decided with it.
+    footprint: Vec<TypeInfo>,
     tags: Vec<Box<dyn Label>>,
     before_all: DedupedLabels,
     before_all_info: Vec<BeforeAfterConstraint>,
@@ -146,6 +155,11 @@ pub(super) fn create_workload(
     }
 
     let mut batches = Batches {
+        // Systems are still in occurrence order, `order_systems` moves them.
+        conditions_borrow: to_be_placed_systems
+            .iter_mut()
+            .map(|system| core::mem::take(&mut system.conditions_borrow))
+            .collect(),
         workload_run_if: workload_run_if.map(|workload_run_if| workload_run_if.system_fn),
         ..Default::default()
     };
@@ -327,8 +341,7 @@ fn insert_systems_in_scheduler(
                     display_name,
                     system_fn,
                     borrow_constraints,
-                    // Conditions don't take part in scheduling yet.
-                    run_if_borrow_constraints: _,
+                    run_if_borrow_constraints,
                     mut tracking_to_enable,
                     generator,
                     run_if,
@@ -372,7 +385,9 @@ fn insert_systems_in_scheduler(
                     index: system_index,
                     occurrence,
                     display_name,
+                    footprint: footprint(&borrow_constraints, &run_if_borrow_constraints),
                     borrow_constraints,
+                    conditions_borrow: run_if_borrow_constraints,
                     tags,
                     before_all,
                     after_all_info: Vec::new(),
@@ -391,6 +406,33 @@ fn insert_systems_in_scheduler(
             },
         )
         .collect()
+}
+
+/// Returns what an occurrence borrows when it runs: what its system and its conditions borrow.
+///
+/// A storage borrowed several times is listed once, exclusive if one of the borrows is,
+/// not thread safe if one of them isn't.
+/// Every condition of a chain counts, even the ones a previous condition can skip.
+fn footprint(system: &[TypeInfo], conditions: &[TypeInfo]) -> Vec<TypeInfo> {
+    let mut footprint: Vec<TypeInfo> = Vec::with_capacity(system.len() + conditions.len());
+
+    for type_info in system.iter().chain(conditions) {
+        let Some(listed) = footprint
+            .iter_mut()
+            .find(|listed| listed.storage_id == type_info.storage_id)
+        else {
+            footprint.push(type_info.clone());
+
+            continue;
+        };
+
+        if type_info.mutability == Mutability::Exclusive {
+            listed.mutability = Mutability::Exclusive;
+        }
+        listed.thread_safe &= type_info.thread_safe;
+    }
+
+    footprint
 }
 
 /// Tags an occurrence with its position, so the numeric `before` constraints can find it.
@@ -462,7 +504,7 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
             }
 
             if let Some(conflict) =
-                check_conflict(system, other_system.index, &other_system.borrow_constraints)
+                check_conflict(system, other_system.index, &other_system.footprint)
             {
                 conflicts.push((j, conflict));
             }
@@ -626,6 +668,7 @@ fn order_systems(
     let mut latest_batch_run_if = &mut batches.parallel_run_if[0];
     let mut latest_batch_occurrences = &mut batches.parallel_occurrences[0];
     let mut latest_batch_info = &mut batches_info[0];
+    let mut latest_batch_footprints = BatchFootprints::default();
     // Occurrences placed since we last released hard edges.
     let mut placed = Vec::new();
     loop {
@@ -633,7 +676,7 @@ fn order_systems(
             batches.sequential.push(Step::System(system.index));
             batches.sequential_occurrences.push(system.occurrence);
 
-            let conflict = check_can_go_in_parallel_batch(latest_batch_info, &system);
+            let conflict = check_can_go_in_parallel_batch(&latest_batch_footprints, &system);
             if conflict.is_some() {
                 batches.parallel.push((None, Vec::new()));
                 batches.parallel_run_if.push((usize::MAX, Vec::new()));
@@ -648,13 +691,16 @@ fn order_systems(
                 latest_batch_run_if = batches.parallel_run_if.last_mut().unwrap();
                 latest_batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
                 latest_batch_info = batches_info.last_mut().unwrap();
+                latest_batch_footprints = BatchFootprints::default();
             }
 
-            let is_single_system = system.borrow_constraints.iter().any(|constraint| {
+            // A condition needing the calling thread takes its system along, they run together.
+            let is_single_system = system.footprint.iter().any(|constraint| {
                 !constraint.thread_safe || constraint.storage_id == TypeId::of::<AllStorages>()
             });
 
             if is_single_system {
+                latest_batch_footprints.single = Some((system.index, system.footprint));
                 latest_batch.0 = Some(Step::System(system.index));
                 latest_batch_occurrences.0 = system.occurrence;
                 latest_batch_info.systems.0 = Some(SystemInfo {
@@ -667,6 +713,9 @@ fn order_systems(
                     unique_id: system.index,
                 });
             } else {
+                latest_batch_footprints
+                    .others
+                    .push((system.index, system.footprint));
                 latest_batch.1.push(Step::System(system.index));
                 latest_batch_occurrences.1.push(system.occurrence);
                 latest_batch_info.systems.1.push(SystemInfo {
@@ -730,6 +779,7 @@ fn order_systems(
             latest_batch_run_if = batches.parallel_run_if.last_mut().unwrap();
             latest_batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
             latest_batch_info = batches_info.last_mut().unwrap();
+            latest_batch_footprints = BatchFootprints::default();
         }
     }
 
@@ -747,29 +797,25 @@ fn order_systems(
     Ok(batches_info)
 }
 
+/// The footprints of the systems in the batch being filled, with their callable index.
+///
+/// Unlike the batch's info, they include what the systems' conditions borrow.
+#[derive(Default)]
+struct BatchFootprints {
+    /// The system in the calling-thread slot.
+    single: Option<(usize, Vec<TypeInfo>)>,
+    others: Vec<(usize, Vec<TypeInfo>)>,
+}
+
 fn check_can_go_in_parallel_batch(
-    batch_info: &BatchInfo,
+    batch: &BatchFootprints,
     tested_system: &ToBePlacedSystem,
 ) -> Option<Conflict> {
-    if let Some(single_system_info) = &batch_info.systems.0
-        && let Some(conflict) = check_conflict(
-            tested_system,
-            single_system_info.unique_id,
-            &single_system_info.borrow,
-        )
-    {
-        return Some(conflict);
-    }
-
-    for system_info in &batch_info.systems.1 {
-        if let Some(conflict) =
-            check_conflict(tested_system, system_info.unique_id, &system_info.borrow)
-        {
-            return Some(conflict);
-        };
-    }
-
-    None
+    batch
+        .single
+        .iter()
+        .chain(&batch.others)
+        .find_map(|(index, footprint)| check_conflict(tested_system, *index, footprint))
 }
 
 fn check_conflict(
@@ -777,7 +823,7 @@ fn check_conflict(
     other_system_id: usize,
     borrow_constraints: &[TypeInfo],
 ) -> Option<Conflict> {
-    for type_info in &tested_system.borrow_constraints {
+    for type_info in &tested_system.footprint {
         for other_type_info in borrow_constraints {
             if !type_info.thread_safe && !other_type_info.thread_safe {
                 return Some(Conflict::OtherNotSendSync {

@@ -147,10 +147,12 @@ impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
     /// - Each set is regrouped before the first system borrowing one of its storages, to take in
     ///   the changes made outside the workload. Workloads that only read get this regroup too.
     /// - A system borrowing a grouped storage exclusively, with a `ViewMut` for example, leaves it
-    ///   to regroup once it ran. Even if it only changed values, the workload can't know.\
-    ///   A system skipped by its condition doesn't.
+    ///   to regroup. Even if it only changed values, the workload can't know.
     /// - The set of that storage is then regrouped before the storage's next borrow,
     ///   and before the workload ends.
+    ///
+    /// These regroups are planned when the workload is added and run every time,
+    /// even after a system skipped by its condition. A set with nothing to move is cheap to regroup.
     ///
     /// A regroup is only needed before the written storage is used again. Other storages of its set can be used in the meantime.\
     /// With an `A+B` group, `write A -> read B -> read A` runs as
@@ -164,8 +166,9 @@ impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
     /// The next workload using these sets regroups them when it starts.
     ///
     /// Only the storages systems borrow directly count. Borrows made by `run_if` or `skip_if` conditions,
-    /// or through `AllStorages`, don't wait for a regroup, and their changes don't make the workload regroup.\
+    /// or through `AllStorages`, don't wait for a regroup, and their changes don't add regroups to the workload.\
     /// Use [`AllStorages::regroup_set`] when they need one.
+    /// A condition still never runs at the same time as a regroup of a storage it borrows.
     ///
     /// Workloads made with [`Workload::build`] don't regroup, they aren't tied to a world.
     ///

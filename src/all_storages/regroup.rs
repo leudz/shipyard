@@ -88,17 +88,6 @@ impl AllStorages {
         Ok(regrouped)
     }
 
-    /// Returns `true` when regrouping `set` would have nothing to do.
-    ///
-    /// Borrows the set like [`regroup_connected_set`](AllStorages::regroup_connected_set),
-    /// only for the time of the check.
-    #[cfg(feature = "parallel")]
-    pub(crate) fn is_set_clean(&self, set: &ConnectedSet) -> Result<bool, error::GetStorage> {
-        let mut guards = self.borrow_set(set)?;
-
-        Ok(analysis::is_clean(&Selected::guarded(set, &mut guards)))
-    }
-
     /// Borrows every member of `set` exclusively, in order.
     ///
     /// When a borrow fails, the ones already taken are released.

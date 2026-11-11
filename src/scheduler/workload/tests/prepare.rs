@@ -537,6 +537,37 @@ fn exit_alongside() {
     );
 }
 
+/// Borrows an ungrouped storage.
+fn read_u16(_: View<'_, U16>) {}
+
+/// Asserts that a regroup doesn't run alongside a system whose condition borrows from its set,
+/// that system waits for it like `read_a`.
+#[test]
+fn condition_apart() {
+    let workload = Workload::new("")
+        .with_system(read_a)
+        .with_system(read_u16.run_if(|_: View<'_, B>| true));
+
+    let (batches, _) = prepare(workload, &world());
+
+    assert_eq!(
+        batches.parallel,
+        &[(None, vec![Regroup(0)]), (None, vec![System(0), System(1)])]
+    );
+    assert_eq!(regroups(&batches), &[(Entry, set::<A, B>())]);
+}
+
+/// Asserts that a condition borrowing a grouped storage doesn't add a regroup.
+#[test]
+fn condition_no_trigger() {
+    let workload = Workload::new("").with_system(read_u16.run_if(|_: ViewMut<'_, B>| true));
+
+    let (batches, _) = prepare(workload, &world());
+
+    assert_eq!(batches.parallel, &[(None, vec![System(0)])]);
+    assert!(batches.regroups.is_empty());
+}
+
 /// Asserts that a regroup doesn't join a batch with a system borrowing `AllStorages`,
 /// it gets its own batch.
 #[test]

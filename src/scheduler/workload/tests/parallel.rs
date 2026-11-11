@@ -117,18 +117,8 @@ fn disjoint_regroups() {
     assert!(evaluated::<C>(&world));
 }
 
-/// Makes the regroup at `index` count its runs in `runs`, asserting it runs on the calling thread.
-fn on_calling_thread(scheduled: &mut ScheduledWorkload, index: usize, runs: &Arc<AtomicUsize>) {
-    let caller = std::thread::current().id();
-    let runs = runs.clone();
-    hook(scheduled, index, move || {
-        assert_eq!(std::thread::current().id(), caller, "ran on a worker");
-        runs.fetch_add(1, Ordering::SeqCst);
-    });
-}
-
-/// Asserts that the clean regroups of two disjoint sets sharing a batch both run on the calling
-/// thread, without waking a worker up for nothing to move.
+/// Asserts that the regroups of two clean sets sharing a batch both run,
+/// a regroup runs each time the workload reaches it.
 #[test]
 fn clean_regroups() {
     let mut world = two_sets();
@@ -140,32 +130,16 @@ fn clean_regroups() {
         (None, vec![Step::Regroup(0), Step::Regroup(1)])
     );
     let runs = Arc::new(AtomicUsize::new(0));
-    on_calling_thread(&mut workload, 0, &runs);
-    on_calling_thread(&mut workload, 1, &runs);
+    for index in 0..2 {
+        let runs = runs.clone();
+        hook(&mut workload, index, move || {
+            runs.fetch_add(1, Ordering::SeqCst);
+        });
+    }
 
     run(&workload, &world).unwrap();
 
     assert_eq!(runs.load(Ordering::SeqCst), 2);
-}
-
-/// Asserts that a clean regroup sharing its batch with an unrelated system runs on the calling
-/// thread once the system ran there.
-#[test]
-fn clean_regroup_next_to_system() {
-    let mut world = two_sets();
-    world.regroup();
-    let workload = Workload::new("").with_system(read_a).with_system(|| {});
-    let mut workload = prepare(workload, &world);
-    assert_eq!(
-        workload.batches.parallel[0],
-        (None, vec![System(1), Step::Regroup(0)])
-    );
-    let runs = Arc::new(AtomicUsize::new(0));
-    on_calling_thread(&mut workload, 0, &runs);
-
-    run(&workload, &world).unwrap();
-
-    assert_eq!(runs.load(Ordering::SeqCst), 1);
 }
 
 /// Asserts that when a clean set and a set with work to do share a batch, both regroups run
@@ -345,8 +319,7 @@ macro_rules! condition_workload {
 /// Runs a workload from `condition_workload!` with `readers` counted readers.
 ///
 /// Asserts that the readers and the writer fill a single batch's parallel slots, that every
-/// condition was evaluated once, that each reader allowed to run ran once and the others didn't,
-/// and that the skipped writer left nothing for the regroup before `read_a`.
+/// condition was evaluated once, and that each reader allowed to run ran once and the others didn't.
 fn check_condition_slots(
     workload: Workload,
     readers: usize,
@@ -354,7 +327,7 @@ fn check_condition_slots(
     evaluations: &[AtomicUsize],
 ) {
     let world = pending::world();
-    let mut workload = prepare(workload, &world);
+    let workload = prepare(workload, &world);
 
     // Systems are numbered in order: `prime` is 0, then the readers and the writer.
     let slots: Vec<Step> = (1..=readers + 1).map(System).collect();
@@ -365,16 +338,6 @@ fn check_condition_slots(
         .find(|batch| batch.1.contains(&System(1)))
         .unwrap();
     assert_eq!(batch, &(None, slots));
-
-    let pending_runs = Arc::new(AtomicUsize::new(0));
-    for index in 0..workload.batches.regroups.len() {
-        if workload.batches.regroups[index].trigger == RegroupTrigger::Pending {
-            let pending_runs = pending_runs.clone();
-            hook(&mut workload, index, move || {
-                pending_runs.fetch_add(1, Ordering::SeqCst);
-            });
-        }
-    }
 
     run(&workload, &world).unwrap();
 
@@ -388,12 +351,11 @@ fn check_condition_slots(
             "reader {index}"
         );
     }
-    assert_eq!(pending_runs.load(Ordering::SeqCst), 0);
 }
 
-/// Asserts that a batch filling exactly the sixteen inline condition slots, with readers allowed
-/// and skipped by their conditions and a skipped writer, runs each allowed reader once and leaves
-/// nothing pending.
+/// Asserts that in a batch of sixteen systems with conditions, readers allowed and skipped by
+/// their conditions and a skipped writer, each condition is evaluated once and each allowed reader
+/// runs once.
 #[test]
 fn sixteen_conditions() {
     let runs = counters(15);
@@ -401,18 +363,6 @@ fn sixteen_conditions() {
     let workload = condition_workload!(runs, evaluations; 8 9 10 11 12 13 14);
 
     check_condition_slots(workload, 15, &runs, &evaluations);
-}
-
-/// Asserts that a batch one slot past the sixteen inline condition slots keeps every condition
-/// with its system: each allowed reader runs once, including the one in the seventeenth slot,
-/// the others and the skipped writer don't, and nothing is left pending.
-#[test]
-fn seventeen_conditions() {
-    let runs = counters(16);
-    let evaluations = counters(16);
-    let workload = condition_workload!(runs, evaluations; 8 9 10 11 12 13 14 15);
-
-    check_condition_slots(workload, 16, &runs, &evaluations);
 }
 
 /// Returns a two-worker pool whose threads are named `custom-<index>`,
@@ -589,16 +539,29 @@ fn local_pool_non_send_regroup() {
 }
 
 /// Runs a thread-safe system whose condition borrows `NonSendSync<View<D>>`,
-/// returns the result and the threads the condition ran on.
+/// in one batch with a thread-safe peer they meet with.
+/// Returns the result and the threads the condition, then its system, ran on.
 ///
 /// Unlike `NonSend`, a `NonSendSync` storage can't even be read from another thread.
+/// The condition takes its system to the calling-thread slot, the peer is declared first
+/// so the runner's habit of running a batch's first system on the caller can't do it instead.
 #[cfg(feature = "thread_local")]
 fn run_non_send_condition(world: &World) -> (Result<(), error::RunWorkload>, Threads) {
     use crate::borrow::NonSendSync;
 
-    fn thread_safe(_: View<'_, C>) {}
-
     let threads = Threads::default();
+    let meeting = Meeting::default();
+    let peer = {
+        let meeting = meeting.clone();
+        move |_: View<'_, C>| meeting.meet()
+    };
+    let system = {
+        let threads = threads.clone();
+        move |_: View<'_, C>| {
+            threads.record();
+            meeting.meet();
+        }
+    };
     let condition = {
         let threads = threads.clone();
         move |_: NonSendSync<View<'_, D>>| {
@@ -606,14 +569,20 @@ fn run_non_send_condition(world: &World) -> (Result<(), error::RunWorkload>, Thr
             true
         }
     };
-    let workload = Workload::new("").with_system(thread_safe.run_if(condition));
+    let workload = Workload::new("")
+        .with_system(peer)
+        .with_system(system.run_if(condition));
     let workload = prepare(workload, world);
+    assert_eq!(
+        workload.batches.parallel,
+        [(Some(System(1)), vec![System(0)])]
+    );
 
     (run(&workload, world), threads)
 }
 
 /// Asserts that with the global pool, a condition borrowing `NonSendSync` storage
-/// runs on the calling thread.
+/// and its system run on the calling thread, while a peer runs alongside them.
 #[cfg(feature = "thread_local")]
 #[test]
 fn global_pool_non_send_condition() {
@@ -622,11 +591,12 @@ fn global_pool_non_send_condition() {
     let (result, threads) = run_non_send_condition(&world);
 
     result.unwrap();
-    assert_eq!(threads.ids(), [std::thread::current().id()]);
+    let caller = std::thread::current().id();
+    assert_eq!(threads.ids(), [caller, caller]);
 }
 
 /// Asserts that with a world's own pool, a condition borrowing `NonSendSync` storage
-/// runs on the calling thread.
+/// and its system run on the calling thread, while a peer runs alongside them.
 #[cfg(feature = "thread_local")]
 #[test]
 fn local_pool_non_send_condition() {
@@ -635,7 +605,77 @@ fn local_pool_non_send_condition() {
     let (result, threads) = run_non_send_condition(&world);
 
     result.unwrap();
-    assert_eq!(threads.ids(), [std::thread::current().id()]);
+    let caller = std::thread::current().id();
+    assert_eq!(threads.ids(), [caller, caller]);
+}
+
+/// Asserts that the conditions of two systems in the same batch run at the same time.
+#[test]
+fn conditions_overlap() {
+    let world = World::new_for_test();
+    let meeting = Meeting::default();
+    let first = (|_: View<'_, C>| {}).run_if({
+        let meeting = meeting.clone();
+        move || {
+            meeting.meet();
+            true
+        }
+    });
+    let second = (|_: View<'_, Usize>| {}).run_if(move || {
+        meeting.meet();
+        true
+    });
+    let workload = Workload::new("").with_system(first).with_system(second);
+    let workload = prepare(workload, &world);
+    assert_eq!(
+        workload.batches.parallel,
+        [(None, vec![System(0), System(1)])]
+    );
+
+    run(&workload, &world).unwrap();
+}
+
+/// Returns a condition recording its thread in `threads`.
+fn recording_condition(threads: &Threads) -> impl Fn() -> bool + Clone + Send + Sync + 'static {
+    let threads = threads.clone();
+
+    move || {
+        threads.record();
+        true
+    }
+}
+
+/// Asserts that a condition runs on the same thread as its system,
+/// for both systems of a batch, one of them on a worker.
+#[test]
+fn condition_system_thread() {
+    let world = World::new_for_test();
+    let meeting = Meeting::default();
+    let (first, second) = (Threads::default(), Threads::default());
+    let first_system = {
+        let (threads, meeting) = (first.clone(), meeting.clone());
+        move |_: View<'_, C>| {
+            threads.record();
+            meeting.meet();
+        }
+    };
+    let second_system = {
+        let threads = second.clone();
+        move |_: View<'_, Usize>| {
+            threads.record();
+            meeting.meet();
+        }
+    };
+    let workload = Workload::new("")
+        .with_system(first_system.run_if(recording_condition(&first)))
+        .with_system(second_system.run_if(recording_condition(&second)));
+    let workload = prepare(workload, &world);
+
+    run(&workload, &world).unwrap();
+
+    let (first, second) = (first.ids(), second.ids());
+    assert_eq!((first[0], second[0]), (first[1], second[1]));
+    assert_ne!(first[0], second[0]);
 }
 
 /// Asserts that with a world's own pool, the thread-safe systems of a batch

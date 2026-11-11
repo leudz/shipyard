@@ -14,6 +14,15 @@ use core::ops::Not;
 /// Allows to set if and when a systems runs.
 pub trait SystemModificator<B, R> {
     /// Only run the system if the function evaluates to `true`.
+    ///
+    /// The condition runs right before its system, on the same thread, every time the workload reaches it.\
+    /// When it returns `false`, the system is skipped and the rest of the workload still runs.
+    ///
+    /// ### Scheduling
+    ///
+    /// A condition and its system are placed together, as if the system borrowed what the condition borrows.\
+    /// A condition borrowing `AllStorages`, or a storage that isn't `Send`/`Sync`, keeps its system on the
+    /// calling thread, even when the system alone could run on any thread.
     fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem;
     /// Only run the system if the `T` storage is empty.
     ///
@@ -55,6 +64,8 @@ pub trait SystemModificator<B, R> {
         self.run_if(run_if)
     }
     /// Do not run the system if the function evaluates to `true`.
+    ///
+    /// The condition runs and is scheduled like a [`run_if`](SystemModificator::run_if) condition.
     fn skip_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem;
     /// Do not run the system if the `T` storage is empty.
     ///

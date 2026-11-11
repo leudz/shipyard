@@ -90,13 +90,15 @@ pub struct RegroupInfo {
     pub trigger: RegroupTrigger,
 }
 
-/// What makes a workload's regroup run.
+/// Why a workload has a regroup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum RegroupTrigger {
     /// Runs each time the workload starts, for the changes made outside of it.
     Entry,
-    /// Runs only when a system that ran before it borrowed a member exclusively.
+    /// Placed after a system borrowing a member of the set exclusively.
+    ///
+    /// Like every regroup it runs each time the workload reaches it, a set with nothing to move is cheap.
     Pending,
 }
 

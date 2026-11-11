@@ -17,6 +17,14 @@ use core::ops::Not;
 /// Allows to set if and when a workload runs.
 pub trait WorkloadModificator {
     /// Only run the workload if the function evaluates to `true`.
+    ///
+    /// When the workload runs by itself, the condition runs once on the calling thread, before any of
+    /// its systems.
+    ///
+    /// When the workload is part of another one, its condition is added to each of its systems' conditions
+    /// instead. It then runs right before each system and is scheduled with it, see
+    /// [`SystemModificator::run_if`](crate::scheduler::SystemModificator::run_if).
+    /// A condition that has to run on the calling thread keeps every system of the workload there.
     fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(self, run_if: Run) -> Workload;
     /// Only run the workload if the `T` storage is empty.
     ///
@@ -58,6 +66,8 @@ pub trait WorkloadModificator {
         self.run_if(run_if)
     }
     /// Do not run the workload if the function evaluates to `true`.
+    ///
+    /// The condition runs and is scheduled like a [`run_if`](WorkloadModificator::run_if) condition.
     fn skip_if<RunB, Run: IntoWorkloadRunIf<RunB>>(self, run_if: Run) -> Workload;
     /// Do not run the workload if the `T` storage is empty.
     ///

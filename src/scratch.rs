@@ -56,28 +56,6 @@ impl<T: Default, const N: usize> ScratchVec<T, N> {
 
         *self = ScratchVec::Heap(heap);
     }
-
-    /// Keeps the items `keep` returns `true` for, in order.
-    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
-        match self {
-            ScratchVec::Inline { items, len } => {
-                let mut kept = 0;
-                for index in 0..*len {
-                    if keep(&items[index]) {
-                        items.swap(kept, index);
-                        kept += 1;
-                    }
-                }
-
-                // The slots we don't need any more go back to placeholders.
-                for item in &mut items[kept..*len] {
-                    *item = T::default();
-                }
-                *len = kept;
-            }
-            ScratchVec::Heap(heap) => heap.retain(keep),
-        }
-    }
 }
 
 impl<T: Default, const N: usize> Default for ScratchVec<T, N> {
@@ -129,39 +107,5 @@ impl<'a, T, const N: usize> IntoIterator for &'a ScratchVec<T, N> {
 impl<T: fmt::Debug, const N: usize> fmt::Debug for ScratchVec<T, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ScratchVec;
-
-    /// Asserts that `retain` on an inline list keeps the kept items in order and puts the freed
-    /// slots back to placeholders.
-    #[test]
-    fn retain_inline() {
-        let mut list: ScratchVec<u32, 4> = [1, 2, 3, 4].into_iter().collect();
-
-        list.retain(|&item| item % 2 == 0);
-
-        assert_eq!(*list, [2, 4]);
-        assert!(matches!(
-            list,
-            ScratchVec::Inline {
-                items: [2, 4, 0, 0],
-                len: 2
-            }
-        ));
-    }
-
-    /// Asserts that `retain` on a list that moved to the heap keeps the kept items in order.
-    #[test]
-    fn retain_heap() {
-        let mut list: ScratchVec<u32, 2> = [1, 2, 3, 4].into_iter().collect();
-
-        list.retain(|&item| item != 2);
-
-        assert_eq!(*list, [1, 3, 4]);
-        assert!(matches!(list, ScratchVec::Heap(_)));
     }
 }
