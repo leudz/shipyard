@@ -39,7 +39,7 @@ pub struct OperationFacts {
 }
 
 /// A storage an operation borrows when it runs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Access {
     /// The storage's full name, it identifies the storage.
     pub storage: String,

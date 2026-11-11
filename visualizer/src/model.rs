@@ -3,6 +3,7 @@
 //! Records live in vectors sorted by label and are referenced by index.
 //! So sorting ids also sorts by label, which is how every index below is ordered.
 
+use crate::conflicts::ConflictGraph;
 use crate::facts::{normalize, Facts, WorkloadInput};
 use crate::import::ImportError;
 use crate::names::{label_cmp, unique_labels};
@@ -56,6 +57,8 @@ pub struct Dataset {
     pub regroups: Vec<Regroup>,
     /// How each operation was scheduled.
     pub facts: Facts,
+    /// Why operations couldn't join the batch before their own.
+    pub conflicts: ConflictGraph,
 }
 
 #[derive(Debug)]
@@ -358,14 +361,18 @@ impl Dataset {
             }
         }
 
-        Ok(Dataset {
+        let mut dataset = Dataset {
             workloads,
             systems,
             components,
             occurrences,
             regroups,
             facts,
-        })
+            conflicts: ConflictGraph::default(),
+        };
+        dataset.conflicts = ConflictGraph::new(&dataset);
+
+        Ok(dataset)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -475,6 +482,7 @@ fn regroup_record(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixtures::add_occurrences;
     use serde_json::{json, Value};
 
     /// An exported system borrowing each of `borrows` as `Shared`.
@@ -497,55 +505,6 @@ mod tests {
 
     fn batch(thread_bound: Option<Value>, others: Vec<Value>) -> Value {
         json!({"systems": [thread_bound, others]})
-    }
-
-    /// Gives each system and regroup of a workload its occurrence, numbered in order:
-    /// systems run with what they borrow and nothing has to run before them.
-    ///
-    /// A batch without `regroups` gets an empty list, the export always has one.
-    fn add_occurrences(batches: &mut [Value]) {
-        let mut systems = 0;
-        let mut regroups = 0;
-        let mut add_system = |system: &mut Value, thread_bound: bool| {
-            system["occurrence"] = json!({
-                "id": systems,
-                "conditions": [],
-                "footprint": system["borrow"].clone(),
-                "thread_bound": thread_bound,
-                "after": [],
-            });
-            systems += 1;
-        };
-
-        for batch in batches {
-            if batch.get("regroups").is_none() {
-                batch["regroups"] = json!([]);
-            }
-            if batch["systems"][0].is_object() {
-                add_system(&mut batch["systems"][0], true);
-            }
-            for system in batch["systems"][1].as_array_mut().unwrap() {
-                add_system(system, false);
-            }
-            for regroup in batch
-                .get_mut("regroups")
-                .and_then(Value::as_array_mut)
-                .into_iter()
-                .flatten()
-            {
-                let thread_bound = regroup["borrow"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|borrow| borrow["thread_safe"] == false);
-                regroup["occurrence"] = json!({
-                    "id": regroups,
-                    "thread_bound": thread_bound,
-                    "after": [],
-                });
-                regroups += 1;
-            }
-        }
     }
 
     fn dataset(workloads: Vec<(&str, Vec<Value>)>) -> Dataset {
