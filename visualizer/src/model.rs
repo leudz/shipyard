@@ -399,6 +399,20 @@ impl Dataset {
         &self.regroups[id.0]
     }
 
+    /// A short name for `regroup`: its storages' labels.
+    ///
+    /// Repeated regroups of the same storages share it, tell them apart with their batch.
+    pub fn regroup_label(&self, regroup: RegroupId) -> String {
+        let labels: Vec<&str> = self
+            .regroup(regroup)
+            .borrows
+            .iter()
+            .map(|borrow| self.component(borrow.component).label.as_str())
+            .collect();
+
+        labels.join(" + ")
+    }
+
     /// The workload and batch index `operation` runs in.
     pub fn location(&self, operation: OperationId) -> (WorkloadId, usize) {
         match operation {

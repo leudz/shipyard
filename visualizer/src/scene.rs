@@ -20,7 +20,7 @@ use visualizer::camera::{self, Camera, ZOOM_STEP};
 use visualizer::highlight::{Relation, Relations};
 use visualizer::inspectors::Record;
 use visualizer::layout::{layout_workload, BatchLayout, WorkloadLayout, TILE_WIDTH};
-use visualizer::model::{Dataset, OccurrenceId, Workload, WorkloadId};
+use visualizer::model::{Dataset, OccurrenceId, OperationId, Workload, WorkloadId};
 use visualizer::overview;
 use visualizer::panels::{self, Point};
 use visualizer::state::{Action, AppState, Loaded};
@@ -112,7 +112,7 @@ pub fn entry_id(loaded: &Loaded) -> Option<String> {
     let workload = loaded.workspace.selected_workload?;
     let dataset = &loaded.dataset;
 
-    if let Some(selected) = loaded.workspace.selected_occurrence {
+    if let Some(OperationId::System(selected)) = loaded.workspace.selected {
         if dataset.occurrence(selected).workload == workload {
             return Some(tile_id(selected));
         }
@@ -257,7 +257,7 @@ fn WorkloadView(
         let app = state.read();
         app.loaded
             .as_ref()
-            .and_then(|loaded| loaded.workspace.selected_occurrence)
+            .and_then(|loaded| loaded.workspace.selected)
     });
     let measured = use_memo(move || {
         let tile_heights = tile_heights.read();
@@ -293,7 +293,7 @@ fn WorkloadView(
 
     // An inspector asked to show an occurrence, we pan to its batch once we know where it is.
     use_effect(move || {
-        let Some(occurrence) = framing() else {
+        let Some(framed_operation) = framing() else {
             return;
         };
         let Some(size) = scene_rect() else {
@@ -308,7 +308,7 @@ fn WorkloadView(
                     let tile = batch
                         .tiles
                         .iter()
-                        .find(|tile| tile.occurrence == occurrence)?;
+                        .find(|tile| OperationId::System(tile.occurrence) == framed_operation)?;
                     Some((batch.bounds, tile.bounds))
                 });
             let Some((batch, tile)) = found else {
@@ -476,7 +476,7 @@ fn World(
     state: Signal<AppState>,
     layout: Memo<Option<WorkloadLayout>>,
     camera: Memo<Camera>,
-    selected: Memo<Option<OccurrenceId>>,
+    selected: Memo<Option<OperationId>>,
     hovered: Signal<Option<OccurrenceId>>,
     focused: Signal<Option<OccurrenceId>>,
     scene_rect: Signal<Option<SceneRect>>,
@@ -514,7 +514,7 @@ fn Batches(
     mut state: Signal<AppState>,
     layout: Memo<Option<WorkloadLayout>>,
     camera: Memo<Camera>,
-    selected: Memo<Option<OccurrenceId>>,
+    selected: Memo<Option<OperationId>>,
     mut hovered: Signal<Option<OccurrenceId>>,
     mut focused: Signal<Option<OccurrenceId>>,
     scene_rect: Signal<Option<SceneRect>>,
@@ -554,7 +554,7 @@ fn Batches(
                     {
                         let occurrence = tile.occurrence;
                         let bounds = tile.bounds;
-                        let is_selected = selected == Some(occurrence);
+                        let is_selected = selected == Some(OperationId::System(occurrence));
                         let relation = relations.as_ref().map(|relations| {
                             relations.system(dataset.occurrence(occurrence).system)
                         });
@@ -572,7 +572,7 @@ fn Batches(
                                 style: "left: {bounds.x - batch.bounds.x}px; top: {bounds.y - batch.bounds.y}px; width: {bounds.width}px; height: {bounds.height}px;",
                                 onclick: move |event| {
                                     let pointer = click_point(&event);
-                                    let action = Action::SelectOccurrence(occurrence);
+                                    let action = Action::SelectOperation(OperationId::System(occurrence));
                                     openings.open(state, action, pointer, Some(tile_id(occurrence)));
                                 },
                                 // Dragging from a tile doesn't pan, the press is for the tile.
@@ -687,17 +687,20 @@ fn HighlightSummary(mut state: Signal<AppState>, workload: WorkloadId) -> Elemen
         .map(|(relations, loaded)| {
             let dataset = &loaded.dataset;
             let (kind, label) = match relations.target {
-                Record::System(system) => ("System", &dataset.system(system).label),
-                Record::Component(component) => ("Component", &dataset.component(component).label),
+                Record::System(system) => ("System", dataset.system(system).label.clone()),
+                Record::Component(component) => {
+                    ("Component", dataset.component(component).label.clone())
+                }
+                Record::Regroup(regroup) => ("Regroup", dataset.regroup_label(regroup)),
             };
-            // Tiles of this workload marked by the highlight.
+            // Tiles of this workload marked by the highlight, a regroup is a tile too.
             let marked = dataset
                 .workload(workload)
                 .batches
                 .iter()
-                .flat_map(|batch| batch.occurrences())
-                .filter(|&occurrence| {
-                    let relation = relations.system(dataset.occurrence(occurrence).system);
+                .flat_map(|batch| batch.operations())
+                .filter(|&operation| {
+                    let relation = relations.operation(dataset, operation);
                     matches!(
                         relation,
                         Relation::Target | Relation::Exclusive | Relation::Shared
@@ -705,7 +708,7 @@ fn HighlightSummary(mut state: Signal<AppState>, workload: WorkloadId) -> Elemen
                 })
                 .count();
 
-            (relations.target, kind, label.clone(), marked)
+            (relations.target, kind, label, marked)
         });
 
     rsx! {

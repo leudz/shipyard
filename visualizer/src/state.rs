@@ -3,11 +3,13 @@
 //! Views and platform adapters change it only through [`AppState::start_import`] and [`AppState::update`].
 
 use crate::camera::Camera;
+use crate::conflicts::VisibleLinks;
+use crate::highlight::{link_roots, Relations};
 use crate::import::{load_dataset, ImportError};
 #[cfg(test)]
 use crate::inspectors::OpenPanel;
 use crate::inspectors::{InspectorAction, InspectorId, Inspectors, Record};
-use crate::model::{ComponentId, Dataset, OccurrenceId, SystemId, WorkloadId};
+use crate::model::{ComponentId, Dataset, OperationId, SystemId, WorkloadId};
 use crate::search::Search;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -103,15 +105,16 @@ pub struct Loaded {
 pub struct Workspace {
     /// `None` only when the dataset has no workloads.
     pub selected_workload: Option<WorkloadId>,
-    /// The tile last picked in the scene. It can belong to another workload than the selected one.
-    pub selected_occurrence: Option<OccurrenceId>,
+    /// The tile last picked in the scene, a system appearance or a regroup.
+    /// It can belong to another workload than the selected one.
+    pub selected: Option<OperationId>,
     /// How the selected workload is panned and zoomed.
     pub camera: Camera,
-    /// An occurrence of the selected workload the scene should move the camera to.
+    /// An operation of the selected workload the scene should move the camera to.
     ///
     /// The scene knows where batches are once it measured them, it does the framing and clears
     /// this with [`Action::SetCamera`].
-    pub framing: Option<OccurrenceId>,
+    pub framing: Option<OperationId>,
     pub searches: Searches,
     pub inspectors: Inspectors,
     /// The system or component whose relationships every view marks.
@@ -124,7 +127,7 @@ impl Workspace {
 
         Workspace {
             selected_workload,
-            selected_occurrence: None,
+            selected: None,
             camera: Camera::default(),
             framing: None,
             searches: Searches::new(dataset),
@@ -243,10 +246,10 @@ pub enum Action {
     },
     /// Shows another workload, from its start at 100%.
     SelectWorkload(WorkloadId),
-    /// Selects a tile of the scene and inspects its system.
-    SelectOccurrence(OccurrenceId),
-    /// Selects an occurrence and its workload, and frames its batch.
-    ShowOccurrence(OccurrenceId),
+    /// Selects a tile of the scene and inspects its system, or the regroup itself.
+    SelectOperation(OperationId),
+    /// Selects an operation and its workload, and frames its batch.
+    ShowOperation(OperationId),
     /// Shows a record in the unpinned inspector, see [`Inspectors::inspect`]. This deselects the
     /// tile, the selection is about the tile last picked.
     Inspect(Record),
@@ -323,37 +326,43 @@ impl AppState {
                     loaded.workspace.select_workload(workload);
                 }
             }
-            Action::SelectOccurrence(occurrence) => {
+            Action::SelectOperation(operation) => {
                 if let Some(loaded) = &mut self.loaded {
-                    let system = loaded.dataset.occurrence(occurrence).system;
-                    loaded.workspace.selected_occurrence = Some(occurrence);
-                    loaded.workspace.inspectors.inspect(Record::System(system));
+                    // A system's inspector is shared by its appearances, a regroup has its own.
+                    let record = match operation {
+                        OperationId::System(occurrence) => {
+                            Record::System(loaded.dataset.occurrence(occurrence).system)
+                        }
+                        OperationId::Regroup(regroup) => Record::Regroup(regroup),
+                    };
+                    loaded.workspace.selected = Some(operation);
+                    loaded.workspace.inspectors.inspect(record);
                 }
             }
-            Action::ShowOccurrence(occurrence) => {
+            Action::ShowOperation(operation) => {
                 if let Some(loaded) = &mut self.loaded {
-                    let workload = loaded.dataset.occurrence(occurrence).workload;
+                    let (workload, _) = loaded.dataset.location(operation);
                     let workspace = &mut loaded.workspace;
 
                     // Staying in the workload keeps its zoom, framing only pans.
                     if workspace.selected_workload != Some(workload) {
                         workspace.select_workload(workload);
                     }
-                    workspace.selected_occurrence = Some(occurrence);
-                    workspace.framing = Some(occurrence);
+                    workspace.selected = Some(operation);
+                    workspace.framing = Some(operation);
                 }
             }
             Action::Inspect(record) => {
                 if let Some(loaded) = &mut self.loaded {
                     loaded.workspace.inspectors.inspect(record);
-                    loaded.workspace.selected_occurrence = None;
+                    loaded.workspace.selected = None;
                 }
             }
             Action::Inspector(inspector, action) => {
                 if let Some(loaded) = &mut self.loaded {
                     loaded.workspace.inspectors.update(inspector, action);
                     if matches!(action, InspectorAction::Back | InspectorAction::Forward) {
-                        loaded.workspace.selected_occurrence = None;
+                        loaded.workspace.selected = None;
                     }
                 }
             }
@@ -598,6 +607,27 @@ fn content_hash(bytes: &[u8]) -> u64 {
 }
 
 impl Loaded {
+    /// The conflict links of the selected workload to show: the selected operation's blockers,
+    /// and those of every operation the highlight marks.
+    pub fn visible_links(&self) -> VisibleLinks {
+        let Some(workload) = self.workspace.selected_workload else {
+            return VisibleLinks::default();
+        };
+        let relations = self
+            .workspace
+            .highlight
+            .map(|target| Relations::new(&self.dataset, target));
+
+        let roots = link_roots(
+            &self.dataset,
+            workload,
+            self.workspace.selected,
+            relations.as_ref(),
+        );
+
+        self.dataset.conflicts.visible(roots)
+    }
+
     fn search(&mut self, kind: SearchKind, query: String) {
         let searches = &mut self.workspace.searches;
 
@@ -621,6 +651,7 @@ impl Loaded {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::OccurrenceId;
 
     const TWO_WORKLOADS: &[u8] = br#"{
         "a": {"name": "a", "batches_info": [{"systems": [null, [{
@@ -644,6 +675,36 @@ mod tests {
         }]], "regroups": []}
     ]}}"#;
     const ONE_WORKLOAD: &[u8] = br#"{"c": {"name": "c", "batches_info": []}}"#;
+    /// Workload `a`: an entry regroup of A, a system reading A, then a pending regroup of A.
+    /// Workload `b`: a system reading A.
+    const REGROUPS: &[u8] = br#"{
+        "a": {"name": "a", "batches_info": [
+            {"systems": [null, []], "regroups": [{"borrow": [
+                {"name": "A", "mutability": "Exclusive", "thread_safe": true}
+            ], "trigger": "Entry", "occurrence": {"id": 0, "thread_bound": false, "after": []}}]},
+            {"systems": [null, [{
+                "name": "System(read)", "borrow": [
+                    {"name": "A", "mutability": "Shared", "thread_safe": true}
+                ], "conflict": null,
+                "after": [], "after_all": [], "before_all": [], "unique_id": 0,
+                "occurrence": {"id": 0, "conditions": [], "footprint": [
+                    {"name": "A", "mutability": "Shared", "thread_safe": true}
+                ], "thread_bound": false, "after": []}
+            }]], "regroups": []},
+            {"systems": [null, []], "regroups": [{"borrow": [
+                {"name": "A", "mutability": "Exclusive", "thread_safe": true}
+            ], "trigger": "Pending", "occurrence": {"id": 1, "thread_bound": false, "after": []}}]}
+        ]},
+        "b": {"name": "b", "batches_info": [{"systems": [null, [{
+            "name": "System(read)", "borrow": [
+                {"name": "A", "mutability": "Shared", "thread_safe": true}
+            ], "conflict": null,
+            "after": [], "after_all": [], "before_all": [], "unique_id": 0,
+            "occurrence": {"id": 0, "conditions": [], "footprint": [
+                {"name": "A", "mutability": "Shared", "thread_safe": true}
+            ], "thread_bound": false, "after": []}
+        }]], "regroups": []}]}
+    }"#;
     /// Valid JSON whose occurrence information points to a system that doesn't exist.
     const BROKEN_OCCURRENCE: &[u8] = br#"{"c": {"name": "c", "batches_info": [{"systems": [null, [{
         "name": "System(run)", "borrow": [], "conflict": null,
@@ -682,7 +743,9 @@ mod tests {
         import(&mut state, "a.json", TWO_WORKLOADS);
         state.update(Action::SelectWorkload(WorkloadId(1)));
         state.update(search(SearchKind::Workloads, "b"));
-        state.update(Action::SelectOccurrence(OccurrenceId(0)));
+        state.update(Action::SelectOperation(OperationId::System(OccurrenceId(
+            0,
+        ))));
         // Pin the inspector selecting the tile opened.
         let inspector = loaded(&state).workspace.inspectors.open()[0].id();
         state.update(Action::Inspector(inspector, InspectorAction::TogglePin));
@@ -831,6 +894,138 @@ mod tests {
         assert_eq!(loaded(&state).workspace, seeded_workspace());
     }
 
+    /// A state with [`REGROUPS`] loaded, a camera away from the default, workload `a` shown.
+    fn regrouped() -> AppState {
+        let mut state = AppState::default();
+        import(&mut state, "r.json", REGROUPS);
+        state.update(Action::SetCamera(Camera {
+            x: -120.0,
+            zoom: 0.75,
+        }));
+
+        state
+    }
+
+    fn regroup_op(index: usize) -> OperationId {
+        OperationId::Regroup(crate::model::RegroupId(index))
+    }
+
+    fn system_op(index: usize) -> OperationId {
+        OperationId::System(OccurrenceId(index))
+    }
+
+    /// The `(blocker, blocked)` pairs the loaded workspace shows.
+    fn links(state: &AppState) -> Vec<(OperationId, OperationId)> {
+        loaded(state).visible_links().pairs.into_iter().collect()
+    }
+
+    /// Asserts that selecting a regroup inspects that regroup, and that two regroups of the same
+    /// storages are two entries of the inspector's history.
+    #[test]
+    fn select_regroups() {
+        let mut state = regrouped();
+
+        state.update(Action::SelectOperation(regroup_op(0)));
+        state.update(Action::SelectOperation(regroup_op(1)));
+
+        let workspace = &loaded(&state).workspace;
+        assert_eq!(workspace.selected, Some(regroup_op(1)));
+        let inspector = workspace.inspectors.open()[0].inspector().unwrap();
+        assert_eq!(
+            inspector.record(),
+            Record::Regroup(crate::model::RegroupId(1))
+        );
+        assert_eq!(inspector.position(), (2, 2));
+    }
+
+    /// Asserts that selecting, highlighting and clearing the highlight never move the camera.
+    #[test]
+    fn links_keep_camera() {
+        let mut state = regrouped();
+        let camera = loaded(&state).workspace.camera;
+
+        state.update(Action::SelectOperation(system_op(0)));
+        state.update(Action::ToggleHighlight(Record::Regroup(
+            crate::model::RegroupId(1),
+        )));
+        state.update(Action::ToggleHighlight(Record::Regroup(
+            crate::model::RegroupId(1),
+        )));
+
+        assert_eq!(loaded(&state).workspace.camera, camera);
+        assert_eq!(loaded(&state).workspace.framing, None);
+    }
+
+    /// Asserts that a selected system shows its blockers.
+    #[test]
+    fn selection_links() {
+        let mut state = regrouped();
+
+        state.update(Action::SelectOperation(system_op(0)));
+
+        assert_eq!(links(&state), [(regroup_op(0), system_op(0))]);
+    }
+
+    /// Asserts that the selection and the highlight add up, and that toggling the highlight off
+    /// keeps the selection's links.
+    #[test]
+    fn selection_and_highlight() {
+        let mut state = regrouped();
+        state.update(Action::SelectOperation(system_op(0)));
+
+        state.update(Action::ToggleHighlight(Record::Regroup(
+            crate::model::RegroupId(1),
+        )));
+        assert_eq!(
+            links(&state),
+            [(system_op(0), regroup_op(1)), (regroup_op(0), system_op(0))]
+        );
+
+        state.update(Action::ToggleHighlight(Record::Regroup(
+            crate::model::RegroupId(1),
+        )));
+        assert_eq!(links(&state), [(regroup_op(0), system_op(0))]);
+    }
+
+    /// Asserts that a highlighted component brings the blockers of its system and regroup borrowers.
+    #[test]
+    fn component_links() {
+        let mut state = regrouped();
+        let a = ComponentId(0);
+
+        state.update(Action::ToggleHighlight(Record::Component(a)));
+
+        assert_eq!(
+            links(&state),
+            [(system_op(0), regroup_op(1)), (regroup_op(0), system_op(0))]
+        );
+    }
+
+    /// Asserts that a selection kept from another workload has no link in the shown one.
+    #[test]
+    fn other_workload_selection() {
+        let mut state = regrouped();
+        state.update(Action::SelectOperation(system_op(0)));
+
+        state.update(Action::SelectWorkload(WorkloadId(1)));
+
+        assert_eq!(loaded(&state).workspace.selected, Some(system_op(0)));
+        assert!(links(&state).is_empty());
+    }
+
+    /// Asserts that a highlighted system only brings the links of its appearances in the shown workload.
+    #[test]
+    fn system_links_per_workload() {
+        let mut state = regrouped();
+        let system = loaded(&state).dataset.occurrence(OccurrenceId(0)).system;
+
+        state.update(Action::ToggleHighlight(Record::System(system)));
+        assert_eq!(links(&state), [(regroup_op(0), system_op(0))]);
+
+        state.update(Action::SelectWorkload(WorkloadId(1)));
+        assert!(links(&state).is_empty());
+    }
+
     /// Asserts that a read error is reported like any other failure.
     #[test]
     fn read_error() {
@@ -947,10 +1142,7 @@ mod tests {
         let fresh = Workspace::new(&loaded.dataset);
 
         assert_ne!(loaded.workspace.selected_workload, fresh.selected_workload);
-        assert_ne!(
-            loaded.workspace.selected_occurrence,
-            fresh.selected_occurrence
-        );
+        assert_ne!(loaded.workspace.selected, fresh.selected);
         assert_ne!(loaded.workspace.camera, fresh.camera);
         assert_ne!(loaded.workspace.searches, fresh.searches);
         assert_ne!(loaded.workspace.inspectors, fresh.inspectors);
@@ -1083,10 +1275,15 @@ mod tests {
         let mut state = AppState::default();
         import(&mut state, "a.json", TWO_WORKLOADS);
 
-        state.update(Action::SelectOccurrence(OccurrenceId(0)));
+        state.update(Action::SelectOperation(OperationId::System(OccurrenceId(
+            0,
+        ))));
 
         let workspace = &loaded(&state).workspace;
-        assert_eq!(workspace.selected_occurrence, Some(OccurrenceId(0)));
+        assert_eq!(
+            workspace.selected,
+            Some(OperationId::System(OccurrenceId(0)))
+        );
         assert_eq!(records(workspace), [Record::System(SystemId(0))]);
     }
 
@@ -1101,11 +1298,11 @@ mod tests {
             panic!("expected two occurrences");
         };
 
-        state.update(Action::SelectOccurrence(first));
-        state.update(Action::SelectOccurrence(second));
+        state.update(Action::SelectOperation(OperationId::System(first)));
+        state.update(Action::SelectOperation(OperationId::System(second)));
 
         let workspace = &loaded(&state).workspace;
-        assert_eq!(workspace.selected_occurrence, Some(second));
+        assert_eq!(workspace.selected, Some(OperationId::System(second)));
         assert_eq!(records(workspace), [Record::System(SystemId(0))]);
     }
     /// Asserts that showing an occurrence of another workload selects that workload from its start
@@ -1120,13 +1317,19 @@ mod tests {
             zoom: 0.5,
         }));
 
-        state.update(Action::ShowOccurrence(OccurrenceId(0)));
+        state.update(Action::ShowOperation(OperationId::System(OccurrenceId(0))));
 
         let workspace = &loaded(&state).workspace;
         assert_eq!(workspace.selected_workload, Some(WorkloadId(0)));
-        assert_eq!(workspace.selected_occurrence, Some(OccurrenceId(0)));
+        assert_eq!(
+            workspace.selected,
+            Some(OperationId::System(OccurrenceId(0)))
+        );
         assert_eq!(workspace.camera, Camera::default());
-        assert_eq!(workspace.framing, Some(OccurrenceId(0)));
+        assert_eq!(
+            workspace.framing,
+            Some(OperationId::System(OccurrenceId(0)))
+        );
         assert!(records(workspace).is_empty());
     }
 
@@ -1141,11 +1344,14 @@ mod tests {
         };
         state.update(Action::SetCamera(camera));
 
-        state.update(Action::ShowOccurrence(OccurrenceId(1)));
+        state.update(Action::ShowOperation(OperationId::System(OccurrenceId(1))));
 
         let workspace = &loaded(&state).workspace;
         assert_eq!(workspace.camera, camera);
-        assert_eq!(workspace.framing, Some(OccurrenceId(1)));
+        assert_eq!(
+            workspace.framing,
+            Some(OperationId::System(OccurrenceId(1)))
+        );
     }
 
     /// Asserts that setting the camera, which the scene does once it framed, ends the framing.
@@ -1153,7 +1359,7 @@ mod tests {
     fn framed() {
         let mut state = AppState::default();
         import(&mut state, "r.json", REPEATED);
-        state.update(Action::ShowOccurrence(OccurrenceId(1)));
+        state.update(Action::ShowOperation(OperationId::System(OccurrenceId(1))));
 
         state.update(Action::SetCamera(Camera::default()));
 
@@ -1165,7 +1371,7 @@ mod tests {
     fn select_workload_drops_framing() {
         let mut state = AppState::default();
         import(&mut state, "a.json", TWO_WORKLOADS);
-        state.update(Action::ShowOccurrence(OccurrenceId(0)));
+        state.update(Action::ShowOperation(OperationId::System(OccurrenceId(0))));
 
         state.update(Action::SelectWorkload(WorkloadId(1)));
 
@@ -1177,7 +1383,7 @@ mod tests {
     fn replace_drops_framing() {
         let mut state = AppState::default();
         import(&mut state, "a.json", TWO_WORKLOADS);
-        state.update(Action::ShowOccurrence(OccurrenceId(0)));
+        state.update(Action::ShowOperation(OperationId::System(OccurrenceId(0))));
 
         import(&mut state, "b.json", ONE_WORKLOAD);
         state.update(Action::ConfirmReplacement);
@@ -1189,11 +1395,13 @@ mod tests {
     fn inspect_deselects() {
         let mut state = AppState::default();
         import(&mut state, "r.json", REPEATED);
-        state.update(Action::SelectOccurrence(OccurrenceId(0)));
+        state.update(Action::SelectOperation(OperationId::System(OccurrenceId(
+            0,
+        ))));
 
         state.update(Action::Inspect(Record::System(SystemId(0))));
 
-        assert_eq!(loaded(&state).workspace.selected_occurrence, None);
+        assert_eq!(loaded(&state).workspace.selected, None);
     }
 
     /// Asserts that going Back in an inspector deselects the tile, and bringing it to the front
@@ -1202,17 +1410,19 @@ mod tests {
     fn history_deselects() {
         let mut state = AppState::default();
         import(&mut state, "r.json", REPEATED);
-        state.update(Action::SelectOccurrence(OccurrenceId(0)));
+        state.update(Action::SelectOperation(OperationId::System(OccurrenceId(
+            0,
+        ))));
         let inspector = loaded(&state).workspace.inspectors.open()[0].id();
 
         state.update(Action::Inspector(inspector, InspectorAction::BringToFront));
         assert_eq!(
-            loaded(&state).workspace.selected_occurrence,
-            Some(OccurrenceId(0))
+            loaded(&state).workspace.selected,
+            Some(OperationId::System(OccurrenceId(0)))
         );
 
         state.update(Action::Inspector(inspector, InspectorAction::Back));
-        assert_eq!(loaded(&state).workspace.selected_occurrence, None);
+        assert_eq!(loaded(&state).workspace.selected, None);
     }
     /// Asserts that highlighting a record twice stops highlighting it.
     #[test]
@@ -1247,12 +1457,17 @@ mod tests {
     fn highlight_separate() {
         let mut state = AppState::default();
         import(&mut state, "r.json", REPEATED);
-        state.update(Action::SelectOccurrence(OccurrenceId(0)));
+        state.update(Action::SelectOperation(OperationId::System(OccurrenceId(
+            0,
+        ))));
 
         state.update(Action::ToggleHighlight(Record::System(SystemId(0))));
 
         let workspace = &loaded(&state).workspace;
-        assert_eq!(workspace.selected_occurrence, Some(OccurrenceId(0)));
+        assert_eq!(
+            workspace.selected,
+            Some(OperationId::System(OccurrenceId(0)))
+        );
         assert_eq!(records(workspace), [Record::System(SystemId(0))]);
     }
 
@@ -1261,13 +1476,18 @@ mod tests {
     fn open_map() {
         let mut state = AppState::default();
         import(&mut state, "r.json", REPEATED);
-        state.update(Action::SelectOccurrence(OccurrenceId(0)));
+        state.update(Action::SelectOperation(OperationId::System(OccurrenceId(
+            0,
+        ))));
 
         state.update(Action::OpenMap);
 
         let workspace = &loaded(&state).workspace;
         assert_eq!(workspace.inspectors.open().len(), 2);
-        assert_eq!(workspace.selected_occurrence, Some(OccurrenceId(0)));
+        assert_eq!(
+            workspace.selected,
+            Some(OperationId::System(OccurrenceId(0)))
+        );
     }
     /// `a.json` loaded with auto-reload on, and a workspace that isn't fresh.
     fn watching() -> AppState {

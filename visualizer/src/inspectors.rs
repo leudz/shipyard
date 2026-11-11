@@ -4,7 +4,7 @@
 //! Inspecting a record always goes to the single unpinned inspector, so pinned inspectors keep
 //! what they show until they're closed. The map is always pinned, and there's at most one.
 
-use crate::model::{ComponentId, SystemId};
+use crate::model::{ComponentId, RegroupId, SystemId};
 
 /// How many records an inspector's history keeps, older ones are dropped.
 pub const HISTORY_LIMIT: usize = 20;
@@ -14,6 +14,8 @@ pub const HISTORY_LIMIT: usize = 20;
 pub enum Record {
     System(SystemId),
     Component(ComponentId),
+    /// One regroup of one batch, two regroups of the same storages are different records.
+    Regroup(RegroupId),
 }
 
 /// Identifies an inspector or the map while it's open, views can use it as a key.
@@ -241,6 +243,34 @@ mod tests {
     const A: Record = Record::System(SystemId(0));
     const B: Record = Record::System(SystemId(1));
     const C: Record = Record::Component(ComponentId(0));
+    const R0: Record = Record::Regroup(RegroupId(0));
+    const R1: Record = Record::Regroup(RegroupId(1));
+
+    /// Asserts that two regroups, even of the same storages, are separate entries of one history.
+    #[test]
+    fn regroups() {
+        let mut inspectors = inspected(&[R0, R1]);
+        let inspector = id(&inspectors, 0);
+        assert_eq!(nth(&inspectors, 0).position(), (2, 2));
+
+        inspectors.update(inspector, InspectorAction::Back);
+
+        assert_eq!(records(&inspectors), [R0]);
+    }
+
+    /// Asserts that a pinned regroup inspector keeps its regroup when another one is inspected.
+    #[test]
+    fn pinned_regroup() {
+        let mut inspectors = inspected(&[R0]);
+        let pinned = id(&inspectors, 0);
+        inspectors.update(pinned, InspectorAction::TogglePin);
+
+        inspectors.inspect(R1);
+        inspectors.inspect(R0);
+
+        assert_eq!(records(&inspectors), [R1, R0]);
+        assert!(nth(&inspectors, 1).pinned);
+    }
 
     /// The record each open inspector shows, back to front.
     fn records(inspectors: &Inspectors) -> Vec<Record> {

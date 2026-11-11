@@ -11,9 +11,10 @@ use crate::map_ui::MapPanel;
 use crate::scene::{Highlighting, SceneRect};
 use dioxus::prelude::*;
 use shipyard::borrow::Mutability;
+use shipyard::scheduler::info::RegroupTrigger;
 use std::collections::HashMap;
 use visualizer::inspectors::{Inspector, InspectorAction, OpenPanel, Record};
-use visualizer::model::{ComponentId, Dataset, OccurrenceId, SystemId};
+use visualizer::model::{ComponentId, Dataset, OccurrenceId, OperationId, RegroupId, SystemId};
 use visualizer::names::storage_kind;
 use visualizer::panels::preferred_width;
 use visualizer::state::{Action, AppState};
@@ -118,11 +119,27 @@ fn InspectorPanel(
     let (kind, title, label, name) = match record {
         Record::System(system) => {
             let system = dataset.system(system);
-            ("system", "System", &system.label, &system.name)
+            (
+                "system",
+                "System",
+                system.label.clone(),
+                system.name.clone(),
+            )
         }
         Record::Component(component) => {
             let component = dataset.component(component);
-            ("component", "Component", &component.label, &component.name)
+            (
+                "component",
+                "Component",
+                component.label.clone(),
+                component.name.clone(),
+            )
+        }
+        // Regroups have no name, their storages and place tell them apart.
+        Record::Regroup(regroup) => {
+            let (workload, batch) = dataset.location(OperationId::Regroup(regroup));
+            let place = format!("{}, batch {batch}", dataset.workload(workload).label);
+            ("regroup", "Regroup", dataset.regroup_label(regroup), place)
         }
     };
     let (position, length) = inspector.position();
@@ -140,7 +157,7 @@ fn InspectorPanel(
             // Named like "System a::run".
             name: "{title} {label}",
             noun: "inspector",
-            width: preferred_width(label),
+            width: preferred_width(&label),
             layer,
             in_front,
             index,
@@ -208,6 +225,7 @@ fn InspectorPanel(
                 match record {
                     Record::System(system) => system_details(state, openings, target, dataset, system),
                     Record::Component(component) => component_details(state, openings, target, dataset, component),
+                    Record::Regroup(regroup) => regroup_details(state, openings, target, dataset, regroup),
                 }
             }
         }
@@ -280,6 +298,71 @@ fn component_details(
         p { class: "inspector-note", "{storage_kind(&component.name)}" }
         {chip_group(state, openings, target, Mutability::Exclusive, "Exclusive borrowers", group(Mutability::Exclusive))}
         {chip_group(state, openings, target, Mutability::Shared, "Shared borrowers", group(Mutability::Shared))}
+    }
+}
+
+/// Why the regroup is there, the storages it regroups, then where it runs.
+fn regroup_details(
+    mut state: Signal<AppState>,
+    openings: Openings,
+    target: Option<Record>,
+    dataset: &Dataset,
+    regroup: RegroupId,
+) -> Element {
+    let operation = OperationId::Regroup(regroup);
+    let (workload, batch) = dataset.location(operation);
+    let workload = &dataset.workload(workload).label;
+    let regroup = dataset.regroup(regroup);
+    // The export only says why the workload placed it, not what ran or changed before it.
+    let trigger = match regroup.trigger {
+        RegroupTrigger::Entry => {
+            "Entry: prepares these storages for changes made outside the workload."
+        }
+        RegroupTrigger::Pending => {
+            "Pending: placed after systems borrowing one of these storages exclusively."
+        }
+    };
+    let chips = regroup
+        .borrows
+        .iter()
+        .map(|borrow| {
+            let component = dataset.component(borrow.component);
+            Chip {
+                record: Record::Component(borrow.component),
+                label: component.label.clone(),
+                name: component.name.clone(),
+            }
+        })
+        .collect();
+    let name = if regroup.thread_bound {
+        format!("{workload}, batch {batch}, thread-bound slot")
+    } else {
+        format!("{workload}, batch {batch}")
+    };
+
+    rsx! {
+        p { class: "inspector-note", "{trigger}" }
+        if regroup.thread_bound {
+            p { class: "inspector-note", "Runs on the world's thread: one of its storages isn't thread safe." }
+        }
+        {chip_group(state, openings, target, Mutability::Exclusive, "Exclusive", chips)}
+
+        h3 { "Workload occurrence" }
+        ul { class: "occurrences",
+            li {
+                span { class: "occurrence-workload", "{workload}" }
+                button {
+                    class: "button occurrence",
+                    r#type: "button",
+                    aria_label: name,
+                    onclick: move |_| state.write().update(Action::ShowOperation(operation)),
+                    if regroup.thread_bound {
+                        span { class: "tile-mark", "◆ " }
+                    }
+                    "Batch {batch}"
+                }
+            }
+        }
     }
 }
 
@@ -371,7 +454,7 @@ fn occurrence_list(
                                             class: "button occurrence",
                                             r#type: "button",
                                             aria_label: name,
-                                            onclick: move |_| state.write().update(Action::ShowOccurrence(id)),
+                                            onclick: move |_| state.write().update(Action::ShowOperation(OperationId::System(id))),
                                             if occurrence.thread_bound {
                                                 span { class: "tile-mark", "◆ " }
                                             }
