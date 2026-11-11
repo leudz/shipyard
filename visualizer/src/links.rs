@@ -9,11 +9,10 @@
 //! Nothing here changes the camera, cues only point to what's off screen.
 
 use crate::camera::Camera;
-use crate::layout::{
-    BatchLayout, Rect, WorkloadLayout, BATCH_END_PADDING, BATCH_HEADER_HEIGHT, COLUMN_GAP,
-};
+use crate::layout::{Rect, WorkloadLayout, BATCH_END_PADDING, BATCH_HEADER_HEIGHT, COLUMN_GAP};
 use crate::model::OperationId;
 use crate::panels::Point;
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Where the band crossing columns starts, below the batch header's text.
@@ -73,65 +72,239 @@ impl View {
 /// Routes every `(blocker, blocked)` pair of `pairs` through `layout`.
 ///
 /// Pairs without both tiles in the layout, or with unusable bounds, get no route.
+///
+/// Links sharing a tile, a gutter, a column gap or the band are spread apart, in an order that
+/// keeps them from crossing when they can. They still cross when they swap heights, or when one
+/// goes across another's whole height.
 pub fn routes(layout: &WorkloadLayout, pairs: &BTreeSet<(OperationId, OperationId)>) -> Vec<Route> {
     let tiles = tile_places(layout);
-    let usable: Vec<(OperationId, OperationId)> = pairs
+    let links: Vec<Link> = pairs
         .iter()
-        .copied()
-        .filter(|(blocker, blocked)| {
-            let (Some(from), Some(to)) = (tiles.get(blocker), tiles.get(blocked)) else {
-                return false;
-            };
-
+        .filter_map(|&(blocker, blocked)| {
+            let (from, to) = (tiles.get(&blocker)?, tiles.get(&blocked)?);
             // Links only go from a batch to the next one.
-            to.batch == from.batch + 1 && is_finite(&from.bounds) && is_finite(&to.bounds)
+            let usable =
+                to.batch == from.batch + 1 && is_finite(&from.bounds) && is_finite(&to.bounds);
+
+            usable.then(|| Link {
+                blocker,
+                blocked,
+                from,
+                to,
+                exits_up: from.column + 1 < layout.batches[from.batch].columns,
+                enters_down: to.column > 0,
+            })
         })
         .collect();
 
-    // Each link gets its own attach point on shared tiles, and its own lane in a shared gutter.
-    let outgoing = slots(usable.iter().map(|&(blocker, blocked)| (blocker, blocked)));
-    let incoming = slots(usable.iter().map(|&(blocker, blocked)| (blocked, blocker)));
-    let gutters = slots(
-        usable
+    // Attach points on shared tiles, in the order the links leave or come into the gutter, so
+    // they don't cross there. Ends aren't placed yet, the middle of the other tile stands in.
+    let middle = |place: &TilePlace| place.bounds.y + place.bounds.height / 2.0;
+    let outgoing = ranks(links.iter().map(|link| {
+        let other = middle(link.to);
+
+        (link.blocker, link.leaves(other, other))
+    }));
+    let incoming = ranks(
+        links
             .iter()
-            .map(|&(blocker, blocked)| (tiles[&blocker].batch, (blocker, blocked))),
+            .map(|link| (link.blocked, link.comes_in(middle(link.from)))),
     );
-
-    usable
+    let ends: Vec<(Point, Point)> = links
         .iter()
-        .map(|&(blocker, blocked)| {
-            let from = &tiles[&blocker];
-            let to = &tiles[&blocked];
-            let (out_slot, out_count) = outgoing[&(blocker, blocked)];
-            let (in_slot, in_count) = incoming[&(blocked, blocker)];
-            let (gutter_slot, gutter_count) = gutters[&(from.batch, (blocker, blocked))];
-
+        .zip(outgoing.iter().zip(&incoming))
+        .map(|(link, (&(out_slot, out_count), &(in_slot, in_count)))| {
+            let (from, to) = (link.from.bounds, link.to.bounds);
             let start = Point {
-                x: from.bounds.right(),
-                y: spread(from.bounds.y, from.bounds.height, out_slot, out_count),
+                x: from.right(),
+                y: spread(from.y, from.height, out_slot, out_count),
             };
             let end = Point {
-                x: to.bounds.x,
-                y: spread(to.bounds.y, to.bounds.height, in_slot, in_count),
+                x: to.x,
+                y: spread(to.y, to.height, in_slot, in_count),
             };
-            let previous = &layout.batches[from.batch];
-            let next = &layout.batches[to.batch];
+
+            (start, end)
+        })
+        .collect();
+
+    let comes_in: Vec<Height> = links
+        .iter()
+        .zip(&ends)
+        .map(|(link, (start, _))| link.comes_in(start.y))
+        .collect();
+    // Links reaching the same column through the band leave the gutter in the order they came in.
+    let arrivals = ranks(comes_in.iter().map(|&height| ((), height)));
+    let leaves: Vec<Height> = links
+        .iter()
+        .zip(&ends)
+        .zip(&arrivals)
+        .map(|((link, (_, end)), &(arrival, _))| link.leaves(end.y, arrival as f64))
+        .collect();
+
+    // Gutters, from left to right: links going up, then links going down. Going up, the ones
+    // coming in lower are further right, they pass in front of the others' entries. Going down,
+    // the ones coming in higher are. Rows line up across batches, a link often comes in at the
+    // height another leaves at: with this order they don't run along each other there.
+    let gutters = ranks(links.iter().zip(&comes_in).zip(&ends).map(
+        |((link, &[band, a, b]), (start, end))| {
+            let going_up = !link.exits_up && (link.enters_down || end.y < start.y);
+            let order = if going_up {
+                [0.0, band, a, b]
+            } else {
+                [1.0, -band, -a, -b]
+            };
+
+            (link.from.batch, order)
+        },
+    ));
+
+    // The band, from top to bottom. Leaving their batch, links from columns further left are
+    // higher: they cross the gaps of later columns. Reaching theirs, links to columns further
+    // right are higher, for the same reason. Links leaving their batch through the band are above
+    // the ones only reaching theirs through it, which climb the gutter under them.
+    let bands = ranks(links.iter().zip(comes_in.iter().zip(&leaves)).map(
+        |(link, (&[a, b, c], &[d, e, f]))| {
+            let order = if link.exits_up {
+                [0.0, a, b, c]
+            } else {
+                [1.0, d, e, f]
+            };
+
+            (link.from.batch, order)
+        },
+    ));
+    let lane_ys: Vec<f64> = bands
+        .iter()
+        .map(|&(rank, count)| spread(LANE_TOP, LANE_BOTTOM - LANE_TOP, rank, count))
+        .collect();
+
+    // Column gaps, from left to right: links coming down from the band, the higher ones further
+    // right, then links going up to it, the higher ones further left.
+    let mut climbs = Vec::new();
+    for (index, link) in links.iter().enumerate() {
+        if link.enters_down {
+            let gap = (link.to.batch, link.to.column - 1);
+            climbs.push((index, false, (gap, [0.0, -lane_ys[index]])));
+        }
+        if link.exits_up {
+            let gap = (link.from.batch, link.from.column);
+            climbs.push((index, true, (gap, [1.0, lane_ys[index]])));
+        }
+    }
+    let gap_slots = ranks(climbs.iter().map(|&(_, _, entry)| entry));
+    let mut entry_xs = vec![0.0; links.len()];
+    let mut exit_xs = vec![0.0; links.len()];
+    for (&(index, exits, _), &(slot, count)) in climbs.iter().zip(&gap_slots) {
+        let link = &links[index];
+        if exits {
+            exit_xs[index] = spread(link.from.bounds.right(), COLUMN_GAP, slot, count);
+        } else {
+            entry_xs[index] = spread(link.to.bounds.x - COLUMN_GAP, COLUMN_GAP, slot, count);
+        }
+    }
+
+    links
+        .iter()
+        .enumerate()
+        .map(|(index, link)| {
+            let (gutter_slot, gutter_count) = gutters[index];
+            let previous = &layout.batches[link.from.batch];
+            let next = &layout.batches[link.to.batch];
             let gutter_left = previous.bounds.right() - BATCH_END_PADDING;
-            let gutter_x = spread(
-                gutter_left,
-                next.bounds.x - gutter_left,
-                gutter_slot,
-                gutter_count,
-            );
-            let lane_y = spread(LANE_TOP, LANE_BOTTOM - LANE_TOP, gutter_slot, gutter_count);
+            let xs = Xs {
+                exit: exit_xs[index],
+                gutter: spread(
+                    gutter_left,
+                    next.bounds.x - gutter_left,
+                    gutter_slot,
+                    gutter_count,
+                ),
+                entry: entry_xs[index],
+            };
 
             Route {
-                blocker,
-                blocked,
-                points: path(start, end, from, previous, to, gutter_x, lane_y),
+                blocker: link.blocker,
+                blocked: link.blocked,
+                points: path(ends[index], link, xs, lane_ys[index]),
             }
         })
         .collect()
+}
+
+/// A link being routed.
+struct Link<'a> {
+    blocker: OperationId,
+    blocked: OperationId,
+    from: &'a TilePlace,
+    to: &'a TilePlace,
+    /// The blocker isn't in its batch's last column, the link goes up to the band to leave it.
+    exits_up: bool,
+    /// The blocked tile isn't in its batch's first column, the link comes down from the band.
+    enters_down: bool,
+}
+
+/// How high a link comes into or leaves a gutter, sorting from highest to lowest. The band is
+/// above every tile: `[0.0, ..]` sorts before a tile's `[1.0, y, 0.0]`.
+type Height = [f64; 3];
+
+impl Link<'_> {
+    /// How high the link comes into the gutter, leaving its blocker at `y`. Through the band,
+    /// links from columns further left come in higher.
+    fn comes_in(&self, y: f64) -> Height {
+        if self.exits_up {
+            [0.0, self.from.column as f64, y]
+        } else {
+            [1.0, y, 0.0]
+        }
+    }
+
+    /// How high the link leaves the gutter, reaching its blocked tile at `y`. Through the band,
+    /// links to columns further right leave higher, `tie` orders the others.
+    fn leaves(&self, y: f64, tie: f64) -> Height {
+        if self.enters_down {
+            [0.0, -(self.to.column as f64), tie]
+        } else {
+            [1.0, y, 0.0]
+        }
+    }
+}
+
+/// Where a link goes vertically: up its blocker's column gap, down the gutter, and down its
+/// blocked tile's column gap. Only the ones its path takes are used.
+struct Xs {
+    exit: f64,
+    gutter: f64,
+    entry: f64,
+}
+
+/// Numbers each entry within its group, by its key: `(index, entries in the group)`, in the order
+/// given. Entries with the same key keep their order.
+fn ranks<G: Ord + Copy, const N: usize>(
+    entries: impl Iterator<Item = (G, [f64; N])>,
+) -> Vec<(usize, usize)> {
+    let entries: Vec<(G, [f64; N])> = entries.collect();
+    let mut order: Vec<usize> = (0..entries.len()).collect();
+    order.sort_by(|&a, &b| {
+        let ((group_a, key_a), (group_b, key_b)) = (&entries[a], &entries[b]);
+        let keys = key_a
+            .iter()
+            .zip(key_b)
+            .map(|(a, b)| a.total_cmp(b))
+            .find(|ordering| ordering.is_ne())
+            .unwrap_or(Ordering::Equal);
+
+        group_a.cmp(group_b).then(keys)
+    });
+
+    let mut numbered = vec![(0, 0); entries.len()];
+    for group in order.chunk_by(|&a, &b| entries[a].0 == entries[b].0) {
+        for (rank, &index) in group.iter().enumerate() {
+            numbered[index] = (rank, group.len());
+        }
+    }
+
+    numbered
 }
 
 /// The cues of `routes` with one end off screen, stacked so cues on the same edge don't overlap.
@@ -208,84 +381,55 @@ fn is_finite(bounds: &Rect) -> bool {
         .all(|value| value.is_finite())
 }
 
-/// Numbers each `(group, item)` within its group: `(index, group size)`, in sorted order.
-fn slots<G: Ord + Copy, I: Ord + Copy>(
-    entries: impl Iterator<Item = (G, I)>,
-) -> BTreeMap<(G, I), (usize, usize)> {
-    let mut groups: BTreeMap<G, Vec<I>> = BTreeMap::new();
-    for (group, item) in entries {
-        groups.entry(group).or_default().push(item);
-    }
-
-    let mut numbered = BTreeMap::new();
-    for (group, mut items) in groups {
-        items.sort();
-        let count = items.len();
-
-        for (index, item) in items.into_iter().enumerate() {
-            numbered.insert((group, item), (index, count));
-        }
-    }
-
-    numbered
-}
-
 /// The `slot`-th of `count` evenly spread positions strictly inside `start..start + length`.
 fn spread(start: f64, length: f64, slot: usize, count: usize) -> f64 {
     start + length * (slot + 1) as f64 / (count + 1) as f64
 }
 
-/// The points from `start` to `end`, see the module's documentation for the spaces it goes through.
-fn path(
-    start: Point,
-    end: Point,
-    from: &TilePlace,
-    previous: &BatchLayout,
-    to: &TilePlace,
-    gutter_x: f64,
-    lane_y: f64,
-) -> Vec<Point> {
+/// The points from the link's start to its end, see the module's documentation for the spaces it
+/// goes through.
+fn path((start, end): (Point, Point), link: &Link, xs: Xs, lane_y: f64) -> Vec<Point> {
     let mut points = vec![start];
 
     // Tiles of later columns are in the way, we go up the column gap and over them.
-    let last_column = previous.columns - 1;
-    if from.column == last_column {
+    if link.exits_up {
         points.push(Point {
-            x: gutter_x,
+            x: xs.exit,
             y: start.y,
+        });
+        points.push(Point {
+            x: xs.exit,
+            y: lane_y,
+        });
+        points.push(Point {
+            x: xs.gutter,
+            y: lane_y,
         });
     } else {
-        let gap_x = start.x + COLUMN_GAP / 2.0;
         points.push(Point {
-            x: gap_x,
+            x: xs.gutter,
             y: start.y,
-        });
-        points.push(Point {
-            x: gap_x,
-            y: lane_y,
-        });
-        points.push(Point {
-            x: gutter_x,
-            y: lane_y,
         });
     }
 
-    if to.column == 0 {
+    if link.enters_down {
         points.push(Point {
-            x: gutter_x,
+            x: xs.gutter,
+            y: lane_y,
+        });
+        points.push(Point {
+            x: xs.entry,
+            y: lane_y,
+        });
+        points.push(Point {
+            x: xs.entry,
             y: end.y,
         });
     } else {
-        let gap_x = end.x - COLUMN_GAP / 2.0;
         points.push(Point {
-            x: gutter_x,
-            y: lane_y,
+            x: xs.gutter,
+            y: end.y,
         });
-        points.push(Point {
-            x: gap_x,
-            y: lane_y,
-        });
-        points.push(Point { x: gap_x, y: end.y });
     }
     points.push(end);
 
@@ -472,6 +616,169 @@ mod tests {
             .map(|route| route.points.last().unwrap().y)
             .collect();
         assert_ne!(arrivals[0], arrivals[1]);
+    }
+
+    /// How many times a segment of one route crosses a segment of another. Touching and running
+    /// along each other don't count.
+    fn crossings(routes: &[Route]) -> usize {
+        let segments = |route: &Route| -> Vec<(Point, Point)> {
+            route
+                .points
+                .windows(2)
+                .map(|segment| (segment[0], segment[1]))
+                .collect()
+        };
+        let cross = |(a, b): (Point, Point), (c, d): (Point, Point)| {
+            // A horizontal segment and a vertical one cross strictly inside both.
+            let ((h1, h2), (v1, v2)) = if a.y == b.y && c.x == d.x {
+                ((a, b), (c, d))
+            } else if c.y == d.y && a.x == b.x {
+                ((c, d), (a, b))
+            } else {
+                return false;
+            };
+            let (left, right) = (h1.x.min(h2.x), h1.x.max(h2.x));
+            let (top, bottom) = (v1.y.min(v2.y), v1.y.max(v2.y));
+
+            left < v1.x && v1.x < right && top < h1.y && h1.y < bottom
+        };
+
+        let mut count = 0;
+        for (index, route) in routes.iter().enumerate() {
+            for other in &routes[index + 1..] {
+                for segment in segments(route) {
+                    for other_segment in segments(other) {
+                        count += usize::from(cross(segment, other_segment));
+                    }
+                }
+            }
+        }
+
+        count
+    }
+
+    /// How many times a segment of one route runs along a segment of another.
+    fn overlaps(routes: &[Route]) -> usize {
+        let along = |(a, b): (Point, Point), (c, d): (Point, Point)| {
+            let shared = |(a1, a2): (f64, f64), (b1, b2): (f64, f64)| {
+                a1.min(a2).max(b1.min(b2)) < a1.max(a2).min(b1.max(b2))
+            };
+
+            (a.y == b.y && c.y == d.y && a.y == c.y && shared((a.x, b.x), (c.x, d.x)))
+                || (a.x == b.x && c.x == d.x && a.x == c.x && shared((a.y, b.y), (c.y, d.y)))
+        };
+
+        let mut count = 0;
+        for (index, route) in routes.iter().enumerate() {
+            for other in &routes[index + 1..] {
+                for segment in route.points.windows(2) {
+                    for other_segment in other.points.windows(2) {
+                        let segment = (segment[0], segment[1]);
+                        let other_segment = (other_segment[0], other_segment[1]);
+                        count += usize::from(along(segment, other_segment));
+                    }
+                }
+            }
+        }
+
+        count
+    }
+
+    /// Asserts that links into one tile, from tiles above, beside and below it, don't cross.
+    #[test]
+    fn fan_in() {
+        let layout = layout(&[3, 3]);
+
+        for target in 3..6 {
+            let routes = routes(&layout, &pairs(&[(0, target), (1, target), (2, target)]));
+
+            assert_eq!(crossings(&routes), 0, "into {target}: {routes:#?}");
+        }
+    }
+
+    /// Asserts that links out of one tile, to tiles above, beside and below it, don't cross.
+    #[test]
+    fn fan_out() {
+        let layout = layout(&[3, 3]);
+
+        for source in 0..3 {
+            let routes = routes(&layout, &pairs(&[(source, 3), (source, 4), (source, 5)]));
+
+            assert_eq!(crossings(&routes), 0, "out of {source}: {routes:#?}");
+        }
+    }
+
+    /// Asserts that links between distinct tiles going the same way don't cross.
+    ///
+    /// Links that swap heights, or one going across another's whole height, can't avoid it.
+    #[test]
+    fn parallel() {
+        let layout = layout(&[3, 3]);
+
+        for pairs_list in [
+            [(0, 4), (1, 5)],
+            [(1, 3), (2, 4)],
+            [(0, 4), (2, 5)],
+            [(0, 3), (1, 5)],
+            [(1, 4), (2, 5)],
+        ] {
+            let routes = routes(&layout, &pairs(&pairs_list));
+
+            assert_eq!(crossings(&routes), 0, "{pairs_list:?}: {routes:#?}");
+        }
+    }
+
+    /// Asserts that links into one tile, or out of one tile, neither cross nor run along each
+    /// other, with tiles in several columns.
+    #[test]
+    fn fans_across_columns() {
+        for sizes in [[4, 4], [3, 4], [4, 3], [4, 1], [1, 4], [6, 6]] {
+            let layout = layout(&sizes);
+            let (first, second) = (0..sizes[0], sizes[0]..sizes[0] + sizes[1]);
+
+            for target in second.clone() {
+                let list: Vec<(usize, usize)> =
+                    first.clone().map(|source| (source, target)).collect();
+                let routes = routes(&layout, &pairs(&list));
+
+                assert_eq!(
+                    crossings(&routes),
+                    0,
+                    "{sizes:?} into {target}: {routes:#?}"
+                );
+                assert_eq!(overlaps(&routes), 0, "{sizes:?} into {target}: {routes:#?}");
+            }
+            for source in first.clone() {
+                let list: Vec<(usize, usize)> =
+                    second.clone().map(|target| (source, target)).collect();
+                let routes = routes(&layout, &pairs(&list));
+
+                assert_eq!(
+                    crossings(&routes),
+                    0,
+                    "{sizes:?} out of {source}: {routes:#?}"
+                );
+                assert_eq!(
+                    overlaps(&routes),
+                    0,
+                    "{sizes:?} out of {source}: {routes:#?}"
+                );
+            }
+        }
+    }
+
+    /// Asserts that a link leaving at the height another arrives at doesn't run along it. Rows
+    /// line up across batches, so it's common.
+    #[test]
+    fn same_height() {
+        // 0 and 3 are in the first row of batch 0, 4 and 7 in the first row of batch 1.
+        let layout = layout(&[4, 4]);
+
+        for list in [[(0, 4), (3, 7)], [(3, 4), (0, 7)], [(0, 5), (3, 4)]] {
+            let routes = routes(&layout, &pairs(&list));
+
+            assert_eq!(overlaps(&routes), 0, "{list:?}: {routes:#?}");
+        }
     }
 
     /// Asserts that a pair without a tile, or not in consecutive batches, gets no route.
