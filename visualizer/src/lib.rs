@@ -19,3 +19,6 @@ pub mod overview;
 pub mod panels;
 pub mod search;
 pub mod state;
+
+#[cfg(test)]
+mod export_tests;

@@ -1,0 +1,741 @@
+{
+  "labels": {
+    "name": "labels",
+    "batches_info": [
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::first)",
+              "borrow": [],
+              "conflict": null,
+              "after": [],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 2,
+              "occurrence": {
+                "id": 0,
+                "conditions": [],
+                "footprint": [],
+                "thread_bound": false,
+                "after": []
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::second)",
+              "borrow": [],
+              "conflict": null,
+              "after": [
+                0
+              ],
+              "after_all": [
+                {
+                  "other_system": 0,
+                  "constraint": "System(visualizer::export_tests::first)"
+                }
+              ],
+              "before_all": [],
+              "unique_id": 3,
+              "occurrence": {
+                "id": 1,
+                "conditions": [],
+                "footprint": [],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "System": 0
+                    },
+                    "origins": [
+                      {
+                        "AfterAll": "System(visualizer::export_tests::first)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::third)",
+              "borrow": [],
+              "conflict": null,
+              "after": [
+                0,
+                1
+              ],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 4,
+              "occurrence": {
+                "id": 2,
+                "conditions": [],
+                "footprint": [],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "System": 0
+                    },
+                    "origins": [
+                      "Barrier"
+                    ]
+                  },
+                  {
+                    "occurrence": {
+                      "System": 1
+                    },
+                    "origins": [
+                      "Barrier"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      }
+    ]
+  },
+  "sequential": {
+    "name": "sequential",
+    "batches_info": [
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::first)",
+              "borrow": [],
+              "conflict": null,
+              "after": [],
+              "after_all": [],
+              "before_all": [
+                {
+                  "other_system": 3,
+                  "constraint": "Sequential(child 1)"
+                }
+              ],
+              "unique_id": 2,
+              "occurrence": {
+                "id": 0,
+                "conditions": [],
+                "footprint": [],
+                "thread_bound": false,
+                "after": []
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::second)",
+              "borrow": [],
+              "conflict": null,
+              "after": [
+                0
+              ],
+              "after_all": [],
+              "before_all": [
+                {
+                  "other_system": 4,
+                  "constraint": "Sequential(child 2)"
+                }
+              ],
+              "unique_id": 3,
+              "occurrence": {
+                "id": 1,
+                "conditions": [],
+                "footprint": [],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "System": 0
+                    },
+                    "origins": [
+                      "Sequential"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::third)",
+              "borrow": [],
+              "conflict": null,
+              "after": [
+                1
+              ],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 4,
+              "occurrence": {
+                "id": 2,
+                "conditions": [],
+                "footprint": [],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "System": 1
+                    },
+                    "origins": [
+                      "Sequential"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      }
+    ]
+  },
+  "pair": {
+    "name": "pair",
+    "batches_info": [
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::write_c)",
+              "borrow": [
+                {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::C>",
+                  "mutability": "Exclusive",
+                  "thread_safe": true
+                }
+              ],
+              "conflict": null,
+              "after": [],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 0,
+              "occurrence": {
+                "id": 0,
+                "conditions": [],
+                "footprint": [
+                  {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::C>",
+                    "mutability": "Exclusive",
+                    "thread_safe": true
+                  }
+                ],
+                "thread_bound": false,
+                "after": []
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::read_c)",
+              "borrow": [
+                {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::C>",
+                  "mutability": "Shared",
+                  "thread_safe": true
+                }
+              ],
+              "conflict": {
+                "Borrow": {
+                  "type_info": {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::C>",
+                    "mutability": "Shared",
+                    "thread_safe": true
+                  },
+                  "other_system": 0,
+                  "other_type_info": {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::C>",
+                    "mutability": "Exclusive",
+                    "thread_safe": true
+                  }
+                }
+              },
+              "after": [
+                0
+              ],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 1,
+              "occurrence": {
+                "id": 1,
+                "conditions": [],
+                "footprint": [
+                  {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::C>",
+                    "mutability": "Shared",
+                    "thread_safe": true
+                  }
+                ],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "System": 0
+                    },
+                    "origins": [
+                      "Implicit",
+                      "Barrier"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      }
+    ]
+  },
+  "regroups": {
+    "name": "regroups",
+    "batches_info": [
+      {
+        "systems": [
+          null,
+          []
+        ],
+        "regroups": [
+          {
+            "borrow": [
+              {
+                "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::B>",
+                "mutability": "Exclusive",
+                "thread_safe": true
+              },
+              {
+                "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                "mutability": "Exclusive",
+                "thread_safe": true
+              }
+            ],
+            "trigger": "Entry",
+            "occurrence": {
+              "id": 0,
+              "thread_bound": false,
+              "after": []
+            }
+          }
+        ]
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::write_a)",
+              "borrow": [
+                {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                  "mutability": "Exclusive",
+                  "thread_safe": true
+                }
+              ],
+              "conflict": {
+                "Regroup": {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                  "mutability": "Exclusive",
+                  "thread_safe": true
+                }
+              },
+              "after": [],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 5,
+              "occurrence": {
+                "id": 0,
+                "conditions": [],
+                "footprint": [
+                  {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                    "mutability": "Exclusive",
+                    "thread_safe": true
+                  }
+                ],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "Regroup": 0
+                    },
+                    "origins": [
+                      "Regroup"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          []
+        ],
+        "regroups": [
+          {
+            "borrow": [
+              {
+                "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::B>",
+                "mutability": "Exclusive",
+                "thread_safe": true
+              },
+              {
+                "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                "mutability": "Exclusive",
+                "thread_safe": true
+              }
+            ],
+            "trigger": "Pending",
+            "occurrence": {
+              "id": 1,
+              "thread_bound": false,
+              "after": [
+                {
+                  "occurrence": {
+                    "System": 0
+                  },
+                  "origins": [
+                    "Writes"
+                  ]
+                },
+                {
+                  "occurrence": {
+                    "Regroup": 0
+                  },
+                  "origins": [
+                    "Regroup"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::read_a)",
+              "borrow": [
+                {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                  "mutability": "Shared",
+                  "thread_safe": true
+                }
+              ],
+              "conflict": {
+                "Regroup": {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                  "mutability": "Shared",
+                  "thread_safe": true
+                }
+              },
+              "after": [
+                0
+              ],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 6,
+              "occurrence": {
+                "id": 1,
+                "conditions": [],
+                "footprint": [
+                  {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                    "mutability": "Shared",
+                    "thread_safe": true
+                  }
+                ],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "System": 0
+                    },
+                    "origins": [
+                      "Implicit"
+                    ]
+                  },
+                  {
+                    "occurrence": {
+                      "Regroup": 0
+                    },
+                    "origins": [
+                      "Regroup"
+                    ]
+                  },
+                  {
+                    "occurrence": {
+                      "Regroup": 1
+                    },
+                    "origins": [
+                      "Regroup"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "System(visualizer::export_tests::read_b)",
+              "borrow": [
+                {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::B>",
+                  "mutability": "Shared",
+                  "thread_safe": true
+                }
+              ],
+              "conflict": {
+                "Regroup": {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::B>",
+                  "mutability": "Shared",
+                  "thread_safe": true
+                }
+              },
+              "after": [],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 7,
+              "occurrence": {
+                "id": 3,
+                "conditions": [],
+                "footprint": [
+                  {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::B>",
+                    "mutability": "Shared",
+                    "thread_safe": true
+                  }
+                ],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "Regroup": 0
+                    },
+                    "origins": [
+                      "Regroup"
+                    ]
+                  },
+                  {
+                    "occurrence": {
+                      "Regroup": 1
+                    },
+                    "origins": [
+                      "Regroup"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          [
+            {
+              "name": "System(visualizer::export_tests::write_a)",
+              "borrow": [
+                {
+                  "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                  "mutability": "Exclusive",
+                  "thread_safe": true
+                }
+              ],
+              "conflict": {
+                "Borrow": {
+                  "type_info": {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                    "mutability": "Exclusive",
+                    "thread_safe": true
+                  },
+                  "other_system": 6,
+                  "other_type_info": {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                    "mutability": "Shared",
+                    "thread_safe": true
+                  }
+                }
+              },
+              "after": [
+                0,
+                1
+              ],
+              "after_all": [],
+              "before_all": [],
+              "unique_id": 5,
+              "occurrence": {
+                "id": 2,
+                "conditions": [],
+                "footprint": [
+                  {
+                    "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                    "mutability": "Exclusive",
+                    "thread_safe": true
+                  }
+                ],
+                "thread_bound": false,
+                "after": [
+                  {
+                    "occurrence": {
+                      "System": 0
+                    },
+                    "origins": [
+                      "Implicit"
+                    ]
+                  },
+                  {
+                    "occurrence": {
+                      "System": 1
+                    },
+                    "origins": [
+                      "Implicit"
+                    ]
+                  },
+                  {
+                    "occurrence": {
+                      "Regroup": 0
+                    },
+                    "origins": [
+                      "Regroup"
+                    ]
+                  },
+                  {
+                    "occurrence": {
+                      "Regroup": 1
+                    },
+                    "origins": [
+                      "Regroup"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        ],
+        "regroups": []
+      },
+      {
+        "systems": [
+          null,
+          []
+        ],
+        "regroups": [
+          {
+            "borrow": [
+              {
+                "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::B>",
+                "mutability": "Exclusive",
+                "thread_safe": true
+              },
+              {
+                "name": "shipyard::sparse_set::SparseSet<visualizer::export_tests::A>",
+                "mutability": "Exclusive",
+                "thread_safe": true
+              }
+            ],
+            "trigger": "Pending",
+            "occurrence": {
+              "id": 2,
+              "thread_bound": false,
+              "after": [
+                {
+                  "occurrence": {
+                    "System": 0
+                  },
+                  "origins": [
+                    "Borrows"
+                  ]
+                },
+                {
+                  "occurrence": {
+                    "System": 1
+                  },
+                  "origins": [
+                    "Borrows"
+                  ]
+                },
+                {
+                  "occurrence": {
+                    "System": 2
+                  },
+                  "origins": [
+                    "Writes"
+                  ]
+                },
+                {
+                  "occurrence": {
+                    "System": 3
+                  },
+                  "origins": [
+                    "Borrows"
+                  ]
+                },
+                {
+                  "occurrence": {
+                    "Regroup": 0
+                  },
+                  "origins": [
+                    "Regroup"
+                  ]
+                },
+                {
+                  "occurrence": {
+                    "Regroup": 1
+                  },
+                  "origins": [
+                    "Regroup"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

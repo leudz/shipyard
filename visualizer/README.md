@@ -48,3 +48,9 @@ cargo clippy -p visualizer --target wasm32-unknown-unknown --no-default-features
 ```
 
 Don't use `--all-features`, it enables both renderers.
+
+`src/conflict_workloads.json` is a real export, it checks that the visualizer reads what shipyard writes. After an intended change to the exported information, regenerate it:
+
+```sh
+cargo test -p visualizer --lib --no-default-features -- --ignored regenerate
+```
