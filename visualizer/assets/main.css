@@ -1,6 +1,8 @@
 /* Visual tokens adapted from the Workload Explorer preview.
    We switch palettes with a media query rather than `light-dark()` so older
-   system WebViews (WebKitGTK in particular) get the same colors. */
+   system WebViews (WebKitGTK in particular) get the same colors.
+   The page follows the system's theme until one is picked in the header, which sets
+   `data-theme` on the root. The dark palette is written twice, for both ways to get it. */
 :root {
     color-scheme: light dark;
 
@@ -26,7 +28,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --bg: #171d26;
         --panel: #252e3c;
         --bar: #2c3849;
@@ -44,6 +46,31 @@
         --component: #c4aae6;
         --regroup: #6fd0dc;
     }
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --bg: #171d26;
+    --panel: #252e3c;
+    --bar: #2c3849;
+    --text: #e4ebf6;
+    --muted: #acbbcf;
+    --line: #465772;
+    --accent: #9ec9ff;
+    --tint: #344b69;
+    --red: #ff97a6;
+    --red-bg: #562f3e;
+    --blue: #9ac7ff;
+    --blue-bg: #294362;
+    --shadow: #00000055;
+    --system: #d7bd87;
+    --component: #c4aae6;
+    --regroup: #6fd0dc;
 }
 
 *,

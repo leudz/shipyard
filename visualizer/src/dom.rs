@@ -114,6 +114,43 @@ pub async fn child_heights(id: &str) -> Vec<f64> {
     serde_json::from_value(heights).unwrap_or_default()
 }
 
+/// Applies the theme picked last, if there is one, and returns whether the page is dark.
+///
+/// Without a picked theme the page follows the system's.
+pub async fn restore_theme() -> bool {
+    // Storage can be unavailable, the page then follows the system's theme.
+    let script = r#"
+        let theme = null;
+        try {
+            theme = localStorage.getItem("theme");
+        } catch {}
+        if (theme === "dark" || theme === "light") {
+            document.documentElement.dataset.theme = theme;
+            return theme === "dark";
+        }
+        return matchMedia("(prefers-color-scheme: dark)").matches;
+    "#;
+
+    let Ok(dark) = document::eval(script).await else {
+        return false;
+    };
+
+    dark.as_bool().unwrap_or(false)
+}
+
+/// Shows the page dark or light, whatever the system's theme, and remembers it.
+pub fn set_theme(dark: bool) {
+    let theme = if dark { "dark" } else { "light" };
+    document::eval(&format!(
+        r#"
+        document.documentElement.dataset.theme = {theme:?};
+        try {{
+            localStorage.setItem("theme", {theme:?});
+        }} catch {{}}
+        "#
+    ));
+}
+
 /// Sends pointer `pointer_id`'s events to the element with `id` until the pointer is released,
 /// even once it leaves the element.
 pub fn capture_pointer(id: &str, pointer_id: i32) {

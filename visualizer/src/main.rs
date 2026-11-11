@@ -64,6 +64,9 @@ fn main() {
 fn App() -> Element {
     let mut state = use_signal(AppState::default);
     files::use_startup_file(state);
+    // Whether the page is dark, `None` until we know.
+    let mut dark = use_signal(|| None::<bool>);
+    use_future(move || async move { dark.set(Some(dom::restore_theme().await)) });
     let app = state.read();
 
     rsx! {
@@ -104,6 +107,17 @@ fn App() -> Element {
                         r#type: "button",
                         onclick: move |_| state.write().update(Action::LoadExample),
                         "Load example"
+                    }
+                    if let Some(is_dark) = dark() {
+                        button {
+                            class: "button",
+                            r#type: "button",
+                            onclick: move |_| {
+                                dark.set(Some(!is_dark));
+                                dom::set_theme(!is_dark);
+                            },
+                            if is_dark { "☀ Light" } else { "☾ Dark" }
+                        }
                     }
                 }
             }
