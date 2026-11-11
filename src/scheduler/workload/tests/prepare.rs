@@ -2,8 +2,8 @@ use super::*;
 use crate::all_storages::GroupMember;
 use crate::scheduler::Step;
 use crate::scheduler::Step::Regroup;
-use crate::scheduler::info::BatchInfo;
 use crate::scheduler::info::RegroupTrigger::{self, Entry, Pending};
+use crate::scheduler::info::{BatchInfo, OccurrenceRef, OrderingOrigin, Predecessor};
 use crate::scheduler::workload::prepare::prepare_regroups;
 use crate::storage::StorageId;
 
@@ -368,11 +368,23 @@ fn info() {
     let (batches, info) = prepare(workload, &world());
 
     assert_eq!(info.len(), batches.parallel.len());
-    assert_eq!(info[0].regroups, &[batches.regroups[0].info()]);
+    assert_eq!(info[0].regroups, [batches.regroups[0].info(0)]);
     assert_eq!(info[0].systems().count(), 0);
     assert!(info[1].regroups.is_empty());
     assert_eq!(info[1].systems().count(), 1);
-    assert_eq!(info[2].regroups, &[batches.regroups[1].info()]);
+    // The pending regroup comes after `write_a` and the entry regroup, which `RegroupStep::info` doesn't know.
+    let mut pending = batches.regroups[1].info(1);
+    pending.occurrence.after = vec![
+        Predecessor {
+            occurrence: OccurrenceRef::System(0),
+            origins: vec![OrderingOrigin::Writes],
+        },
+        Predecessor {
+            occurrence: OccurrenceRef::Regroup(0),
+            origins: vec![OrderingOrigin::Regroup],
+        },
+    ];
+    assert_eq!(info[2].regroups, [pending]);
     assert_eq!(info[3].systems().count(), 1);
 }
 

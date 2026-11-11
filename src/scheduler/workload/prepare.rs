@@ -21,7 +21,10 @@
 
 use crate::all_storages::{AllStorages, ConnectedSet, Grouping};
 use crate::borrow::Mutability;
-use crate::scheduler::info::{BatchInfo, Conflict, RegroupTrigger, SystemInfo, TypeInfo};
+use crate::scheduler::info::{
+    BatchInfo, Conflict, OccurrenceRef, OrderingOrigin, Predecessor, RegroupTrigger, SystemInfo,
+    TypeInfo,
+};
 use crate::scheduler::workload::create_workload::{
     DedupedUniqueIds, Dependencies, Node, is_thread_bound, schedule,
 };
@@ -65,7 +68,8 @@ pub(super) fn prepare_regroups(
         return;
     }
 
-    let nodes = nodes(&plan, &user_batches(batches), dependencies);
+    let regroup_edges = regroup_edges(&plan, dependencies);
+    let nodes = nodes(&plan, &user_batches(batches), dependencies, &regroup_edges);
     let thread_bound: Vec<bool> = nodes
         .iter()
         .map(|node| is_thread_bound(&node.footprint))
@@ -84,8 +88,9 @@ pub(super) fn prepare_regroups(
         user_steps,
         &scheduled.batches,
         &thread_bound,
+        &regroup_edges,
     );
-    point_conflicts_to_regroups(batches_info);
+    point_conflicts_to_regroups(batches_info, &dependencies.conflicts);
 }
 
 /// A step of the workload in the sequential order, before it's placed in a batch.
@@ -178,10 +183,90 @@ fn user_batches(batches: &Batches) -> Vec<usize> {
     user_batches
 }
 
+/// An edge keeping a regroup and another step of `plan` in separate batches, as positions in `plan`.
+struct RegroupEdge {
+    predecessor: usize,
+    successor: usize,
+    origin: OrderingOrigin,
+}
+
+/// Returns the edges keeping each regroup of `plan` in its sequential place relative to every step
+/// borrowing from its set, conditions included.
+///
+/// A regroup borrows its whole set exclusively, it can't share a batch with any of them.
+fn regroup_edges(plan: &[Planned], dependencies: &Dependencies) -> Vec<RegroupEdge> {
+    fn footprint<'a>(planned: &'a Planned, dependencies: &'a Dependencies) -> &'a [TypeInfo] {
+        match planned {
+            Planned::System(occurrence) => &dependencies.nodes[*occurrence].footprint,
+            Planned::Regroup(regroup) => &regroup.borrow,
+        }
+    }
+
+    let mut edges = Vec::new();
+    for (position, planned) in plan.iter().enumerate() {
+        let Planned::Regroup(regroup) = planned else {
+            continue;
+        };
+
+        // The systems writing to the set since its previous regroup are the ones this regroup is for.
+        let previous_regroup = plan[..position].iter().rposition(|other| {
+            matches!(other, Planned::Regroup(other) if borrows_from(&other.borrow, &regroup.set))
+        });
+
+        for (other, other_planned) in plan.iter().enumerate() {
+            if other == position
+                || !borrows_from(footprint(other_planned, dependencies), &regroup.set)
+            {
+                continue;
+            }
+
+            let edge = match other_planned {
+                _ if other > position => RegroupEdge {
+                    predecessor: position,
+                    successor: other,
+                    origin: OrderingOrigin::Regroup,
+                },
+                // The earlier regroup added this edge itself.
+                Planned::Regroup(_) => continue,
+                Planned::System(occurrence) => {
+                    let since_previous = previous_regroup.is_none_or(|previous| other > previous);
+                    let writes = dependencies.borrows[*occurrence].iter().any(|type_info| {
+                        type_info.mutability == Mutability::Exclusive
+                            && regroup
+                                .set
+                                .members
+                                .binary_search(&type_info.storage_id)
+                                .is_ok()
+                    });
+
+                    RegroupEdge {
+                        predecessor: other,
+                        successor: position,
+                        origin: if since_previous && writes {
+                            OrderingOrigin::Writes
+                        } else {
+                            OrderingOrigin::Borrows
+                        },
+                    }
+                }
+            };
+
+            edges.push(edge);
+        }
+    }
+
+    edges
+}
+
 /// Returns the node of each step of `plan`, edges pointing to positions in `plan`.
 ///
 /// `user_batches` is the batch of each occurrence before regroups were added.
-fn nodes(plan: &[Planned], user_batches: &[usize], dependencies: &Dependencies) -> Vec<Node> {
+fn nodes(
+    plan: &[Planned],
+    user_batches: &[usize],
+    dependencies: &Dependencies,
+    regroup_edges: &[RegroupEdge],
+) -> Vec<Node> {
     let mut positions = vec![usize::MAX; dependencies.nodes.len()];
     for (position, planned) in plan.iter().enumerate() {
         if let Planned::System(occurrence) = planned {
@@ -225,24 +310,8 @@ fn nodes(plan: &[Planned], user_batches: &[usize], dependencies: &Dependencies) 
         })
         .collect();
 
-    // A regroup borrows its whole set exclusively, it stays in its sequential place
-    // relative to every step borrowing from the set, conditions included.
-    for (position, planned) in plan.iter().enumerate() {
-        let Planned::Regroup(regroup) = planned else {
-            continue;
-        };
-
-        for other in 0..nodes.len() {
-            if other == position || !borrows_from(&nodes[other].footprint, &regroup.set) {
-                continue;
-            }
-
-            if other < position {
-                nodes[position].batch_after.add(other);
-            } else {
-                nodes[other].batch_after.add(position);
-            }
-        }
+    for edge in regroup_edges {
+        nodes[edge.successor].batch_after.add(edge.predecessor);
     }
 
     nodes
@@ -314,6 +383,7 @@ fn take_user_steps(
 ///
 /// `placed` lists the positions in `plan` of each batch's steps, `thread_bound` tells which one
 /// goes in the calling-thread slot. The sequential order is `plan`'s.
+/// `regroup_edges` are added to the occurrence information of the steps.
 fn put_batches(
     batches: &mut Batches,
     batches_info: &mut Vec<BatchInfo>,
@@ -321,28 +391,60 @@ fn put_batches(
     mut user_steps: Vec<Option<UserStep>>,
     placed: &[Vec<usize>],
     thread_bound: &[bool],
+    regroup_edges: &[RegroupEdge],
 ) {
-    // Each step of `plan` with its condition, occurrence and info.
     // Regroups are numbered in the sequential order.
+    let mut regroup_count = 0;
+    let references: Vec<OccurrenceRef> = plan
+        .iter()
+        .map(|planned| match planned {
+            Planned::System(occurrence) => OccurrenceRef::System(*occurrence),
+            Planned::Regroup(_) => {
+                regroup_count += 1;
+
+                OccurrenceRef::Regroup(regroup_count - 1)
+            }
+        })
+        .collect();
+
+    let mut regroup_predecessors: Vec<Vec<Predecessor>> = vec![Vec::new(); plan.len()];
+    for edge in regroup_edges {
+        regroup_predecessors[edge.successor].push(Predecessor {
+            occurrence: references[edge.predecessor],
+            origins: vec![edge.origin.clone()],
+        });
+    }
+
+    // Each step of `plan` with its condition, occurrence and info, regroups' info indexed by regroup.
     let mut steps = Vec::with_capacity(plan.len());
     let mut infos = Vec::with_capacity(plan.len());
-    for planned in plan {
+    let mut regroup_infos = Vec::with_capacity(regroup_count);
+    for (planned, regroup_predecessors) in plan.into_iter().zip(regroup_predecessors) {
         match planned {
             Planned::System(occurrence) => {
-                let user = user_steps[occurrence]
+                let mut user = user_steps[occurrence]
                     .take()
                     .expect("each occurrence is in the batches once");
+
+                let after = &mut user.info.occurrence.after;
+                after.extend(regroup_predecessors);
+                after.sort_by_key(|predecessor| predecessor.occurrence);
 
                 steps.push((user.step, user.run_if, occurrence));
                 infos.push(Some(user.info));
             }
             Planned::Regroup(regroup) => {
-                steps.push((
-                    Step::Regroup(batches.regroups.len()),
-                    usize::MAX,
-                    usize::MAX,
-                ));
+                let index = batches.regroups.len();
+
+                let mut info = regroup.info(index);
+                info.occurrence.after = regroup_predecessors;
+                info.occurrence
+                    .after
+                    .sort_by_key(|predecessor| predecessor.occurrence);
+
+                steps.push((Step::Regroup(index), usize::MAX, usize::MAX));
                 infos.push(None);
+                regroup_infos.push(Some(info));
                 batches.regroups.push(regroup);
             }
         }
@@ -378,7 +480,10 @@ fn put_batches(
 
             match (step, infos[position].take()) {
                 (Step::Regroup(index), _) => {
-                    batch_info.regroups.push(batches.regroups[index].info());
+                    let info = regroup_infos[index].take();
+                    batch_info
+                        .regroups
+                        .push(info.expect("each regroup is placed once"));
                 }
                 (Step::System(_), Some(info)) if thread_bound[position] => {
                     batch_info.systems.0 = Some(info);
@@ -438,25 +543,21 @@ fn set_index(grouping: &Grouping, storage_id: &StorageId) -> Option<usize> {
 /// Conflicts explain why a system couldn't join the previous batch. With regroup batches in
 /// between, the system named by a conflict can now be further back.
 /// We keep the conflicts that still name a system of the previous batch.
-fn point_conflicts_to_regroups(batches_info: &mut [BatchInfo]) {
+///
+/// `conflicts` is the occurrence each occurrence's conflict is with. A conflict only names a callable,
+/// another occurrence of it in the previous batch doesn't make the conflict about that batch.
+fn point_conflicts_to_regroups(batches_info: &mut [BatchInfo], conflicts: &[Option<usize>]) {
     for index in 1..batches_info.len() {
         let (before, after) = batches_info.split_at_mut(index);
         let previous = &before[index - 1];
         let batch = &mut after[0];
 
         for system in batch.systems.0.iter_mut().chain(&mut batch.systems.1) {
-            let names_previous = match &system.conflict {
-                Some(
-                    Conflict::Borrow { other_system, .. }
-                    | Conflict::OtherNotSendSync {
-                        system: other_system,
-                        ..
-                    },
-                ) => previous
+            let names_previous = conflicts[system.occurrence.id].is_some_and(|conflict| {
+                previous
                     .systems()
-                    .any(|other| other.unique_id == *other_system),
-                _ => false,
-            };
+                    .any(|other| other.occurrence.id == conflict)
+            });
             if names_previous {
                 continue;
             }

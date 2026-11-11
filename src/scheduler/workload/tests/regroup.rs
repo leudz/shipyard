@@ -2,7 +2,7 @@ use super::*;
 use crate::all_storages::GroupMember;
 use crate::borrow::Mutability;
 use crate::error;
-use crate::scheduler::info::{RegroupInfo, RegroupTrigger, TypeInfo};
+use crate::scheduler::info::{RegroupInfo, RegroupOccurrence, RegroupTrigger, TypeInfo};
 use crate::scheduler::{RegroupStep, Step};
 use crate::sparse_set::SparseSet;
 use alloc::borrow::Cow;
@@ -77,11 +77,15 @@ fn footprint() {
             .all(|(a, b)| a.name == b.name)
     );
     assert_eq!(
-        regroup.info(),
+        regroup.info(0),
         RegroupInfo {
             borrow: expected,
             trigger: RegroupTrigger::Entry,
-            occurrence: None,
+            occurrence: RegroupOccurrence {
+                id: 0,
+                thread_bound: false,
+                after: vec![],
+            },
         }
     );
 }

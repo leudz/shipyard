@@ -1,7 +1,7 @@
 use crate::all_storages::{ConnectedSet, Grouping};
 use crate::borrow::Mutability;
 use crate::error;
-use crate::scheduler::info::{RegroupInfo, RegroupTrigger, TypeInfo};
+use crate::scheduler::info::{RegroupInfo, RegroupOccurrence, RegroupTrigger, TypeInfo};
 use crate::scheduler::system::WorkloadRunIfFn;
 use crate::world::World;
 use alloc::boxed::Box;
@@ -107,12 +107,18 @@ impl RegroupStep {
         }
     }
 
-    /// Returns what workload information shows about this step.
-    pub(crate) fn info(&self) -> RegroupInfo {
+    /// Returns what workload information shows about this step, `id` being its index in `Batches::regroups`.
+    ///
+    /// Its predecessors are left empty, they're only known once every batch is planned.
+    pub(crate) fn info(&self, id: usize) -> RegroupInfo {
         RegroupInfo {
             borrow: self.borrow.clone(),
             trigger: self.trigger,
-            occurrence: todo!("step 4"),
+            occurrence: RegroupOccurrence {
+                id,
+                thread_bound: !self.set.thread_safe,
+                after: Vec::new(),
+            },
         }
     }
 }

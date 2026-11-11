@@ -3,8 +3,10 @@ use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
 use crate::error;
 use crate::scheduler::info::{
-    BatchInfo, BeforeAfterConstraint, Conflict, DedupedLabels, SystemInfo,
+    BatchInfo, BeforeAfterConstraint, Conflict, DedupedLabels, OccurrenceRef, OrderingOrigin,
+    Predecessor, SystemInfo, SystemOccurrence,
 };
+use crate::scheduler::label::SequentialLabel;
 use crate::scheduler::{
     Batches, Label, Step, TypeId, TypeInfo, Workload, WorkloadInfo, WorkloadSystem,
 };
@@ -31,6 +33,8 @@ struct ToBePlacedSystem {
     ///
     /// Workload info shows it and regroups are triggered by it.
     borrow_constraints: Vec<TypeInfo>,
+    /// What the system's conditions borrow, workload info shows it.
+    conditions_borrow: Vec<TypeInfo>,
     /// What the system and its conditions borrow, see [`footprint`].
     ///
     /// They're scheduled as one unit, conflicts and the calling-thread slot are decided with it.
@@ -48,13 +52,18 @@ struct ToBePlacedSystem {
     order_after: DedupedUniqueIds,
     /// The systems in an earlier batch than this one.
     batch_after: DedupedUniqueIds,
+    /// Why each `batch_after` edge exists, with the predecessor's occurrence.
+    ///
+    /// An edge can have several origins, `batch_after` only keeps the edge once.
+    origins: Vec<(usize, OrderingOrigin)>,
     // System must be before in both orders
     hard_before: DedupedLabels,
     require_in_workload: DedupedLabels,
     require_before: DedupedLabels,
     require_after: DedupedLabels,
     run_if: Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>>,
-    confict: Option<Conflict>,
+    /// Why the system can't join the previous batch, with the occurrence the conflict is with.
+    confict: Option<(usize, Conflict)>,
 }
 
 #[derive(Clone, Default)]
@@ -168,17 +177,19 @@ pub(super) fn create_workload(
     };
 
     // Systems are still in occurrence order, so are the nodes.
-    let dependencies = Dependencies {
+    let mut dependencies = Dependencies {
         nodes: take_nodes(&mut to_be_placed_systems),
         borrows: to_be_placed_systems
             .iter()
             .map(|system| system.borrow_constraints.clone())
             .collect(),
+        conflicts: vec![None; to_be_placed_systems.len()],
     };
 
     let batches_info = order_systems(
         to_be_placed_systems,
         dependencies.nodes.clone(),
+        &mut dependencies.conflicts,
         &mut batches,
     )?;
     let workload_info = WorkloadInfo {
@@ -195,6 +206,10 @@ pub(super) struct Dependencies {
     pub(super) nodes: Vec<Node>,
     /// What each occurrence's system borrows, without its conditions. Regroups are triggered by it.
     pub(super) borrows: Vec<Vec<TypeInfo>>,
+    /// The occurrence each occurrence's exported conflict is with, `None` without one.
+    ///
+    /// The exported conflict only has the other system's callable index, shared by all its occurrences.
+    pub(super) conflicts: Vec<Option<usize>>,
 }
 
 fn check_require_in_workload(
@@ -411,6 +426,7 @@ fn insert_systems_in_scheduler(
                     display_name,
                     footprint: footprint(&borrow_constraints, &run_if_borrow_constraints),
                     borrow_constraints,
+                    conditions_borrow: run_if_borrow_constraints,
                     tags,
                     before_all,
                     after_all_info: Vec::new(),
@@ -418,6 +434,7 @@ fn insert_systems_in_scheduler(
                     before_all_info: Vec::new(),
                     after_info: DedupedUniqueIds::new(),
                     batch_after: DedupedUniqueIds::new(),
+                    origins: Vec::new(),
                     hard_before,
                     order_after: DedupedUniqueIds::new(),
                     require_in_workload,
@@ -497,6 +514,7 @@ fn propagate_barriers(to_be_placed_systems: &mut [ToBePlacedSystem], barriers: V
         for system in &mut to_be_placed_systems[index..] {
             for i in 0..index {
                 system.batch_after.add(i);
+                system.origins.push((i, OrderingOrigin::Barrier));
             }
         }
     }
@@ -562,8 +580,9 @@ fn propagate_implicit_batch_after(to_be_placed_systems: &mut [ToBePlacedSystem])
         let system = &mut to_be_placed_systems[i];
         for &(j, _) in &conflicts {
             system.batch_after.add(j);
+            system.origins.push((j, OrderingOrigin::Implicit));
         }
-        if let Some((_, nearest)) = conflicts.into_iter().next() {
+        if let Some(nearest) = conflicts.into_iter().next() {
             system.confict = Some(nearest);
         }
     }
@@ -609,20 +628,44 @@ fn map_before_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
                 continue;
             }
 
-            if let Some(tag) = other_system
+            let matching_tags: Vec<&Box<dyn Label>> = other_system
                 .tags
                 .iter()
-                .find(|tag| before_all.iter().any(|label| tag == &label))
-            {
-                other_system.batch_after.add(i);
-                before_all_info.push(BeforeAfterConstraint {
-                    other_system: other_system.index,
-                    constraint: format!("{:?}", tag),
-                })
-            }
+                .filter(|tag| before_all.iter().any(|label| tag == &label))
+                .collect();
+            let Some(first_tag) = matching_tags.first() else {
+                continue;
+            };
+
+            // The legacy info only names the first tag, the origins keep all of them.
+            let constraint = format!("{:?}", first_tag);
+            let origins: Vec<OrderingOrigin> = matching_tags
+                .iter()
+                .map(|tag| before_all_origin(&***tag))
+                .collect();
+
+            other_system.batch_after.add(i);
+            other_system
+                .origins
+                .extend(origins.into_iter().map(|origin| (i, origin)));
+            before_all_info.push(BeforeAfterConstraint {
+                other_system: other_system.index,
+                constraint,
+            })
         }
 
         to_be_placed_systems[i].before_all_info = before_all_info;
+    }
+}
+
+/// Returns why a `before_all` matching `tag` orders two systems.
+///
+/// Sequential workloads link their children with private labels, they aren't user labels.
+fn before_all_origin(tag: &dyn Label) -> OrderingOrigin {
+    if tag.as_any().is::<SequentialLabel>() {
+        OrderingOrigin::Sequential
+    } else {
+        OrderingOrigin::BeforeAll(format!("{:?}", tag))
     }
 }
 
@@ -639,17 +682,25 @@ fn map_after_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
                 continue;
             }
 
-            for label in after_all.iter() {
-                if to_be_placed_systems[j].tags.iter().any(|tag| tag == label) {
-                    to_be_placed_systems[i].batch_after.add(j);
+            let matching_labels: Vec<&Box<dyn Label>> = after_all
+                .iter()
+                .filter(|label| to_be_placed_systems[j].tags.iter().any(|tag| tag == *label))
+                .collect();
+            let Some(first_label) = matching_labels.first() else {
+                continue;
+            };
 
-                    after_all_info.push(BeforeAfterConstraint {
-                        other_system: j,
-                        constraint: format!("{:?}", label),
-                    });
-
-                    break;
-                }
+            // The legacy info only names the first label, the origins keep all of them.
+            after_all_info.push(BeforeAfterConstraint {
+                other_system: j,
+                constraint: format!("{:?}", first_label),
+            });
+            let system = &mut to_be_placed_systems[i];
+            system.batch_after.add(j);
+            for label in matching_labels {
+                system
+                    .origins
+                    .push((j, OrderingOrigin::AfterAll(format!("{:?}", label))));
             }
         }
 
@@ -675,6 +726,7 @@ fn map_before_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
                 .any(|tag| before.iter().any(|label| tag == label))
             {
                 other_system.batch_after.add(i);
+                other_system.origins.push((i, OrderingOrigin::Before));
 
                 break;
             }
@@ -704,9 +756,11 @@ fn take_nodes(to_be_placed_systems: &mut [ToBePlacedSystem]) -> Vec<Node> {
 /// Splits the systems into batches following `nodes`, their nodes indexed by occurrence.
 ///
 /// The sequential order is the order the systems are placed in.
+/// `conflicts` gets the occurrence each system's conflict is with.
 fn order_systems(
     to_be_placed_systems: Vec<ToBePlacedSystem>,
     nodes: Vec<Node>,
+    conflicts: &mut [Option<usize>],
     batches: &mut Batches,
 ) -> Result<Vec<BatchInfo>, error::AddWorkload> {
     let mut systems: Vec<Option<ToBePlacedSystem>> =
@@ -743,6 +797,7 @@ fn order_systems(
             if let Some(conflict) = scheduled.conflicts[occurrence].take() {
                 system.confict = Some(conflict);
             }
+            conflicts[occurrence] = system.confict.as_ref().map(|&(other, _)| other);
 
             place_system(system, batches, &mut batches_info);
         }
@@ -765,15 +820,32 @@ fn place_system(system: ToBePlacedSystem, batches: &mut Batches, batches_info: &
     batches.sequential_occurrences.push(system.occurrence);
     batches.sequential_run_if.push(run_if_index);
 
+    let thread_bound = is_thread_bound(&system.footprint);
+
+    let occurrence = SystemOccurrence {
+        id: system.occurrence,
+        conditions: system.conditions_borrow,
+        footprint: system.footprint,
+        thread_bound,
+        after: predecessors(system.origins),
+    };
+    // Every `batch_after` edge records its origin when it's added, so both list the same predecessors.
+    debug_assert!(
+        occurrence
+            .after
+            .iter()
+            .map(|predecessor| predecessor.occurrence)
+            .eq(system.after_info.iter().map(OccurrenceRef::System))
+    );
     let info = SystemInfo {
         name: format!("{:?}", system.display_name),
         borrow: system.borrow_constraints,
-        conflict: system.confict,
+        conflict: system.confict.map(|(_, conflict)| conflict),
         after: system.after_info.0,
         after_all: system.after_all_info,
         before_all: system.before_all_info,
         unique_id: system.index,
-        occurrence: todo!("step 4"),
+        occurrence,
     };
 
     let batch = batches.parallel.last_mut().unwrap();
@@ -781,7 +853,7 @@ fn place_system(system: ToBePlacedSystem, batches: &mut Batches, batches_info: &
     let batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
     let batch_info = batches_info.last_mut().unwrap();
 
-    if is_thread_bound(&system.footprint) {
+    if thread_bound {
         batch.0 = Some(Step::System(system.index));
         batch_run_if.0 = run_if_index;
         batch_occurrences.0 = system.occurrence;
@@ -792,6 +864,27 @@ fn place_system(system: ToBePlacedSystem, batches: &mut Batches, batches_info: &
         batch_occurrences.1.push(system.occurrence);
         batch_info.systems.1.push(info);
     }
+}
+
+/// Groups `origins` by predecessor occurrence, both sorted and without duplicates.
+fn predecessors(mut origins: Vec<(usize, OrderingOrigin)>) -> Vec<Predecessor> {
+    origins.sort();
+    origins.dedup();
+
+    let mut predecessors: Vec<Predecessor> = Vec::new();
+    for (occurrence, origin) in origins {
+        let occurrence = OccurrenceRef::System(occurrence);
+
+        match predecessors.last_mut() {
+            Some(last) if last.occurrence == occurrence => last.origins.push(origin),
+            _ => predecessors.push(Predecessor {
+                occurrence,
+                origins: vec![origin],
+            }),
+        }
+    }
+
+    predecessors
 }
 
 /// Returns `true` if what borrows `footprint` has to run on the calling thread.
@@ -821,8 +914,9 @@ pub(super) struct Node {
 pub(super) struct Schedule {
     /// The nodes of each batch, in the order they were placed.
     pub(super) batches: Vec<Vec<usize>>,
-    /// For each node, why it couldn't join the last batch it was tried for. `None` if it joined the first one.
-    pub(super) conflicts: Vec<Option<Conflict>>,
+    /// For each node, why it couldn't join the last batch it was tried for, with the node it conflicts with.
+    /// `None` if it joined the first one.
+    pub(super) conflicts: Vec<Option<(usize, Conflict)>>,
 }
 
 /// Splits `nodes` into batches following their edges, with Kahn's algorithm, one batch at a time.
@@ -879,7 +973,7 @@ fn fill_batch(
     ready: &mut VecDeque<usize>,
     waiting: &mut Vec<usize>,
     nodes: &mut [Node],
-    conflicts: &mut [Option<Conflict>],
+    conflicts: &mut [Option<(usize, Conflict)>],
 ) -> Vec<usize> {
     let mut deferred = VecDeque::new();
     let mut placed = Vec::new();
@@ -895,6 +989,7 @@ fn fill_batch(
                 nodes[other].callable,
                 &nodes[other].footprint,
             )
+            .map(|conflict| (other, conflict))
         });
         if let Some(conflict) = conflict {
             conflicts[node] = Some(conflict);

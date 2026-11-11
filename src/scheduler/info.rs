@@ -31,7 +31,6 @@ pub struct BatchInfo {
     #[allow(missing_docs)]
     pub systems: (Option<SystemInfo>, Vec<SystemInfo>),
     /// Regroups running in this batch, alongside its systems.
-    #[cfg_attr(feature = "serde1", serde(default))]
     pub regroups: Vec<RegroupInfo>,
 }
 
@@ -51,14 +50,28 @@ pub struct SystemInfo {
     #[allow(missing_docs)]
     pub borrow: Vec<TypeInfo>,
     /// Information explaining why this system could not be part of the previous batch.
+    ///
+    /// Only one reason is kept and it names the other system by callable index, see `unique_id`,
+    /// which doesn't tell its occurrences apart. [`SystemOccurrence`] has the facts behind every reason.
     pub conflict: Option<Conflict>,
-    /// Contains all ordering information the scheduler used to place this system
+    /// The systems this one has to run after, in an earlier batch, by [`SystemOccurrence::id`].
+    ///
+    /// Regroups aren't listed. [`SystemOccurrence::after`] lists them too, with why each one is there.
     pub after: Vec<usize>,
-    /// List of all after_all constraints
+    /// The `after_all` constraints that ordered this system, `other_system` being a [`SystemOccurrence::id`].
+    ///
+    /// Only the first matching label of each other system is listed, [`SystemOccurrence::after`] has all of them.
     pub after_all: Vec<BeforeAfterConstraint>,
-    /// List of all before_all constraints
+    /// The `before_all` constraints that ordered this system, `other_system` being a callable index,
+    /// see `unique_id`.
+    ///
+    /// Only the first matching label of each other system is listed,
+    /// the other system's [`SystemOccurrence::after`] has all of them.
     pub before_all: Vec<BeforeAfterConstraint>,
-    /// A unique identifier for this system within the workload
+    /// Index of the system's callable in the world's scheduler.
+    ///
+    /// Every occurrence of a system shares it, in this workload and in the others.
+    /// [`SystemOccurrence::id`] tells occurrences apart.
     pub unique_id: usize,
     /// What the scheduler used to place this appearance of the system, see [`SystemOccurrence`].
     ///
@@ -167,8 +180,12 @@ pub enum OrderingOrigin {
     Before,
     /// The successor borrows from the storages the predecessor regroup moves.
     Regroup,
-    /// The successor regroup moves storages the predecessor might have changed.
+    /// The successor regroup moves storages the predecessor might have changed since the set's
+    /// previous regroup, the regroup is there for it.
     Writes,
+    /// The successor regroup moves storages the predecessor borrows, without having changed them
+    /// since the set's previous regroup.
+    Borrows,
 }
 
 /// Contains information related to a regroup a workload runs between its systems.
@@ -207,7 +224,7 @@ pub enum Conflict {
     Borrow {
         #[allow(missing_docs)]
         type_info: TypeInfo,
-        #[allow(missing_docs)]
+        /// The other system's callable index, see [`SystemInfo::unique_id`].
         other_system: usize,
         #[allow(missing_docs)]
         other_type_info: TypeInfo,
@@ -216,7 +233,7 @@ pub enum Conflict {
     NotSendSync(TypeInfo),
     /// A `!Send` and/or `!Sync` type currently prevents any parrallelism.
     OtherNotSendSync {
-        #[allow(missing_docs)]
+        /// The other system's callable index, see [`SystemInfo::unique_id`].
         system: usize,
         #[allow(missing_docs)]
         type_info: TypeInfo,
@@ -394,7 +411,7 @@ impl<'a> Extend<&'a Box<dyn Label>> for DedupedLabels {
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct BeforeAfterConstraint {
-    #[allow(missing_docs)]
+    /// The other system, see [`SystemInfo::after_all`] and [`SystemInfo::before_all`] for what the number is.
     pub other_system: usize,
     #[allow(missing_docs)]
     pub constraint: String,
