@@ -250,6 +250,8 @@ pub enum Action {
     SelectOperation(OperationId),
     /// Selects an operation and its workload, and frames its batch.
     ShowOperation(OperationId),
+    /// Deselects the tile. The highlight, inspectors and camera stay as they are.
+    ClearSelection,
     /// Shows a record in the unpinned inspector, see [`Inspectors::inspect`]. This deselects the
     /// tile, the selection is about the tile last picked.
     Inspect(Record),
@@ -350,6 +352,11 @@ impl AppState {
                     }
                     workspace.selected = Some(operation);
                     workspace.framing = Some(operation);
+                }
+            }
+            Action::ClearSelection => {
+                if let Some(loaded) = &mut self.loaded {
+                    loaded.workspace.selected = None;
                 }
             }
             Action::Inspect(record) => {
@@ -1024,6 +1031,37 @@ mod tests {
 
         state.update(Action::SelectWorkload(WorkloadId(1)));
         assert!(links(&state).is_empty());
+    }
+
+    /// Asserts that clearing the selection keeps the highlight, the pinned inspector and the camera.
+    #[test]
+    fn clear_selection() {
+        let mut state = seeded();
+        assert!(loaded(&state).workspace.selected.is_some());
+        let before = seeded_workspace();
+
+        state.update(Action::ClearSelection);
+
+        let workspace = &loaded(&state).workspace;
+        assert_eq!(workspace.selected, None);
+        assert_eq!(workspace.highlight, before.highlight);
+        assert_eq!(workspace.inspectors, before.inspectors);
+        assert_eq!(workspace.camera, before.camera);
+        assert_eq!(workspace.framing, before.framing);
+    }
+
+    /// Asserts that clearing the selection keeps the links the highlight brings.
+    #[test]
+    fn clear_keeps_highlight_links() {
+        let mut state = regrouped();
+        state.update(Action::SelectOperation(system_op(0)));
+        state.update(Action::ToggleHighlight(Record::Regroup(
+            crate::model::RegroupId(1),
+        )));
+
+        state.update(Action::ClearSelection);
+
+        assert_eq!(links(&state), [(system_op(0), regroup_op(1))]);
     }
 
     /// Asserts that a read error is reported like any other failure.

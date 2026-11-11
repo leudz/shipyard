@@ -9,6 +9,16 @@ pub const MIN_ZOOM: f64 = 0.03;
 pub const MAX_ZOOM: f64 = 1.6;
 /// How much one zoom button press zooms in or out.
 pub const ZOOM_STEP: f64 = 1.25;
+/// How far, in screen pixels, a press can move and still count as a click rather than a drag.
+pub const CLICK_SLOP: f64 = 4.0;
+
+/// Returns `true` if a press that moved by `(dx, dy)` screen pixels is a drag, not a click.
+pub fn is_drag(dx: f64, dy: f64) -> bool {
+    let distance = dx.hypot(dy);
+
+    // A NaN distance can't be trusted to be a click.
+    distance.is_nan() || distance > CLICK_SLOP
+}
 
 /// Where the scene is drawn: scene point `p` lands on screen at `x + p * zoom`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -160,6 +170,16 @@ pub fn fit(viewport_width: f64, layout_width: impl Fn(f64) -> f64) -> Camera {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Asserts that a press moving a few pixels is still a click, and one moving further is a drag.
+    #[test]
+    fn click_or_drag() {
+        assert!(!is_drag(0.0, 0.0));
+        assert!(!is_drag(3.0, -2.0));
+        assert!(is_drag(6.0, 0.0));
+        assert!(is_drag(0.0, -10.0));
+        assert!(is_drag(f64::NAN, 0.0));
+    }
 
     fn camera(x: f64, zoom: f64) -> Camera {
         Camera { x, zoom }

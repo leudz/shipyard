@@ -97,8 +97,12 @@ struct Drag {
     pointer: i32,
     /// The pointer's x when the drag started.
     start: f64,
+    /// The pointer's y when the drag started, only to tell a click from a drag.
+    start_y: f64,
     /// The camera's x when the drag started.
     camera_x: f64,
+    /// Whether the pointer went far enough for this to be a drag rather than a click.
+    moved: bool,
 }
 
 /// How every record relates to the highlight, `None` without one. Provided by the scene.
@@ -350,6 +354,12 @@ fn WorkloadView(
             class: "workload",
             tabindex: "-1",
             aria_labelledby: "workload-title",
+            // The panels and search fields are outside the workload, their Escape does its own thing.
+            onkeydown: move |event| {
+                if event.key() == Key::Escape {
+                    state.write().update(Action::ClearSelection);
+                }
+            },
 
             header { class: "workload-heading",
                 span { "Workload" }
@@ -419,10 +429,13 @@ fn WorkloadView(
                     }
 
                     let pointer = event.pointer_id();
+                    let start = event.client_coordinates();
                     drag.set(Some(Drag {
                         pointer,
-                        start: event.client_coordinates().x,
+                        start: start.x,
+                        start_y: start.y,
                         camera_x: camera().x,
+                        moved: false,
                     }));
                     dom::capture_pointer(SURFACE_ID, pointer);
                 },
@@ -434,13 +447,31 @@ fn WorkloadView(
                         return;
                     }
 
+                    let position = event.client_coordinates();
+                    let (dx, dy) = (position.x - current.start, position.y - current.start_y);
+                    if !current.moved && camera::is_drag(dx, dy) {
+                        drag.set(Some(Drag { moved: true, ..current }));
+                    }
+
                     let next = Camera {
-                        x: current.camera_x + event.client_coordinates().x - current.start,
+                        x: current.camera_x + dx,
                         ..camera()
                     };
                     state.write().update(Action::SetCamera(next));
                 },
-                onpointerup: move |_| drag.set(None),
+                // Pressing and releasing on the empty canvas without dragging deselects.
+                // Tiles stop their presses, so they never start one of these.
+                onpointerup: move |event| {
+                    let finished = drag();
+                    drag.set(None);
+                    let Some(finished) = finished else {
+                        return;
+                    };
+
+                    if finished.pointer == event.pointer_id() && !finished.moved {
+                        state.write().update(Action::ClearSelection);
+                    }
+                },
                 onpointercancel: move |_| drag.set(None),
                 onlostpointercapture: move |_| drag.set(None),
 
