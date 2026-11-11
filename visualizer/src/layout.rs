@@ -17,10 +17,11 @@ pub const MIN_TILE_HEIGHT: f64 = 36.0;
 /// Columns never get shorter than this, however little room the viewport leaves.
 pub const MIN_AVAILABLE_HEIGHT: f64 = 150.0;
 
-const COLUMN_GAP: f64 = 10.0;
+/// Space between two columns of a batch, links go through it.
+pub const COLUMN_GAP: f64 = 10.0;
 const ROW_GAP: f64 = 6.0;
 /// Space after a batch's last column, before its separator.
-const BATCH_END_PADDING: f64 = 10.0;
+pub const BATCH_END_PADDING: f64 = 10.0;
 /// Space below a batch's tallest column.
 const BATCH_BOTTOM_PADDING: f64 = 8.0;
 const BATCH_GAP: f64 = 18.0;

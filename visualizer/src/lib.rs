@@ -11,6 +11,7 @@ pub mod highlight;
 pub mod import;
 pub mod inspectors;
 pub mod layout;
+pub mod links;
 pub mod model;
 pub mod names;
 pub mod overview;
