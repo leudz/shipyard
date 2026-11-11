@@ -57,7 +57,20 @@ mod tests {
     use super::*;
 
     const SQUARE_EATER: &[u8] = include_bytes!("square_eater_workloads.json");
-    const OLD_FORMAT: &[u8] = include_bytes!("../../output/visualizer-design/drop_me.json");
+    /// A minimal export in the older `batch_info`/`type_id` shape, which we intentionally don't support.
+    const OLD_FORMAT: &[u8] = br#"{"Workload(old)": {
+        "name": "Workload(old)",
+        "batch_info": [{
+            "systems": [null, [{
+                "name": "old::system",
+                "type_id": 1,
+                "borrow": [{"name": "old::A", "mutability": "Exclusive", "storage_id": 1, "thread_safe": true}],
+                "conflict": null,
+                "before": [],
+                "after": []
+            }]]
+        }]
+    }}"#;
 
     /// Asserts that the bundled square-eater example, which contains borrow conflicts, imports.
     #[test]
