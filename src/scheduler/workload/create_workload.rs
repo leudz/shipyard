@@ -205,6 +205,12 @@ fn check_require_before(
 
     'outer: for i in 0..to_be_placed_systems.len() {
         let mut require_before = core::mem::take(&mut to_be_placed_systems[i].require_before);
+        // Without requirements there is nothing to check, we skip walking its predecessors.
+        // Every conflict is a hard edge, so that walk can cover most of the workload.
+        if require_before.is_empty() {
+            continue;
+        }
+
         let mut systems_before = DedupedUniqueIds::new();
 
         for &system_index in &to_be_placed_systems[i].hard_after.0 {
@@ -258,6 +264,11 @@ fn check_require_after(
 
     'outer: for i in 0..to_be_placed_systems.len() {
         let mut require_after = core::mem::take(&mut to_be_placed_systems[i].require_after);
+        // Without requirements there is nothing to check, we skip walking its successors.
+        if require_after.is_empty() {
+            continue;
+        }
+
         let mut systems_after = DedupedUniqueIds::new();
 
         for j in 0..to_be_placed_systems.len() {
@@ -437,6 +448,10 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
             continue;
         }
 
+        // Every earlier conflicting system has to run before this one, not only the nearest.
+        // Requirement checks follow hard edges, so they need all of them.
+        // The nearest conflict stays the one we export as explanation.
+        let mut conflicts = Vec::new();
         for j in (0..i).rev() {
             let other_system = &to_be_placed_systems[j];
             if !other_system.before_all.is_empty() || !other_system.after_all.is_empty() {
@@ -449,11 +464,16 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
             if let Some(conflict) =
                 check_conflict(system, other_system.index, &other_system.borrow_constraints)
             {
-                to_be_placed_systems[i].hard_after.add(j);
-                to_be_placed_systems[i].confict = Some(conflict);
-
-                break;
+                conflicts.push((j, conflict));
             }
+        }
+
+        let system = &mut to_be_placed_systems[i];
+        for &(j, _) in &conflicts {
+            system.hard_after.add(j);
+        }
+        if let Some((_, nearest)) = conflicts.into_iter().next() {
+            system.confict = Some(nearest);
         }
     }
 }

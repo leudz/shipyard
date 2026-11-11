@@ -115,3 +115,172 @@ fn require_after() {
         ))
     );
 }
+
+/// Asserts that without requirements, `c` lands after both `a` and `b`.
+///
+/// `c` writes both storages, so it conflicts with `a` (X) and `b` (Y).
+#[test]
+fn implicit_unconstrained() {
+    fn a(_: ViewMut<'_, Usize>) {}
+    fn b(_: ViewMut<'_, U32>) {}
+    fn c(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(a)
+        .with_system(b)
+        .with_system(c);
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
+/// Asserts that `c` requiring its nearest conflicting predecessor `b` before itself is accepted,
+/// and that the requirement adds no edge.
+#[test]
+fn implicit_nearest_before() {
+    fn a(_: ViewMut<'_, Usize>) {}
+    fn b(_: ViewMut<'_, U32>) {}
+    fn c(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(a)
+        .with_system(b)
+        .with_system(c.require_before(b));
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
+/// Asserts that `b` requiring its nearest conflicting successor `c` after itself is accepted,
+/// and that the requirement adds no edge.
+#[test]
+fn implicit_nearest_after() {
+    fn a(_: ViewMut<'_, Usize>) {}
+    fn b(_: ViewMut<'_, U32>) {}
+    fn c(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(a)
+        .with_system(b.require_after(c))
+        .with_system(c);
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
+/// Asserts that `c` requiring an unrelated earlier system `d` before itself is rejected.
+///
+/// `d` borrows a storage `c` doesn't touch, so only declaration order puts it first.
+/// That's no guarantee `d` runs before `c`.
+#[test]
+fn implicit_unrelated_before() {
+    fn a(_: ViewMut<'_, Usize>) {}
+    fn b(_: ViewMut<'_, U32>) {}
+    fn d(_: ViewMut<'_, U16>) {}
+    fn c(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
+
+    let result = Workload::new("")
+        .with_system(a)
+        .with_system(b)
+        .with_system(d)
+        .with_system(c.require_before(d))
+        .build();
+
+    assert_eq!(
+        result.err(),
+        Some(error::AddWorkload::MissingBefore(
+            c.as_label(),
+            vec![d.as_label()]
+        ))
+    );
+}
+
+/// Asserts that an unrelated earlier system `d` requiring `c` after itself is rejected.
+///
+/// `d` borrows a storage `c` doesn't touch, so only declaration order puts `c` later.
+/// That's no guarantee `c` runs after `d`.
+#[test]
+fn implicit_unrelated_after() {
+    fn a(_: ViewMut<'_, Usize>) {}
+    fn b(_: ViewMut<'_, U32>) {}
+    fn d(_: ViewMut<'_, U16>) {}
+    fn c(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
+
+    let result = Workload::new("")
+        .with_system(a)
+        .with_system(b)
+        .with_system(d.require_after(c))
+        .with_system(c)
+        .build();
+
+    assert_eq!(
+        result.err(),
+        Some(error::AddWorkload::MissingAfter(
+            d.as_label(),
+            vec![c.as_label()]
+        ))
+    );
+}
+
+/// Asserts that `c` requiring `a` before itself is accepted
+/// when implicit ordering already puts `a` first, and that the requirement adds no edge.
+///
+/// `a` isn't `c`'s nearest conflicting predecessor, `b` is.
+#[test]
+fn implicit_require_before() {
+    fn a(_: ViewMut<'_, Usize>) {}
+    fn b(_: ViewMut<'_, U32>) {}
+    fn c(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(a)
+        .with_system(b)
+        .with_system(c.require_before(a));
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
+
+/// Asserts that `a` requiring `c` after itself is accepted
+/// when implicit ordering already puts `c` later, and that the requirement adds no edge.
+///
+/// `a` isn't `c`'s nearest conflicting predecessor, `b` is.
+#[test]
+fn implicit_require_after() {
+    fn a(_: ViewMut<'_, Usize>) {}
+    fn b(_: ViewMut<'_, U32>) {}
+    fn c(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
+
+    let workload = Workload::new("")
+        .with_system(a.require_after(c))
+        .with_system(b)
+        .with_system(c);
+
+    assert_eq!(
+        Schedule::built(workload),
+        Schedule {
+            parallel: vec![steps(&["a", "b"]), steps(&["c"])],
+            sequential: steps(&["a", "b", "c"]),
+        }
+    );
+}
