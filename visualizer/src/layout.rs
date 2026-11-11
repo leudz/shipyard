@@ -165,6 +165,7 @@ mod tests {
         Batch {
             thread_bound: if thread_bound { ids.next() } else { None },
             others: ids.collect(),
+            regroups: Vec::new(),
         }
     }
 
@@ -250,6 +251,7 @@ mod tests {
         let workload = workload(vec![Batch {
             thread_bound: Some(OccurrenceId(7)),
             others: vec![OccurrenceId(2), OccurrenceId(5)],
+            regroups: Vec::new(),
         }]);
 
         let layout = layout_workload(&workload, |_| 40.0, 500.0);

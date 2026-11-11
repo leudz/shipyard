@@ -5,7 +5,7 @@
 
 use crate::names::{label_cmp, unique_labels};
 use shipyard::borrow::Mutability;
-use shipyard::scheduler::info::{SystemInfo, WorkloadsInfo};
+use shipyard::scheduler::info::{RegroupInfo, RegroupTrigger, SystemInfo, WorkloadsInfo};
 use std::collections::{BTreeSet, HashMap};
 
 /// Index of a [`Workload`] in [`Dataset::workloads`].
@@ -24,6 +24,19 @@ pub struct ComponentId(pub usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OccurrenceId(pub usize);
 
+/// Index of a [`Regroup`] in [`Dataset::regroups`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RegroupId(pub usize);
+
+/// Anything a batch runs: a system appearance or a regroup.
+///
+/// Only meaningful for the [`Dataset`] it comes from, it isn't an id from the export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum OperationId {
+    System(OccurrenceId),
+    Regroup(RegroupId),
+}
+
 /// Everything the views display about an imported export.
 ///
 /// Fields are public to read, the indexes between them are only consistent as built by [`Dataset::new`].
@@ -33,10 +46,12 @@ pub struct Dataset {
     pub workloads: Vec<Workload>,
     /// Sorted by label.
     pub systems: Vec<System>,
-    /// Every storage a system borrows, sorted by label.
+    /// Every storage a system or regroup borrows, sorted by label.
     pub components: Vec<Component>,
     /// Every place a system appears in a batch.
     pub occurrences: Vec<Occurrence>,
+    /// Every regroup of every batch. Repeated regroups of the same storages stay distinct.
+    pub regroups: Vec<Regroup>,
 }
 
 #[derive(Debug)]
@@ -48,21 +63,31 @@ pub struct Workload {
     pub batches: Vec<Batch>,
 }
 
-/// Systems a workload runs in parallel.
-///
-/// We don't display regroups, so a batch that only regroups has no occurrences.
+/// Systems and regroups a workload runs in parallel.
 #[derive(Debug)]
 pub struct Batch {
     /// The system running on the world's thread, when there is one.
     pub thread_bound: Option<OccurrenceId>,
     /// The other systems, sorted by label. They run in parallel, this order is only for display.
     pub others: Vec<OccurrenceId>,
+    /// In the export's order.
+    pub regroups: Vec<RegroupId>,
 }
 
 impl Batch {
-    /// The batch's occurrences in display order, the thread-bound one first.
+    /// The batch's system occurrences in display order, the thread-bound one first.
+    ///
+    /// Regroups aren't included, see [`Batch::operations`] for everything the batch runs.
     pub fn occurrences(&self) -> impl Iterator<Item = OccurrenceId> + '_ {
         self.thread_bound.iter().chain(&self.others).copied()
+    }
+
+    /// Everything the batch runs in display order: its systems like [`Batch::occurrences`], then its regroups.
+    pub fn operations(&self) -> impl Iterator<Item = OperationId> + '_ {
+        let systems = self.occurrences().map(OperationId::System);
+        let regroups = self.regroups.iter().copied().map(OperationId::Regroup);
+
+        systems.chain(regroups)
     }
 }
 
@@ -94,6 +119,8 @@ pub struct Component {
     pub label: String,
     /// Sorted by system label.
     pub borrowers: Vec<Borrower>,
+    /// Regroups including this storage, they always borrow it exclusively. Sorted by workload label, then batch.
+    pub regroups: Vec<RegroupId>,
 }
 
 /// A system borrowing a [`Component`].
@@ -114,6 +141,22 @@ pub struct Occurrence {
     pub local_id: usize,
     pub system: SystemId,
     /// Whether this is the batch's [`Batch::thread_bound`] system.
+    pub thread_bound: bool,
+}
+
+/// One regroup in a batch.
+///
+/// The workload adds regroups itself, two regroups of the same storages are still distinct records.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Regroup {
+    pub workload: WorkloadId,
+    /// Index in [`Workload::batches`].
+    pub batch: usize,
+    /// Every storage of the regrouped set, all exclusive. Sorted by component label.
+    pub borrows: Vec<Borrow>,
+    /// A pending regroup only means the set may need it, not that a system ran or changed anything.
+    pub trigger: RegroupTrigger,
+    /// Whether one of the storages isn't `thread_safe`, so the regroup needs the world's thread.
     pub thread_bound: bool,
 }
 
@@ -150,17 +193,15 @@ impl SystemKey {
 impl Dataset {
     /// Builds the records and indexes for `info`.
     pub fn new(info: &WorkloadsInfo) -> Dataset {
-        let all_systems = || {
-            info.0
-                .values()
-                .flat_map(|workload| &workload.batches_info)
-                .flat_map(|batch| batch.systems())
-        };
+        let all_batches = || info.0.values().flat_map(|workload| &workload.batches_info);
+        let all_systems = || all_batches().flat_map(|batch| batch.systems());
+        let all_regroups = || all_batches().flat_map(|batch| &batch.regroups);
 
-        // Components come from system borrows only. Storages that only appear in conflicts or
-        // regroups have nothing to show.
-        let component_names: BTreeSet<&str> = all_systems()
-            .flat_map(|system| &system.borrow)
+        // Components come from system and regroup borrows.
+        let system_storages = all_systems().flat_map(|system| &system.borrow);
+        let regroup_storages = all_regroups().flat_map(|regroup| &regroup.borrow);
+        let component_names: BTreeSet<&str> = system_storages
+            .chain(regroup_storages)
             .map(|type_info| &*type_info.name)
             .collect();
         let mut components: Vec<Component> = labelled(component_names)
@@ -168,6 +209,7 @@ impl Dataset {
                 name: name.to_string(),
                 label,
                 borrowers: Vec::new(),
+                regroups: Vec::new(),
             })
             .collect();
         components.sort_by(|a, b| label_cmp(&a.label, &b.label));
@@ -196,17 +238,6 @@ impl Dataset {
             .map(|(_, system)| system)
             .collect();
 
-        // We walk systems in label order, so each component's borrowers come out sorted.
-        for (index, system) in systems.iter().enumerate() {
-            for borrow in &system.borrows {
-                components[borrow.component.0].borrowers.push(Borrower {
-                    system: SystemId(index),
-                    mutability: borrow.mutability,
-                    thread_safe: borrow.thread_safe,
-                });
-            }
-        }
-
         let mut sorted_workloads: Vec<_> = labelled(info.0.keys().map(String::as_str))
             .map(|(name, label)| (name, label, &info.0[name]))
             .collect();
@@ -214,6 +245,7 @@ impl Dataset {
 
         // We walk workloads in label order, so each system's occurrences come out sorted too.
         let mut occurrences = Vec::new();
+        let mut regroups = Vec::new();
         let mut workloads = Vec::new();
         for (workload_index, (name, label, workload_info)) in
             sorted_workloads.into_iter().enumerate()
@@ -254,9 +286,28 @@ impl Dataset {
                     (occurrence.system, occurrence.local_id)
                 });
 
+                let batch_regroups: Vec<RegroupId> = batch_info
+                    .regroups
+                    .iter()
+                    .map(|regroup_info| {
+                        let id = RegroupId(regroups.len());
+                        let regroup = regroup_record(
+                            regroup_info,
+                            WorkloadId(workload_index),
+                            batch_index,
+                            &component_ids,
+                        );
+
+                        regroups.push(regroup);
+
+                        id
+                    })
+                    .collect();
+
                 batches.push(Batch {
                     thread_bound,
                     others,
+                    regroups: batch_regroups,
                 });
             }
 
@@ -267,11 +318,33 @@ impl Dataset {
             });
         }
 
+        // `component_ids` borrows the component names, so we fill the reverse indexes once we're done with it.
+        // We walk systems in label order, so each component's borrowers come out sorted.
+        for (index, system) in systems.iter().enumerate() {
+            for borrow in &system.borrows {
+                components[borrow.component.0].borrowers.push(Borrower {
+                    system: SystemId(index),
+                    mutability: borrow.mutability,
+                    thread_safe: borrow.thread_safe,
+                });
+            }
+        }
+
+        // Regroups were created in workload label order, then batch order.
+        for (index, regroup) in regroups.iter().enumerate() {
+            for borrow in &regroup.borrows {
+                components[borrow.component.0]
+                    .regroups
+                    .push(RegroupId(index));
+            }
+        }
+
         Dataset {
             workloads,
             systems,
             components,
             occurrences,
+            regroups,
         }
     }
 
@@ -293,6 +366,26 @@ impl Dataset {
 
     pub fn occurrence(&self, id: OccurrenceId) -> &Occurrence {
         &self.occurrences[id.0]
+    }
+
+    pub fn regroup(&self, id: RegroupId) -> &Regroup {
+        &self.regroups[id.0]
+    }
+
+    /// The workload and batch index `operation` runs in.
+    pub fn location(&self, operation: OperationId) -> (WorkloadId, usize) {
+        match operation {
+            OperationId::System(id) => {
+                let occurrence = self.occurrence(id);
+
+                (occurrence.workload, occurrence.batch)
+            }
+            OperationId::Regroup(id) => {
+                let regroup = self.regroup(id);
+
+                (regroup.workload, regroup.batch)
+            }
+        }
     }
 }
 
@@ -327,6 +420,35 @@ fn system_record(
         label,
         borrows,
         occurrences: Vec::new(),
+    }
+}
+
+fn regroup_record(
+    info: &RegroupInfo,
+    workload: WorkloadId,
+    batch: usize,
+    component_ids: &HashMap<&str, ComponentId>,
+) -> Regroup {
+    let mut borrows: Vec<Borrow> = info
+        .borrow
+        .iter()
+        .map(|type_info| Borrow {
+            component: component_ids[&*type_info.name],
+            mutability: type_info.mutability,
+            thread_safe: type_info.thread_safe,
+        })
+        .collect();
+    borrows.sort_by_key(|borrow| borrow.component);
+
+    // Same rule as the scheduler: a single storage that isn't thread safe pins the regroup to the world's thread.
+    let thread_bound = borrows.iter().any(|borrow| !borrow.thread_safe);
+
+    Regroup {
+        workload,
+        batch,
+        borrows,
+        trigger: info.trigger,
+        thread_bound,
     }
 }
 
@@ -540,14 +662,26 @@ mod tests {
         assert_eq!(dataset.occurrences[0].batch, 1);
     }
 
-    /// Asserts that a storage only a regroup borrows doesn't become a component.
+    /// An exported regroup of `storages`, all thread safe.
+    fn regroup(storages: &[&str], trigger: &str) -> Value {
+        let borrows: Vec<Value> = storages
+            .iter()
+            .map(|name| json!({"name": name, "mutability": "Exclusive", "thread_safe": true}))
+            .collect();
+
+        json!({"borrow": borrows, "trigger": trigger})
+    }
+
+    fn with_regroups(mut batch: Value, regroups: Vec<Value>) -> Value {
+        batch["regroups"] = Value::Array(regroups);
+
+        batch
+    }
+
+    /// Asserts that a storage only a regroup borrows becomes a component, listing that regroup.
     #[test]
     fn regroup_storage() {
-        let mut regrouping = batch(None, vec![]);
-        regrouping["regroups"] = json!([{
-            "borrow": [{"name": "Z", "mutability": "Exclusive", "thread_safe": true}],
-            "trigger": "Entry",
-        }]);
+        let regrouping = with_regroups(batch(None, vec![]), vec![regroup(&["Z"], "Entry")]);
 
         let dataset = dataset(vec![(
             "w",
@@ -555,7 +689,106 @@ mod tests {
         )]);
 
         let names: Vec<&str> = dataset.components.iter().map(|c| c.name.as_str()).collect();
-        assert_eq!(names, ["A"]);
+        assert_eq!(names, ["A", "Z"]);
+        assert!(dataset.components[1].borrowers.is_empty());
+        assert_eq!(dataset.components[1].regroups, [RegroupId(0)]);
+    }
+
+    /// Asserts that a batch running only a regroup keeps it, with its location and no system occurrence.
+    #[test]
+    fn regroup_only_batch() {
+        let regrouping = with_regroups(batch(None, vec![]), vec![regroup(&["A"], "Entry")]);
+
+        let dataset = dataset(vec![("w", vec![batch(None, vec![]), regrouping])]);
+
+        let batch = &dataset.workloads[0].batches[1];
+        assert_eq!(batch.occurrences().count(), 0);
+        let operations: Vec<_> = batch.operations().collect();
+        assert_eq!(operations, [OperationId::Regroup(RegroupId(0))]);
+        assert_eq!(dataset.location(operations[0]), (WorkloadId(0), 1));
+    }
+
+    /// Asserts that a mixed batch lists its systems first, then its regroups, and that `occurrences` stays system-only.
+    #[test]
+    fn mixed_batch() {
+        let mixed = with_regroups(
+            batch(Some(system("bound", 0, &[])), vec![system("free", 1, &[])]),
+            vec![regroup(&["A"], "Pending")],
+        );
+
+        let dataset = dataset(vec![("w", vec![mixed])]);
+
+        let batch = &dataset.workloads[0].batches[0];
+        assert_eq!(batch.occurrences().count(), 2);
+        let operations: Vec<_> = batch.operations().collect();
+        assert_eq!(
+            operations,
+            [
+                OperationId::System(OccurrenceId(0)),
+                OperationId::System(OccurrenceId(1)),
+                OperationId::Regroup(RegroupId(0)),
+            ]
+        );
+    }
+
+    /// Asserts that an empty batch has no operations at all.
+    #[test]
+    fn empty_batch_operations() {
+        let dataset = dataset(vec![("w", vec![batch(None, vec![])])]);
+
+        assert_eq!(dataset.workloads[0].batches[0].operations().count(), 0);
+        assert!(dataset.regroups.is_empty());
+    }
+
+    /// Asserts that repeated regroups of one set, entry and pending in the same workload, stay distinct records.
+    #[test]
+    fn repeated_regroups() {
+        let first = with_regroups(batch(None, vec![]), vec![regroup(&["B", "A"], "Entry")]);
+        let second = with_regroups(batch(None, vec![]), vec![regroup(&["A", "B"], "Pending")]);
+
+        let dataset = dataset(vec![("w", vec![first, second])]);
+
+        let [entry, pending] = &dataset.regroups[..] else {
+            panic!("expected two regroups");
+        };
+        assert_eq!((entry.batch, entry.trigger), (0, RegroupTrigger::Entry));
+        assert_eq!(
+            (pending.batch, pending.trigger),
+            (1, RegroupTrigger::Pending)
+        );
+        assert_eq!(entry.borrows, pending.borrows);
+        let first_storage = dataset.component(entry.borrows[0].component);
+        assert_eq!(first_storage.name, "A");
+        assert_eq!(first_storage.regroups, [RegroupId(0), RegroupId(1)]);
+    }
+
+    /// Asserts that a regroup with a storage that isn't thread safe needs the world's thread, and one without doesn't.
+    #[test]
+    fn thread_bound_regroup() {
+        let mut bound = regroup(&["A", "B"], "Pending");
+        bound["borrow"][1]["thread_safe"] = json!(false);
+        let regrouping =
+            with_regroups(batch(None, vec![]), vec![bound, regroup(&["C"], "Pending")]);
+
+        let dataset = dataset(vec![("w", vec![regrouping])]);
+
+        assert!(dataset.regroups[0].thread_bound);
+        assert!(!dataset.regroups[1].thread_bound);
+    }
+
+    /// Asserts that regroups don't change grouped systems or their borrowers.
+    #[test]
+    fn regroups_keep_systems() {
+        let mixed = with_regroups(
+            batch(None, vec![system("run", 0, &["A"])]),
+            vec![regroup(&["A"], "Pending")],
+        );
+
+        let dataset = dataset(vec![("w", vec![mixed])]);
+
+        assert_eq!(system_labels(&dataset), ["run"]);
+        assert_eq!(dataset.components[0].borrowers.len(), 1);
+        assert_eq!(dataset.components[0].regroups, [RegroupId(0)]);
     }
 
     /// Asserts that components list their borrowers by system label, with the borrow's mutability.

@@ -188,6 +188,7 @@ mod tests {
                 Batch {
                     thread_bound: None,
                     others,
+                    regroups: Vec::new(),
                 }
             })
             .collect();
