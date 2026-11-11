@@ -3,7 +3,7 @@
 //! Views and platform adapters change it only through [`AppState::start_import`] and [`AppState::update`].
 
 use crate::camera::Camera;
-use crate::import::{parse_workloads, ImportError};
+use crate::import::{load_dataset, ImportError};
 #[cfg(test)]
 use crate::inspectors::OpenPanel;
 use crate::inspectors::{InspectorAction, InspectorId, Inspectors, Record};
@@ -201,7 +201,7 @@ pub enum ImportStatus {
     /// Waiting for the read of this request to complete.
     Reading(RequestId),
     /// A valid candidate waits for the user to confirm it replaces the loaded dataset.
-    Confirming(Candidate),
+    Confirming(Box<Candidate>),
 }
 
 /// A parsed and validated import, not committed yet.
@@ -301,7 +301,7 @@ impl AppState {
             }
             Action::ConfirmReplacement => match std::mem::take(&mut self.import) {
                 ImportStatus::Confirming(candidate) => {
-                    self.commit(candidate);
+                    self.commit(*candidate);
                     self.resume_watch();
                 }
                 other => self.import = other,
@@ -493,8 +493,8 @@ impl AppState {
         if content == loaded.content {
             return;
         }
-        let workloads = match parse_workloads(&bytes) {
-            Ok(workloads) => workloads,
+        let dataset = match load_dataset(&bytes) {
+            Ok(dataset) => dataset,
             Err(error) => {
                 self.error = Some(failure(error));
                 return;
@@ -506,7 +506,7 @@ impl AppState {
         self.error = None;
         self.commit(Candidate {
             source,
-            dataset: Dataset::new(&workloads),
+            dataset,
             content,
         });
         if let Some(loaded) = &mut self.loaded {
@@ -531,8 +531,8 @@ impl AppState {
 
         self.import = ImportStatus::Idle;
 
-        let parsed = read.and_then(|bytes| Ok((content_hash(&bytes), parse_workloads(&bytes)?)));
-        let (content, workloads) = match parsed {
+        let parsed = read.and_then(|bytes| Ok((content_hash(&bytes), load_dataset(&bytes)?)));
+        let (content, dataset) = match parsed {
             Ok(parsed) => parsed,
             Err(error) => {
                 self.error = Some(ImportFailure {
@@ -548,13 +548,13 @@ impl AppState {
         self.error = None;
         let candidate = Candidate {
             source,
-            dataset: Dataset::new(&workloads),
+            dataset,
             content,
         };
 
         // Replacing loaded data needs the user's confirmation, a first import doesn't.
         if self.loaded.is_some() {
-            self.import = ImportStatus::Confirming(candidate);
+            self.import = ImportStatus::Confirming(Box::new(candidate));
             return;
         }
 
@@ -625,22 +625,32 @@ mod tests {
     const TWO_WORKLOADS: &[u8] = br#"{
         "a": {"name": "a", "batches_info": [{"systems": [null, [{
             "name": "System(run)", "borrow": [], "conflict": null,
-            "after": [], "after_all": [], "before_all": [], "unique_id": 0
-        }]]}]},
+            "after": [], "after_all": [], "before_all": [], "unique_id": 0,
+            "occurrence": {"id": 0, "conditions": [], "footprint": [], "thread_bound": false, "after": []}
+        }]], "regroups": []}]},
         "b": {"name": "b", "batches_info": []}
     }"#;
     /// One system, in two batches.
     const REPEATED: &[u8] = br#"{"a": {"name": "a", "batches_info": [
         {"systems": [null, [{
             "name": "System(run)", "borrow": [], "conflict": null,
-            "after": [], "after_all": [], "before_all": [], "unique_id": 0
-        }]]},
+            "after": [], "after_all": [], "before_all": [], "unique_id": 0,
+            "occurrence": {"id": 0, "conditions": [], "footprint": [], "thread_bound": false, "after": []}
+        }]], "regroups": []},
         {"systems": [null, [{
             "name": "System(run)", "borrow": [], "conflict": null,
-            "after": [], "after_all": [], "before_all": [], "unique_id": 1
-        }]]}
+            "after": [], "after_all": [], "before_all": [], "unique_id": 1,
+            "occurrence": {"id": 1, "conditions": [], "footprint": [], "thread_bound": false, "after": []}
+        }]], "regroups": []}
     ]}}"#;
     const ONE_WORKLOAD: &[u8] = br#"{"c": {"name": "c", "batches_info": []}}"#;
+    /// Valid JSON whose occurrence information points to a system that doesn't exist.
+    const BROKEN_OCCURRENCE: &[u8] = br#"{"c": {"name": "c", "batches_info": [{"systems": [null, [{
+        "name": "System(run)", "borrow": [], "conflict": null,
+        "after": [], "after_all": [], "before_all": [], "unique_id": 0,
+        "occurrence": {"id": 0, "conditions": [], "footprint": [], "thread_bound": false,
+            "after": [{"occurrence": {"System": 9}, "origins": ["Implicit"]}]}
+    }]], "regroups": []}]}}"#;
 
     fn source(name: &str) -> Source {
         Source {
@@ -794,6 +804,23 @@ mod tests {
         let mut state = seeded();
 
         import(&mut state, "bad.json", br#"{"version": 1}"#);
+
+        assert!(matches!(state.import, ImportStatus::Idle));
+        assert!(matches!(
+            state.error.as_ref().unwrap().error,
+            ImportError::UnsupportedFormat(_)
+        ));
+        assert_eq!(loaded(&state).source, source("a.json"));
+        assert_eq!(loaded(&state).workspace, seeded_workspace());
+    }
+
+    /// Asserts that a replacement with broken occurrence information is rejected before confirmation,
+    /// keeping the dataset and workspace.
+    #[test]
+    fn broken_occurrence_replacement() {
+        let mut state = seeded();
+
+        import(&mut state, "broken.json", BROKEN_OCCURRENCE);
 
         assert!(matches!(state.import, ImportStatus::Idle));
         assert!(matches!(
@@ -1345,6 +1372,31 @@ mod tests {
         change(&mut state);
         reload(&mut state, b"{");
         assert!(state.error.is_some());
+        assert_eq!(
+            loaded(&state).workspace.selected_workload,
+            Some(WorkloadId(1))
+        );
+
+        change(&mut state);
+        reload(&mut state, ONE_WORKLOAD);
+        assert_eq!(state.error, None);
+        assert_eq!(loaded(&state).dataset.workloads[0].name, "c");
+    }
+
+    /// Asserts that a reload with broken occurrence information keeps the dataset and workspace,
+    /// and a later valid save recovers.
+    #[test]
+    fn reload_broken_occurrence_then_valid() {
+        let mut state = watching();
+        let generation = loaded(&state).generation;
+
+        change(&mut state);
+        reload(&mut state, BROKEN_OCCURRENCE);
+        assert!(matches!(
+            state.error.as_ref().unwrap().error,
+            ImportError::UnsupportedFormat(_)
+        ));
+        assert_eq!(loaded(&state).generation, generation);
         assert_eq!(
             loaded(&state).workspace.selected_workload,
             Some(WorkloadId(1))

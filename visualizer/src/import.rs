@@ -1,5 +1,6 @@
 //! Turns the bytes of an exported file into [`WorkloadsInfo`], without touching application state.
 
+use crate::model::Dataset;
 use serde_json::error::Category;
 use shipyard::scheduler::info::WorkloadsInfo;
 
@@ -52,6 +53,15 @@ pub fn parse_workloads(bytes: &[u8]) -> Result<WorkloadsInfo, ImportError> {
     })
 }
 
+/// Parses `bytes` like [`parse_workloads`] and builds the dataset the views display.
+///
+/// Manual imports and reloads both go through here, so they accept and reject the same files.
+pub fn load_dataset(bytes: &[u8]) -> Result<Dataset, ImportError> {
+    let workloads = parse_workloads(bytes)?;
+
+    Dataset::new(&workloads)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,10 +110,11 @@ mod tests {
         assert!(workloads.0["W"].batches_info.is_empty());
     }
 
-    /// Asserts that a batch without systems or regroups imports, and that `regroups` may be omitted.
+    /// Asserts that a batch without systems or regroups imports.
     #[test]
     fn empty_batch() {
-        let json = br#"{"W": {"name": "W", "batches_info": [{"systems": [null, []]}]}}"#;
+        let json =
+            br#"{"W": {"name": "W", "batches_info": [{"systems": [null, []], "regroups": []}]}}"#;
 
         let workloads = parse_workloads(json).unwrap();
 
@@ -119,7 +130,8 @@ mod tests {
             "systems": [null, []],
             "regroups": [{
                 "borrow": [{"name": "A", "mutability": "Exclusive", "thread_safe": true}],
-                "trigger": "Pending"
+                "trigger": "Pending",
+                "occurrence": {"id": 0, "thread_bound": false, "after": []}
             }]
         }]}}"#;
 

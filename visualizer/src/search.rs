@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn dataset() {
         let bytes = include_bytes!("square_eater_workloads.json");
-        let dataset = Dataset::new(&crate::import::parse_workloads(bytes).unwrap());
+        let dataset = Dataset::new(&crate::import::parse_workloads(bytes).unwrap()).unwrap();
         let mut search = Search::new(&dataset);
 
         let systems = search.systems("mvpl");

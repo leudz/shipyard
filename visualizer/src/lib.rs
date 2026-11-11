@@ -3,6 +3,7 @@
 //! These modules don't depend on a renderer, so their tests run with `--no-default-features`.
 
 pub mod camera;
+pub mod facts;
 pub mod highlight;
 pub mod import;
 pub mod inspectors;

@@ -3,6 +3,8 @@
 //! Records live in vectors sorted by label and are referenced by index.
 //! So sorting ids also sorts by label, which is how every index below is ordered.
 
+use crate::facts::{normalize, Facts, WorkloadInput};
+use crate::import::ImportError;
 use crate::names::{label_cmp, unique_labels};
 use shipyard::borrow::Mutability;
 use shipyard::scheduler::info::{RegroupInfo, RegroupTrigger, SystemInfo, WorkloadsInfo};
@@ -52,6 +54,8 @@ pub struct Dataset {
     pub occurrences: Vec<Occurrence>,
     /// Every regroup of every batch. Repeated regroups of the same storages stay distinct.
     pub regroups: Vec<Regroup>,
+    /// How each operation was scheduled.
+    pub facts: Facts,
 }
 
 #[derive(Debug)]
@@ -137,7 +141,8 @@ pub struct Occurrence {
     pub workload: WorkloadId,
     /// Index in [`Workload::batches`].
     pub batch: usize,
-    /// The export's `unique_id`, only unique within the workload.
+    /// The export's `unique_id`: the system's callable index, shared by all its occurrences,
+    /// in this workload and in the others.
     pub local_id: usize,
     pub system: SystemId,
     /// Whether this is the batch's [`Batch::thread_bound`] system.
@@ -192,7 +197,10 @@ impl SystemKey {
 
 impl Dataset {
     /// Builds the records and indexes for `info`.
-    pub fn new(info: &WorkloadsInfo) -> Dataset {
+    ///
+    /// Returns [`ImportError::UnsupportedFormat`] when `info`'s occurrence information is broken,
+    /// see [`crate::facts`].
+    pub fn new<'a>(info: &'a WorkloadsInfo) -> Result<Dataset, ImportError> {
         let all_batches = || info.0.values().flat_map(|workload| &workload.batches_info);
         let all_systems = || all_batches().flat_map(|batch| batch.systems());
         let all_regroups = || all_batches().flat_map(|batch| &batch.regroups);
@@ -247,13 +255,19 @@ impl Dataset {
         let mut occurrences = Vec::new();
         let mut regroups = Vec::new();
         let mut workloads = Vec::new();
+        let mut fact_inputs = Vec::new();
         for (workload_index, (name, label, workload_info)) in
             sorted_workloads.into_iter().enumerate()
         {
             let mut batches = Vec::new();
+            let mut fact_input = WorkloadInput {
+                name,
+                systems: Vec::new(),
+                regroups: Vec::new(),
+            };
 
             for (batch_index, batch_info) in workload_info.batches_info.iter().enumerate() {
-                let mut add_occurrence = |system: &SystemInfo, thread_bound: bool| {
+                let mut add_occurrence = |system: &'a SystemInfo, thread_bound: bool| {
                     let id = OccurrenceId(occurrences.len());
                     let system_id = system_ids[&SystemKey::new(system)];
 
@@ -265,6 +279,7 @@ impl Dataset {
                         thread_bound,
                     });
                     systems[system_id.0].occurrences.push(id);
+                    fact_input.systems.push((id, system));
 
                     id
                 };
@@ -298,6 +313,7 @@ impl Dataset {
                             &component_ids,
                         );
 
+                        fact_input.regroups.push((id, regroup_info));
                         regroups.push(regroup);
 
                         id
@@ -316,7 +332,10 @@ impl Dataset {
                 label,
                 batches,
             });
+            fact_inputs.push(fact_input);
         }
+
+        let facts = normalize(&fact_inputs, occurrences.len(), regroups.len())?;
 
         // `component_ids` borrows the component names, so we fill the reverse indexes once we're done with it.
         // We walk systems in label order, so each component's borrowers come out sorted.
@@ -339,13 +358,14 @@ impl Dataset {
             }
         }
 
-        Dataset {
+        Ok(Dataset {
             workloads,
             systems,
             components,
             occurrences,
             regroups,
-        }
+            facts,
+        })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -479,17 +499,67 @@ mod tests {
         json!({"systems": [thread_bound, others]})
     }
 
+    /// Gives each system and regroup of a workload its occurrence, numbered in order:
+    /// systems run with what they borrow and nothing has to run before them.
+    ///
+    /// A batch without `regroups` gets an empty list, the export always has one.
+    fn add_occurrences(batches: &mut [Value]) {
+        let mut systems = 0;
+        let mut regroups = 0;
+        let mut add_system = |system: &mut Value, thread_bound: bool| {
+            system["occurrence"] = json!({
+                "id": systems,
+                "conditions": [],
+                "footprint": system["borrow"].clone(),
+                "thread_bound": thread_bound,
+                "after": [],
+            });
+            systems += 1;
+        };
+
+        for batch in batches {
+            if batch.get("regroups").is_none() {
+                batch["regroups"] = json!([]);
+            }
+            if batch["systems"][0].is_object() {
+                add_system(&mut batch["systems"][0], true);
+            }
+            for system in batch["systems"][1].as_array_mut().unwrap() {
+                add_system(system, false);
+            }
+            for regroup in batch
+                .get_mut("regroups")
+                .and_then(Value::as_array_mut)
+                .into_iter()
+                .flatten()
+            {
+                let thread_bound = regroup["borrow"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|borrow| borrow["thread_safe"] == false);
+                regroup["occurrence"] = json!({
+                    "id": regroups,
+                    "thread_bound": thread_bound,
+                    "after": [],
+                });
+                regroups += 1;
+            }
+        }
+    }
+
     fn dataset(workloads: Vec<(&str, Vec<Value>)>) -> Dataset {
         let workloads: serde_json::Map<String, Value> = workloads
             .into_iter()
-            .map(|(name, batches)| {
+            .map(|(name, mut batches)| {
+                add_occurrences(&mut batches);
                 let workload = json!({"name": name, "batches_info": batches});
 
                 (name.to_string(), workload)
             })
             .collect();
 
-        Dataset::new(&serde_json::from_value(Value::Object(workloads)).unwrap())
+        Dataset::new(&serde_json::from_value(Value::Object(workloads)).unwrap()).unwrap()
     }
 
     fn system_labels(dataset: &Dataset) -> Vec<&str> {

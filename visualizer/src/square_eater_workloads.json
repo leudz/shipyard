@@ -24,10 +24,29 @@
                             "after": [],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 0
+                            "unique_id": 0,
+                            "occurrence": {
+                                "id": 0,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": []
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -62,10 +81,33 @@
                             ],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 1
+                            "unique_id": 1,
+                            "occurrence": {
+                                "id": 1,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": [
+                                    {
+                                        "occurrence": {
+                                            "System": 0
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -111,14 +153,61 @@
                                 }
                             },
                             "after": [
+                                0,
                                 1
                             ],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 2
+                            "unique_id": 2,
+                            "occurrence": {
+                                "id": 2,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Acceleration>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": [
+                                    {
+                                        "occurrence": {
+                                            "System": 0
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 1
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -158,10 +247,38 @@
                             ],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 3
+                            "unique_id": 3,
+                            "occurrence": {
+                                "id": 3,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": [
+                                    {
+                                        "occurrence": {
+                                            "System": 2
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -222,14 +339,76 @@
                                 }
                             },
                             "after": [
+                                2,
                                 3
                             ],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 4
+                            "unique_id": 4,
+                            "occurrence": {
+                                "id": 4,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::entities::Entities",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::FloorCounter>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::SpawnedOnFloor>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Acceleration>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Squagum>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": [
+                                    {
+                                        "occurrence": {
+                                            "System": 2
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 3
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -280,14 +459,93 @@
                                 }
                             },
                             "after": [
+                                0,
+                                1,
+                                2,
+                                3,
                                 4
                             ],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 5
+                            "unique_id": 5,
+                            "occurrence": {
+                                "id": 5,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Squagum>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::ToDelete>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": [
+                                    {
+                                        "occurrence": {
+                                            "System": 0
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 1
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 2
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 3
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 4
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -316,14 +574,82 @@
                             }
                         },
                         "after": [
+                            0,
+                            1,
+                            2,
+                            3,
+                            4,
                             5
                         ],
                         "after_all": [],
                         "before_all": [],
-                        "unique_id": 6
+                        "unique_id": 6,
+                        "occurrence": {
+                            "id": 6,
+                            "conditions": [],
+                            "footprint": [
+                                {
+                                    "name": "shipyard::all_storages::AllStorages",
+                                    "mutability": "Exclusive",
+                                    "thread_safe": true
+                                }
+                            ],
+                            "thread_bound": true,
+                            "after": [
+                                {
+                                    "occurrence": {
+                                        "System": 0
+                                    },
+                                    "origins": [
+                                        "Implicit"
+                                    ]
+                                },
+                                {
+                                    "occurrence": {
+                                        "System": 1
+                                    },
+                                    "origins": [
+                                        "Implicit"
+                                    ]
+                                },
+                                {
+                                    "occurrence": {
+                                        "System": 2
+                                    },
+                                    "origins": [
+                                        "Implicit"
+                                    ]
+                                },
+                                {
+                                    "occurrence": {
+                                        "System": 3
+                                    },
+                                    "origins": [
+                                        "Implicit"
+                                    ]
+                                },
+                                {
+                                    "occurrence": {
+                                        "System": 4
+                                    },
+                                    "origins": [
+                                        "Implicit"
+                                    ]
+                                },
+                                {
+                                    "occurrence": {
+                                        "System": 5
+                                    },
+                                    "origins": [
+                                        "Implicit"
+                                    ]
+                                }
+                            ]
+                        }
                     },
                     []
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -374,14 +700,111 @@
                                 }
                             },
                             "after": [
+                                0,
+                                1,
+                                2,
+                                3,
+                                4,
+                                5,
                                 6
                             ],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 7
+                            "unique_id": 7,
+                            "occurrence": {
+                                "id": 7,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::FloorCounter>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::SpawnedOnFloor>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": [
+                                    {
+                                        "occurrence": {
+                                            "System": 0
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 1
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 2
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 3
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 4
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 5
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 6
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             },
             {
                 "systems": [
@@ -427,14 +850,115 @@
                                 }
                             },
                             "after": [
+                                0,
+                                1,
+                                2,
+                                3,
+                                4,
+                                5,
+                                6,
                                 7
                             ],
                             "after_all": [],
                             "before_all": [],
-                            "unique_id": 8
+                            "unique_id": 8,
+                            "occurrence": {
+                                "id": 8,
+                                "conditions": [],
+                                "footprint": [
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Squagum>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    {
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::FloorCounter>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    }
+                                ],
+                                "thread_bound": false,
+                                "after": [
+                                    {
+                                        "occurrence": {
+                                            "System": 0
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 1
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 2
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 3
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 4
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 5
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 6
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    },
+                                    {
+                                        "occurrence": {
+                                            "System": 7
+                                        },
+                                        "origins": [
+                                            "Implicit"
+                                        ]
+                                    }
+                                ]
+                            }
                         }
                     ]
-                ]
+                ],
+                "regroups": []
             }
         ]
     }

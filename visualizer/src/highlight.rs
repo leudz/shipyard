@@ -95,16 +95,19 @@ mod tests {
         {"name": "System(writer)", "borrow": [
             {"name": "A", "mutability": "Exclusive", "thread_safe": true},
             {"name": "B", "mutability": "Shared", "thread_safe": true}
-        ], "conflict": null, "after": [], "after_all": [], "before_all": [], "unique_id": 0},
+        ], "conflict": null, "after": [], "after_all": [], "before_all": [], "unique_id": 0,
+        "occurrence": {"id": 0, "conditions": [], "footprint": [], "thread_bound": false, "after": []}},
         {"name": "System(reader)", "borrow": [
             {"name": "A", "mutability": "Shared", "thread_safe": true}
-        ], "conflict": null, "after": [], "after_all": [], "before_all": [], "unique_id": 1},
+        ], "conflict": null, "after": [], "after_all": [], "before_all": [], "unique_id": 1,
+        "occurrence": {"id": 1, "conditions": [], "footprint": [], "thread_bound": false, "after": []}},
         {"name": "System(idle)", "borrow": [],
-            "conflict": null, "after": [], "after_all": [], "before_all": [], "unique_id": 2}
-    ]]}]}}"#;
+            "conflict": null, "after": [], "after_all": [], "before_all": [], "unique_id": 2,
+            "occurrence": {"id": 2, "conditions": [], "footprint": [], "thread_bound": false, "after": []}}
+    ]], "regroups": []}]}}"#;
 
     fn dataset() -> Dataset {
-        Dataset::new(&parse_workloads(DATASET).unwrap())
+        Dataset::new(&parse_workloads(DATASET).unwrap()).unwrap()
     }
 
     fn system(dataset: &Dataset, label: &str) -> SystemId {
