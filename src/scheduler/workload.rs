@@ -459,11 +459,12 @@ impl Workload {
             lookup_table,
             &mut tracking_to_enable,
         )
-        .and_then(|(mut batches, mut workload_info)| {
+        .and_then(|(mut batches, mut workload_info, dependencies)| {
             prepare::prepare_regroups(
                 &mut batches,
                 &mut workload_info.batches_info,
                 &all_storages.grouping,
+                &dependencies,
             );
 
             for enable_tracking_fn in &tracking_to_enable {
@@ -544,6 +545,23 @@ impl Workload {
     /// Iteration stays correct, but components added since the last regroup are slower to iterate.\
     /// Call [`World::regroup`] or [`World::regroup_set`] when it matters.
     pub fn build(self) -> Result<(ScheduledWorkload, WorkloadInfo), error::AddWorkload> {
+        let (workload, workload_info, _) = self.build_unprepared()?;
+
+        Ok((workload, workload_info))
+    }
+
+    /// Builds the workload like [`Workload::build`], with what
+    /// [`prepare_regroups`](prepare::prepare_regroups) needs to add regroups to it.
+    fn build_unprepared(
+        self,
+    ) -> Result<
+        (
+            ScheduledWorkload,
+            WorkloadInfo,
+            create_workload::Dependencies,
+        ),
+        error::AddWorkload,
+    > {
         let mut workload = ScheduledWorkload {
             name: self.name.clone(),
             systems: Vec::new(),
@@ -554,7 +572,7 @@ impl Workload {
             batches: Batches::default(),
         };
 
-        let (batches, workload_info) = create_workload::create_workload(
+        let (batches, workload_info, dependencies) = create_workload::create_workload(
             self,
             &mut workload.systems,
             &mut workload.system_names,
@@ -565,7 +583,7 @@ impl Workload {
 
         workload.batches = batches;
 
-        Ok((workload, workload_info))
+        Ok((workload, workload_info, dependencies))
     }
 
     /// Stop parallelism between systems before and after the barrier.

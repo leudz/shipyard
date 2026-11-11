@@ -4,7 +4,7 @@
 //!
 //! - `disjoint_dirty`: a reader of A and C. Its first batch holds the AB and CD regroups only, the
 //!   calling thread takes the first one, the other one is left. Both sets have work to do.
-//! - `clean_then_dirty`: the same reader plus an unrelated system reading E. Its first batch holds
+//! - `clean_then_dirty`: the same reader after an unrelated system reading E. Its first batch holds
 //!   that system, taken by the calling thread, then both regroups, left in order. The first one
 //!   left is clean, the second one has work to do.
 //!
@@ -105,11 +105,12 @@ impl Prepared {
         let target = pairs[0];
         pairs.sort_unstable();
 
-        let workload = Workload::new(probe.name()).with_system(read_a_c(target));
+        // A batch keeps the sequential order, the unrelated system goes first to come before the regroups.
         let workload = match probe {
-            Probe::DisjointDirty => workload,
-            Probe::CleanThenDirty => workload.with_system(unrelated),
+            Probe::DisjointDirty => Workload::new(probe.name()),
+            Probe::CleanThenDirty => Workload::new(probe.name()).with_system(unrelated),
         };
+        let workload = workload.with_system(read_a_c(target));
         workload.add_to_world(&world).unwrap();
 
         let info = world.workloads_info().0[probe.name()].clone();
@@ -264,8 +265,8 @@ fn mix(hash: &mut u64, value: u64) {
 /// Asserts that the first batch holds both entry regroups, with the unrelated system when the
 /// case has one, and the reader waits in the second. Returns the sets in regroup order.
 ///
-/// Within a batch, steps keep the planner's order: the system the batch started with, then the
-/// regroups added to it. `check_run` confirms the system is the calling thread's step.
+/// Within a batch, steps keep the sequential order: the unrelated system, declared first, then the
+/// regroups the reader needs. `check_run` confirms the system is the calling thread's step.
 fn regroup_order(probe: Probe, info: &WorkloadInfo) -> [Set; 2] {
     let name = probe.name();
     let batches = &info.batches_info;

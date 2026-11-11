@@ -206,7 +206,6 @@ fn after_all_single_system() {
             sequential: vec![System(0), System(1), System(2)],
             sequential_run_if: Vec::new(),
             sequential_occurrences: Vec::new(),
-            conditions_borrow: Vec::new(),
             workload_run_if: None,
             systems_run_if: Vec::new(),
             regroups: Vec::new(),

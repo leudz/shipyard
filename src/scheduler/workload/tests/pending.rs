@@ -27,13 +27,14 @@ pub(super) fn world() -> World {
 
 /// Builds `workload` with the regroups it needs in `world`.
 pub(super) fn prepare(workload: Workload, world: &World) -> ScheduledWorkload {
-    let (mut scheduled, mut info) = workload.build().unwrap();
+    let (mut scheduled, mut info, dependencies) = workload.build_unprepared().unwrap();
 
     let all_storages = world.all_storages.borrow().unwrap();
     prepare_regroups(
         &mut scheduled.batches,
         &mut info.batches_info,
         &all_storages.grouping,
+        &dependencies,
     );
 
     scheduled

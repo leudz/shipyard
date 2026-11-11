@@ -26,14 +26,19 @@ fn world() -> World {
 /// Checks that every user step is still there once, with its condition,
 /// and that the sequential order of user steps didn't change.
 fn prepare(workload: Workload, world: &World) -> (Batches, Vec<BatchInfo>) {
-    let (scheduled, info) = workload.build().unwrap();
+    let (scheduled, info, dependencies) = workload.build_unprepared().unwrap();
     let mut batches = scheduled.batches;
     let mut batches_info = info.batches_info;
     let sequential_before = user_sequential(&batches);
     let parallel_before = user_parallel(&batches);
 
     let all_storages = world.all_storages.borrow().unwrap();
-    prepare_regroups(&mut batches, &mut batches_info, &all_storages.grouping);
+    prepare_regroups(
+        &mut batches,
+        &mut batches_info,
+        &all_storages.grouping,
+        &dependencies,
+    );
 
     assert_eq!(user_sequential(&batches), sequential_before);
     assert_eq!(user_parallel(&batches), parallel_before);
@@ -333,38 +338,26 @@ fn ungrouped() {
     assert_eq!(batches, unprepared.batches);
 }
 
-/// Asserts that regroups are only added to the batches: barriers, ordering constraints
-/// and conditions still apply to user systems as before.
+/// Asserts that the systems after a barrier stay in later batches than the ones before it,
+/// once regroups are added. `prepare` checks that conditions and the sequential order don't change.
 #[test]
 fn user_order() {
     fn write_c(_: ViewMut<'_, C>) {}
-    let workload = || {
-        Workload::new("")
-            .with_system(write_a.run_if(|| true))
-            .with_system(read_b.tag("b"))
-            .with_barrier()
-            .with_system(read_a)
-            .with_system(write_c.after_all("b"))
-            .with_system(read_c.skip_if(|| false))
-    };
-    let (unprepared, _) = workload().build().unwrap();
+    let workload = Workload::new("")
+        .with_system(write_a.run_if(|| true))
+        .with_system(read_b.tag("b"))
+        .with_barrier()
+        .with_system(read_a)
+        .with_system(write_c.after_all("b"))
+        .with_system(read_c.skip_if(|| false));
 
-    let (batches, _) = prepare(workload(), &world());
+    let (batches, _) = prepare(workload, &world());
 
-    let user_batches: Vec<(Option<Step>, Vec<Step>)> = batches
-        .parallel
-        .iter()
-        .map(|(single, steps)| {
-            let is_system = |step: &Step| matches!(step, System(_));
-
-            (
-                single.filter(is_system),
-                steps.iter().copied().filter(is_system).collect::<Vec<_>>(),
-            )
-        })
-        .filter(|(single, steps)| single.is_some() || !steps.is_empty())
-        .collect();
-    assert_eq!(user_batches, unprepared.batches.parallel);
+    for after in 2..5 {
+        for before in 0..2 {
+            assert!(batch_of(&batches, System(after)) > batch_of(&batches, System(before)));
+        }
+    }
 }
 
 /// Asserts that workload information gets the same batches, regroup batches listing their regroups.
@@ -482,7 +475,7 @@ fn split() {
         &[
             (None, vec![Regroup(0)]),
             (None, vec![System(0)]),
-            (None, vec![System(2), Regroup(1)]),
+            (None, vec![Regroup(1), System(2)]),
             (None, vec![System(1)]),
         ]
     );
@@ -512,7 +505,7 @@ fn several_due() {
         &[
             (None, vec![Regroup(0), Regroup(1)]),
             (None, vec![System(0)]),
-            (None, vec![System(3), Regroup(2), Regroup(3)]),
+            (None, vec![Regroup(2), System(3), Regroup(3)]),
             (None, vec![System(1), System(2)]),
         ]
     );
@@ -609,15 +602,15 @@ fn split_constraints() {
         &[
             (None, vec![Regroup(0)]),
             (None, vec![System(0)]),
-            (None, vec![System(2), Regroup(1)]),
+            (None, vec![Regroup(1), System(2)]),
             (None, vec![System(1)]),
             (None, vec![System(3)]),
         ]
     );
 }
 
-/// Asserts that a regroup needing the world's thread doesn't join a batch whose
-/// world's thread slot is taken, the batch then waits for it whole.
+/// Asserts that a regroup needing the world's thread doesn't share a batch with
+/// a system taking the world's thread slot.
 #[cfg(feature = "thread_local")]
 #[test]
 fn thread_slot() {
@@ -644,4 +637,206 @@ fn thread_slot() {
             (Some(System(2)), vec![System(1)]),
         ]
     );
+}
+
+/// Asserts that a set's regroup needing the world's thread runs alongside
+/// the systems that don't borrow from it, when the world's thread slot is free.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send_split() {
+    use crate::borrow::NonSend;
+
+    let world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .build();
+    let workload = Workload::new("").with_system(read_a).with_system(read_c);
+
+    let (batches, _) = prepare(workload, &world);
+
+    assert_eq!(
+        batches.parallel,
+        &[(Some(Regroup(0)), vec![System(1)]), (None, vec![System(0)]),]
+    );
+}
+
+/// Asserts that with two disjoint sets needing the world's thread, the reader of the set
+/// regrouped first runs alongside the other set's regroup instead of waiting for it.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send_two_sets() {
+    use crate::borrow::NonSend;
+
+    let world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .with_group::<(C, NonSend<D>)>()
+        .build();
+    let workload = Workload::new("").with_system(read_a).with_system(read_c);
+
+    let (batches, _) = prepare(workload, &world);
+
+    // We don't rely on the sets' order, we look up which reader belongs to the first regroup.
+    let first_reader = if batches.regroups[0].set.members.contains(&A::storage_id()) {
+        System(0)
+    } else {
+        System(1)
+    };
+    assert_eq!(
+        batch_of(&batches, first_reader),
+        batch_of(&batches, Regroup(1))
+    );
+}
+
+/// Asserts that a system unrelated to a due set runs alongside its regroup needing the world's thread,
+/// even when another system of its batch takes the world's thread slot.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send_free_local() {
+    use crate::borrow::NonSend;
+
+    fn local(_: NonSend<ViewMut<'_, Usize>>) {}
+
+    let world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .build();
+    let workload = Workload::new("")
+        .with_system(read_a)
+        .with_system(local)
+        .with_system(read_c);
+
+    let (batches, _) = prepare(workload, &world);
+
+    assert_eq!(
+        batch_of(&batches, System(2)),
+        batch_of(&batches, Regroup(0))
+    );
+}
+
+/// Asserts that a system whose condition needs the world's thread doesn't share a batch with
+/// a regroup needing it too, while an unrelated system runs alongside the regroup.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send_condition() {
+    use crate::borrow::{NonSend, NonSendSync};
+
+    let world = World::builder_for_test()
+        .with_group::<(A, NonSend<B>)>()
+        .build();
+    let workload = Workload::new("")
+        .with_system(read_a)
+        .with_system(read_u16.run_if(|_: NonSendSync<View<'_, Usize>>| true))
+        .with_system(read_c);
+
+    let (batches, _) = prepare(workload, &world);
+
+    assert_eq!(
+        batches.parallel,
+        &[
+            (Some(Regroup(0)), vec![System(2)]),
+            (Some(System(1)), vec![System(0)]),
+        ]
+    );
+}
+
+/// Asserts that two occurrences of a callable are placed by their own conditions' borrows:
+/// the one whose condition reads B waits for the AB regroup, the other one runs alongside it.
+#[test]
+fn repeated_conditions() {
+    let workload = Workload::new("")
+        .with_system(read_a)
+        .with_system(read_u16.run_if(|_: View<'_, B>| true))
+        .with_system(read_u16.run_if(|_: View<'_, U32>| true));
+
+    let (batches, _) = prepare(workload, &world());
+
+    assert_eq!(
+        batches.parallel,
+        &[
+            (None, vec![Regroup(0), System(1)]),
+            (None, vec![System(0), System(1)]),
+        ]
+    );
+    let max = usize::MAX;
+    assert_eq!(
+        batches.parallel_occurrences,
+        &[(max, vec![max, 2]), (max, vec![0, 1])]
+    );
+}
+
+/// Returns the index of the parallel batch running `step`.
+fn batch_of(batches: &Batches, step: Step) -> usize {
+    batches
+        .parallel
+        .iter()
+        .position(|(single, steps)| *single == Some(step) || steps.contains(&step))
+        .unwrap()
+}
+
+fn read_u32(_: View<'_, U32>) {}
+
+/// Asserts that once a regroup splits `read A` from `write X`, `read X` runs alongside `read A`
+/// instead of waiting for it, `read X` only waits for `write X`.
+///
+/// Without regroups, `write A`, `read A`, `write X` after `write A` and `read X` after `write X`
+/// are built as `[write A] -> [read A | write X] -> [read X]`.
+#[test]
+fn stale_boundary() {
+    let workload = || {
+        Workload::new("")
+            .with_system(write_a)
+            .with_system(read_a)
+            .with_system(write_u32.after_all(write_a))
+            .with_system(read_u32.after_all(write_u32))
+    };
+
+    let built = Schedule::built(workload());
+    let (batches, _) = prepare(workload(), &world());
+
+    assert_eq!(
+        built.parallel,
+        vec![
+            steps(&["write_a"]),
+            steps(&["read_a", "write_u32"]),
+            steps(&["read_u32"]),
+        ]
+    );
+    assert_eq!(
+        batches.parallel,
+        &[
+            (None, vec![Regroup(0)]),
+            (None, vec![System(0)]),
+            (None, vec![Regroup(1), System(2)]),
+            (None, vec![System(1), System(3)]),
+        ]
+    );
+}
+
+/// Asserts that a barrier after `read A` keeps `read X` in a later batch,
+/// even once a regroup split `read A` from `write X`.
+#[test]
+fn stale_barrier() {
+    let workload = Workload::new("")
+        .with_system(write_a)
+        .with_system(read_a)
+        .with_system(write_u32.after_all(write_a))
+        .with_barrier()
+        .with_system(read_u32.after_all(write_u32));
+
+    let (batches, _) = prepare(workload, &world());
+
+    assert!(batch_of(&batches, System(3)) > batch_of(&batches, System(1)));
+}
+
+/// Asserts that `read X` explicitly following `read A` stays in a later batch,
+/// even once a regroup split `read A` from `write X`.
+#[test]
+fn stale_after_read() {
+    let workload = Workload::new("")
+        .with_system(write_a)
+        .with_system(read_a)
+        .with_system(write_u32.after_all(write_a))
+        .with_system(read_u32.after_all(write_u32).after_all(read_a));
+
+    let (batches, _) = prepare(workload, &world());
+
+    assert!(batch_of(&batches, System(3)) > batch_of(&batches, System(1)));
 }

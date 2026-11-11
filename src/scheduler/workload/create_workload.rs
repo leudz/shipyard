@@ -12,6 +12,7 @@ use crate::world::World;
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use alloc::format;
+use alloc::vec;
 // use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Debug;
@@ -23,15 +24,13 @@ struct ToBePlacedSystem {
     index: usize,
     /// Position of the system in the workload's list, its identity while we schedule it.
     ///
-    /// Ordering edges (`soft_after`, `hard_after`, ...) point to occurrences.
+    /// Ordering edges (`order_after`, `batch_after`, ...) point to occurrences.
     occurrence: usize,
     display_name: Box<dyn Label>,
     /// What the system borrows, without its conditions.
     ///
     /// Workload info shows it and regroups are triggered by it.
     borrow_constraints: Vec<TypeInfo>,
-    /// What the system's conditions borrow.
-    conditions_borrow: Vec<TypeInfo>,
     /// What the system and its conditions borrow, see [`footprint`].
     ///
     /// They're scheduled as one unit, conflicts and the calling-thread slot are decided with it.
@@ -41,13 +40,14 @@ struct ToBePlacedSystem {
     before_all_info: Vec<BeforeAfterConstraint>,
     after_all: DedupedLabels,
     after_all_info: Vec<BeforeAfterConstraint>,
-    /// Copy of `hard_after` to be returned in `SystemInfo`.
+    /// Copy of `batch_after` to be returned in `SystemInfo`.
     after_info: DedupedUniqueIds,
-    // System must be after in the sequential order
-    // System can run in parallel in the parallel order
-    soft_after: DedupedUniqueIds,
-    // System must be after in both orders
-    hard_after: DedupedUniqueIds,
+    /// The systems placed before this one, it can share their batch.
+    ///
+    /// They keep the declaration order of systems that don't conflict.
+    order_after: DedupedUniqueIds,
+    /// The systems in an earlier batch than this one.
+    batch_after: DedupedUniqueIds,
     // System must be before in both orders
     hard_before: DedupedLabels,
     require_in_workload: DedupedLabels,
@@ -57,16 +57,21 @@ struct ToBePlacedSystem {
     confict: Option<Conflict>,
 }
 
-#[derive(Clone)]
-struct DedupedUniqueIds(Vec<usize>);
+#[derive(Clone, Default)]
+pub(super) struct DedupedUniqueIds(Vec<usize>);
 
 impl DedupedUniqueIds {
-    fn new() -> DedupedUniqueIds {
+    pub(super) fn new() -> DedupedUniqueIds {
         DedupedUniqueIds(Vec::new())
     }
 
+    /// Returns the ids, sorted.
+    pub(super) fn iter(&self) -> impl Iterator<Item = usize> + '_ {
+        self.0.iter().copied()
+    }
+
     /// Returns `true` if the system was already present.
-    fn add(&mut self, id: usize) -> bool {
+    pub(super) fn add(&mut self, id: usize) -> bool {
         match self.0.binary_search(&id) {
             Ok(_) => true,
             Err(index) => {
@@ -97,7 +102,9 @@ impl DedupedUniqueIds {
 
 /// Registers `builder`'s new callables and splits its systems into batches.
 ///
-/// The workload isn't published, the caller decides where the returned batches go.
+/// The workload isn't published, the caller decides where the returned batches go.\
+/// The returned [`Dependencies`] are what [`prepare_regroups`](super::prepare::prepare_regroups)
+/// needs to add regroups to the batches.
 #[allow(clippy::type_complexity)]
 pub(super) fn create_workload(
     mut builder: Workload,
@@ -106,7 +113,7 @@ pub(super) fn create_workload(
     system_generators: &mut Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
     lookup_table: &mut ShipHashMap<TypeId, usize>,
     tracking_to_enable: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
-) -> Result<(Batches, WorkloadInfo), error::AddWorkload> {
+) -> Result<(Batches, WorkloadInfo, Dependencies), error::AddWorkload> {
     let mut to_be_placed_systems = insert_systems_in_scheduler(
         &mut builder,
         systems,
@@ -137,8 +144,8 @@ pub(super) fn create_workload(
 
     propagate_barriers(&mut to_be_placed_systems, barriers);
     remove_absent_labels(&mut to_be_placed_systems);
-    propagate_implicit_hard_ordering(&mut to_be_placed_systems);
-    propagate_implicit_soft_ordering(&mut to_be_placed_systems);
+    propagate_implicit_batch_after(&mut to_be_placed_systems);
+    propagate_implicit_order_after(&mut to_be_placed_systems);
     map_before_all_to_after(&mut to_be_placed_systems);
     map_after_all_to_after(&mut to_be_placed_systems);
     map_before_to_after(&mut to_be_placed_systems);
@@ -156,22 +163,38 @@ pub(super) fn create_workload(
     }
 
     let mut batches = Batches {
-        // Systems are still in occurrence order, `order_systems` moves them.
-        conditions_borrow: to_be_placed_systems
-            .iter_mut()
-            .map(|system| core::mem::take(&mut system.conditions_borrow))
-            .collect(),
         workload_run_if: workload_run_if.map(|workload_run_if| workload_run_if.system_fn),
         ..Default::default()
     };
 
-    let batches_info = order_systems(&mut to_be_placed_systems, &mut batches)?;
+    // Systems are still in occurrence order, so are the nodes.
+    let dependencies = Dependencies {
+        nodes: take_nodes(&mut to_be_placed_systems),
+        borrows: to_be_placed_systems
+            .iter()
+            .map(|system| system.borrow_constraints.clone())
+            .collect(),
+    };
+
+    let batches_info = order_systems(
+        to_be_placed_systems,
+        dependencies.nodes.clone(),
+        &mut batches,
+    )?;
     let workload_info = WorkloadInfo {
         name: format!("{:?}", workload_name),
         batches_info,
     };
 
-    Ok((batches, workload_info))
+    Ok((batches, workload_info, dependencies))
+}
+
+/// What placing regroups among a workload's systems needs to know about them, indexed by occurrence.
+pub(super) struct Dependencies {
+    /// Each occurrence's node, with all its edges.
+    pub(super) nodes: Vec<Node>,
+    /// What each occurrence's system borrows, without its conditions. Regroups are triggered by it.
+    pub(super) borrows: Vec<Vec<TypeInfo>>,
 }
 
 fn check_require_in_workload(
@@ -213,7 +236,7 @@ fn check_require_before(
         }
 
         let system = &to_be_placed_systems[system_index];
-        for &system_index in &system.hard_after.0 {
+        for &system_index in &system.batch_after.0 {
             recursive_add_systems_before(systems_before, to_be_placed_systems, system_index);
         }
     }
@@ -221,14 +244,14 @@ fn check_require_before(
     'outer: for i in 0..to_be_placed_systems.len() {
         let mut require_before = core::mem::take(&mut to_be_placed_systems[i].require_before);
         // Without requirements there is nothing to check, we skip walking its predecessors.
-        // Every conflict is a hard edge, so that walk can cover most of the workload.
+        // Every conflict is a `batch_after` edge, so that walk can cover most of the workload.
         if require_before.is_empty() {
             continue;
         }
 
         let mut systems_before = DedupedUniqueIds::new();
 
-        for &system_index in &to_be_placed_systems[i].hard_after.0 {
+        for &system_index in &to_be_placed_systems[i].batch_after.0 {
             recursive_add_systems_before(&mut systems_before, to_be_placed_systems, system_index);
         }
 
@@ -271,7 +294,7 @@ fn check_require_after(
             }
 
             let system = &to_be_placed_systems[i];
-            if system.hard_after.contains(system_index) {
+            if system.batch_after.contains(system_index) {
                 recursive_add_systems_after(systems_after, to_be_placed_systems, i);
             }
         }
@@ -293,7 +316,7 @@ fn check_require_after(
 
             let system = &to_be_placed_systems[j];
 
-            if system.hard_after.contains(i) {
+            if system.batch_after.contains(i) {
                 recursive_add_systems_after(&mut systems_after, to_be_placed_systems, i);
             }
         }
@@ -388,16 +411,15 @@ fn insert_systems_in_scheduler(
                     display_name,
                     footprint: footprint(&borrow_constraints, &run_if_borrow_constraints),
                     borrow_constraints,
-                    conditions_borrow: run_if_borrow_constraints,
                     tags,
                     before_all,
                     after_all_info: Vec::new(),
                     after_all,
                     before_all_info: Vec::new(),
                     after_info: DedupedUniqueIds::new(),
-                    hard_after: DedupedUniqueIds::new(),
+                    batch_after: DedupedUniqueIds::new(),
                     hard_before,
-                    soft_after: DedupedUniqueIds::new(),
+                    order_after: DedupedUniqueIds::new(),
                     require_in_workload,
                     require_before,
                     require_after,
@@ -474,7 +496,7 @@ fn propagate_barriers(to_be_placed_systems: &mut [ToBePlacedSystem], barriers: V
     for index in barriers {
         for system in &mut to_be_placed_systems[index..] {
             for i in 0..index {
-                system.hard_after.add(i);
+                system.batch_after.add(i);
             }
         }
     }
@@ -504,8 +526,8 @@ fn remove_absent_labels(to_be_placed_systems: &mut [ToBePlacedSystem]) {
     }
 }
 
-/// Translate the implicit ordering's rules to tags and after constraints.
-fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem]) {
+/// Puts each system in a later batch than the systems declared before it that it conflicts with.
+fn propagate_implicit_batch_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
     for i in (1..to_be_placed_systems.len()).rev() {
         let system = &to_be_placed_systems[i];
         if !system.before_all.is_empty() || !system.after_all.is_empty() {
@@ -516,7 +538,7 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
         }
 
         // Every earlier conflicting system has to run before this one, not only the nearest.
-        // Requirement checks follow hard edges, so they need all of them.
+        // Requirement checks follow `batch_after` edges, so they need all of them.
         // The nearest conflict stays the one we export as explanation.
         let mut conflicts = Vec::new();
         for j in (0..i).rev() {
@@ -528,16 +550,18 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
                 continue;
             }
 
-            if let Some(conflict) =
-                check_conflict(system, other_system.index, &other_system.footprint)
-            {
+            if let Some(conflict) = check_conflict(
+                &system.footprint,
+                other_system.index,
+                &other_system.footprint,
+            ) {
                 conflicts.push((j, conflict));
             }
         }
 
         let system = &mut to_be_placed_systems[i];
         for &(j, _) in &conflicts {
-            system.hard_after.add(j);
+            system.batch_after.add(j);
         }
         if let Some((_, nearest)) = conflicts.into_iter().next() {
             system.confict = Some(nearest);
@@ -545,8 +569,8 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
     }
 }
 
-/// Translate the implicit ordering's rules to tags and after constraints.
-fn propagate_implicit_soft_ordering(to_be_placed_systems: &mut [ToBePlacedSystem]) {
+/// Places each system after the one declared before it, they can share a batch.
+fn propagate_implicit_order_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
     for i in (1..to_be_placed_systems.len()).rev() {
         let system = &to_be_placed_systems[i];
         if !system.before_all.is_empty() || !system.after_all.is_empty() {
@@ -565,7 +589,7 @@ fn propagate_implicit_soft_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
                 continue;
             }
 
-            to_be_placed_systems[i].soft_after.add(j);
+            to_be_placed_systems[i].order_after.add(j);
 
             break;
         }
@@ -590,7 +614,7 @@ fn map_before_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
                 .iter()
                 .find(|tag| before_all.iter().any(|label| tag == &label))
             {
-                other_system.hard_after.add(i);
+                other_system.batch_after.add(i);
                 before_all_info.push(BeforeAfterConstraint {
                     other_system: other_system.index,
                     constraint: format!("{:?}", tag),
@@ -617,7 +641,7 @@ fn map_after_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
 
             for label in after_all.iter() {
                 if to_be_placed_systems[j].tags.iter().any(|tag| tag == label) {
-                    to_be_placed_systems[i].hard_after.add(j);
+                    to_be_placed_systems[i].batch_after.add(j);
 
                     after_all_info.push(BeforeAfterConstraint {
                         other_system: j,
@@ -650,7 +674,7 @@ fn map_before_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
                 .iter()
                 .any(|tag| before.iter().any(|label| tag == label))
             {
-                other_system.hard_after.add(i);
+                other_system.batch_after.add(i);
 
                 break;
             }
@@ -658,110 +682,77 @@ fn map_before_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
     }
 }
 
-/// Move systems around until all constraints are satisfied.
+/// Moves the systems' edges into the nodes [`schedule`] places, indexed by occurrence.
 ///
-/// Use Kahn's algorithm to find a topological ordering, one batch at a time.
+/// The systems keep a copy of their `batch_after` edges for their info.
+fn take_nodes(to_be_placed_systems: &mut [ToBePlacedSystem]) -> Vec<Node> {
+    to_be_placed_systems
+        .iter_mut()
+        .map(|system| {
+            system.after_info = system.batch_after.clone();
+
+            Node {
+                callable: system.index,
+                footprint: system.footprint.clone(),
+                batch_after: core::mem::take(&mut system.batch_after),
+                order_after: core::mem::take(&mut system.order_after),
+            }
+        })
+        .collect()
+}
+
+/// Splits the systems into batches following `nodes`, their nodes indexed by occurrence.
+///
+/// The sequential order is the order the systems are placed in.
 fn order_systems(
-    to_be_placed_systems: &mut Vec<ToBePlacedSystem>,
+    to_be_placed_systems: Vec<ToBePlacedSystem>,
+    nodes: Vec<Node>,
     batches: &mut Batches,
 ) -> Result<Vec<BatchInfo>, error::AddWorkload> {
-    for system in &mut *to_be_placed_systems {
-        system.after_info = system.hard_after.clone();
-    }
+    let mut systems: Vec<Option<ToBePlacedSystem>> =
+        to_be_placed_systems.into_iter().map(Some).collect();
 
-    // Systems free of constraints can go in the batch being filled.
-    // That can be the first system in the workload or systems
-    // that do not borrow any component.
-    let mut ready = VecDeque::new();
-    ready.extend(to_be_placed_systems.extract_if(.., |system| {
-        system.hard_after.is_empty() && system.soft_after.is_empty()
-    }));
+    let mut scheduled = match schedule(nodes) {
+        Ok(scheduled) => scheduled,
+        Err(cycle) => {
+            return Err(error::AddWorkload::ImpossibleRequirements(
+                error::ImpossibleRequirements::Cycle(
+                    cycle
+                        .into_iter()
+                        .map(|occurrence| systems[occurrence].take().unwrap().display_name)
+                        .collect(),
+                ),
+            ));
+        }
+    };
 
     let mut batches_info = Vec::new();
-    while !ready.is_empty() {
-        let placed = fill_batch(&mut ready, to_be_placed_systems, batches, &mut batches_info);
+    for batch in scheduled.batches {
+        batches.parallel.push((None, Vec::new()));
+        batches.parallel_run_if.push((usize::MAX, Vec::new()));
+        batches.parallel_occurrences.push((usize::MAX, Vec::new()));
+        batches_info.push(BatchInfo {
+            systems: (None, Vec::new()),
+            regroups: Vec::new(),
+        });
 
-        // The batch is closed, the systems waiting on its systems can go in the next one.
-        // They come after the systems that didn't fit in the batch.
-        ready.extend(to_be_placed_systems.extract_if(.., |other_system| {
-            other_system
-                .hard_after
-                .retain(|occurrence| !placed.contains(&occurrence));
+        for occurrence in batch {
+            let mut system = systems[occurrence].take().unwrap();
 
-            other_system.hard_after.is_empty() && other_system.soft_after.is_empty()
-        }));
-    }
+            // Not fitting in a batch is a more recent reason to be in a later batch than the implicit conflict.
+            if let Some(conflict) = scheduled.conflicts[occurrence].take() {
+                system.confict = Some(conflict);
+            }
 
-    if !to_be_placed_systems.is_empty() {
-        return Err(error::AddWorkload::ImpossibleRequirements(
-            error::ImpossibleRequirements::Cycle(
-                to_be_placed_systems
-                    .drain(..)
-                    .map(|system| system.display_name)
-                    .collect(),
-            ),
-        ));
+            place_system(system, batches, &mut batches_info);
+        }
     }
 
     Ok(batches_info)
 }
 
-/// Opens a batch and places every system of `ready` that fits in it, in order.
-///
-/// Placing a system frees the systems only waiting on it in the sequential order,
-/// they're tried for the same batch.\
-/// The systems that conflict with the batch are left in `ready`, in order.
-///
-/// Returns the occurrences placed in the batch.
-fn fill_batch(
-    ready: &mut VecDeque<ToBePlacedSystem>,
-    to_be_placed_systems: &mut Vec<ToBePlacedSystem>,
-    batches: &mut Batches,
-    batches_info: &mut Vec<BatchInfo>,
-) -> Vec<usize> {
-    batches.parallel.push((None, Vec::new()));
-    batches.parallel_run_if.push((usize::MAX, Vec::new()));
-    batches.parallel_occurrences.push((usize::MAX, Vec::new()));
-    batches_info.push(BatchInfo {
-        systems: (None, Vec::new()),
-        regroups: Vec::new(),
-    });
-
-    let mut footprints = BatchFootprints::default();
-    let mut conflicting = VecDeque::new();
-    let mut placed = Vec::new();
-    while let Some(mut system) = ready.pop_front() {
-        // A system can't join a batch that already conflicts with it, the batch only grows.
-        // So we set it aside for the next batch and keep trying the others.
-        if let Some(conflict) = check_can_go_in_parallel_batch(&footprints, &system) {
-            system.confict = Some(conflict);
-            conflicting.push_back(system);
-
-            continue;
-        }
-
-        ready.extend(to_be_placed_systems.extract_if(.., |other_system| {
-            other_system.soft_after.remove(system.occurrence);
-
-            other_system.hard_after.is_empty() && other_system.soft_after.is_empty()
-        }));
-
-        placed.push(system.occurrence);
-        place_system(system, &mut footprints, batches, batches_info);
-    }
-
-    *ready = conflicting;
-
-    placed
-}
-
 /// Adds `system` to the last batch, and after every placed system in the sequential order.
-fn place_system(
-    system: ToBePlacedSystem,
-    footprints: &mut BatchFootprints,
-    batches: &mut Batches,
-    batches_info: &mut [BatchInfo],
-) {
+fn place_system(system: ToBePlacedSystem, batches: &mut Batches, batches_info: &mut [BatchInfo]) {
     let run_if_index = if let Some(run_if) = system.run_if {
         batches.systems_run_if.push(run_if);
 
@@ -789,19 +780,12 @@ fn place_system(
     let batch_occurrences = batches.parallel_occurrences.last_mut().unwrap();
     let batch_info = batches_info.last_mut().unwrap();
 
-    // A condition needing the calling thread takes its system along, they run together.
-    let is_single_system = system.footprint.iter().any(|constraint| {
-        !constraint.thread_safe || constraint.storage_id == TypeId::of::<AllStorages>()
-    });
-
-    if is_single_system {
-        footprints.single = Some((system.index, system.footprint));
+    if is_thread_bound(&system.footprint) {
         batch.0 = Some(Step::System(system.index));
         batch_run_if.0 = run_if_index;
         batch_occurrences.0 = system.occurrence;
         batch_info.systems.0 = Some(info);
     } else {
-        footprints.others.push((system.index, system.footprint));
         batch.1.push(Step::System(system.index));
         batch_run_if.1.push(run_if_index);
         batch_occurrences.1.push(system.occurrence);
@@ -809,37 +793,147 @@ fn place_system(
     }
 }
 
-/// The footprints of the systems in the batch being filled, with their callable index.
+/// Returns `true` if what borrows `footprint` has to run on the calling thread.
 ///
-/// Unlike the batch's info, they include what the systems' conditions borrow.
-#[derive(Default)]
-struct BatchFootprints {
-    /// The system in the calling-thread slot.
-    single: Option<(usize, Vec<TypeInfo>)>,
-    others: Vec<(usize, Vec<TypeInfo>)>,
+/// A batch has a single slot for it. A condition needing the calling thread takes its system along,
+/// they run together.
+pub(super) fn is_thread_bound(footprint: &[TypeInfo]) -> bool {
+    footprint.iter().any(|type_info| {
+        !type_info.thread_safe || type_info.storage_id == TypeId::of::<AllStorages>()
+    })
 }
 
-fn check_can_go_in_parallel_batch(
-    batch: &BatchFootprints,
-    tested_system: &ToBePlacedSystem,
-) -> Option<Conflict> {
-    batch
-        .single
-        .iter()
-        .chain(&batch.others)
-        .find_map(|(index, footprint)| check_conflict(tested_system, *index, footprint))
+/// Something [`schedule`] places in a batch: a system occurrence or a regroup.
+#[derive(Clone)]
+pub(super) struct Node {
+    /// Index of the system's callable, the conflicts with the node name it. `usize::MAX` for a regroup.
+    pub(super) callable: usize,
+    /// What the node borrows when it runs, a system's conditions included.
+    pub(super) footprint: Vec<TypeInfo>,
+    /// The nodes that have to be in an earlier batch.
+    pub(super) batch_after: DedupedUniqueIds,
+    /// The nodes that have to be placed first, the node can join their batch.
+    pub(super) order_after: DedupedUniqueIds,
 }
 
+/// The batches [`schedule`] made.
+pub(super) struct Schedule {
+    /// The nodes of each batch, in the order they were placed.
+    pub(super) batches: Vec<Vec<usize>>,
+    /// For each node, why it couldn't join the last batch it was tried for. `None` if it joined the first one.
+    pub(super) conflicts: Vec<Option<Conflict>>,
+}
+
+/// Splits `nodes` into batches following their edges, with Kahn's algorithm, one batch at a time.
+///
+/// Edges point to indexes in `nodes`. A node is ready once its edges are satisfied.\
+/// Each batch takes every ready node that fits in it, in order, the others wait for the next batch.
+/// Ready nodes are tried in the order of `nodes`, after the ones that didn't fit in the previous batch.
+///
+/// ### Errors
+///
+/// The nodes left when their edges make a cycle, in order.
+pub(super) fn schedule(mut nodes: Vec<Node>) -> Result<Schedule, Vec<usize>> {
+    let mut conflicts = vec![None; nodes.len()];
+    let mut waiting: Vec<usize> = (0..nodes.len()).collect();
+
+    let mut ready: VecDeque<usize> = waiting
+        .extract_if(.., |node| {
+            nodes[*node].batch_after.is_empty() && nodes[*node].order_after.is_empty()
+        })
+        .collect();
+
+    let mut batches = Vec::new();
+    while !ready.is_empty() {
+        let placed = fill_batch(&mut ready, &mut waiting, &mut nodes, &mut conflicts);
+
+        // The batch is closed, the nodes waiting on its nodes can go in the next one.
+        // They come after the nodes that didn't fit in the batch.
+        ready.extend(waiting.extract_if(.., |node| {
+            let node = &mut nodes[*node];
+            node.batch_after
+                .retain(|predecessor| !placed.contains(&predecessor));
+
+            node.batch_after.is_empty() && node.order_after.is_empty()
+        }));
+
+        batches.push(placed);
+    }
+
+    if !waiting.is_empty() {
+        return Err(waiting);
+    }
+
+    Ok(Schedule { batches, conflicts })
+}
+
+/// Opens a batch and places every node of `ready` that fits in it, in order.
+///
+/// Placing a node frees the nodes only waiting on it in the sequential order,
+/// they're tried for the same batch.\
+/// The nodes that conflict with the batch are left in `ready`, in order.
+///
+/// Returns the nodes placed in the batch.
+fn fill_batch(
+    ready: &mut VecDeque<usize>,
+    waiting: &mut Vec<usize>,
+    nodes: &mut [Node],
+    conflicts: &mut [Option<Conflict>],
+) -> Vec<usize> {
+    let mut deferred = VecDeque::new();
+    let mut placed = Vec::new();
+    // The calling-thread node, it's compared first.
+    let mut single = None;
+    let mut others = Vec::new();
+    while let Some(node) = ready.pop_front() {
+        // A node can't join a batch that already conflicts with it, the batch only grows.
+        // So we set it aside for the next batch and keep trying the others.
+        let conflict = single.iter().chain(&others).find_map(|&other: &usize| {
+            check_conflict(
+                &nodes[node].footprint,
+                nodes[other].callable,
+                &nodes[other].footprint,
+            )
+        });
+        if let Some(conflict) = conflict {
+            conflicts[node] = Some(conflict);
+            deferred.push_back(node);
+
+            continue;
+        }
+
+        ready.extend(waiting.extract_if(.., |other| {
+            let other = &mut nodes[*other];
+            other.order_after.remove(node);
+
+            other.batch_after.is_empty() && other.order_after.is_empty()
+        }));
+
+        if is_thread_bound(&nodes[node].footprint) {
+            single = Some(node);
+        } else {
+            others.push(node);
+        }
+        placed.push(node);
+    }
+
+    *ready = deferred;
+
+    placed
+}
+
+/// Returns why what borrows `footprint` can't run alongside what borrows `other_footprint`,
+/// `other_callable` being its callable index.
 fn check_conflict(
-    tested_system: &ToBePlacedSystem,
-    other_system_id: usize,
-    borrow_constraints: &[TypeInfo],
+    footprint: &[TypeInfo],
+    other_callable: usize,
+    other_footprint: &[TypeInfo],
 ) -> Option<Conflict> {
-    for type_info in &tested_system.footprint {
-        for other_type_info in borrow_constraints {
+    for type_info in footprint {
+        for other_type_info in other_footprint {
             if !type_info.thread_safe && !other_type_info.thread_safe {
                 return Some(Conflict::OtherNotSendSync {
-                    system: other_system_id,
+                    system: other_callable,
                     type_info: other_type_info.clone(),
                 });
             }
@@ -854,7 +948,7 @@ fn check_conflict(
             {
                 return Some(Conflict::Borrow {
                     type_info: type_info.clone(),
-                    other_system: other_system_id,
+                    other_system: other_callable,
                     other_type_info: other_type_info.clone(),
                 });
             }

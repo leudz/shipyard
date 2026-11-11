@@ -63,7 +63,7 @@ fn regroup_next_to_system(world: World) {
     let mut workload = prepare(workload, &world);
     assert_eq!(
         workload.batches.parallel[0],
-        (None, vec![System(1), Step::Regroup(0)])
+        (None, vec![Step::Regroup(0), System(1)])
     );
     hook(&mut workload, 0, move || meeting.meet());
 
@@ -219,7 +219,7 @@ fn failure() {
     let workload = prepare(workload, &world);
     assert_eq!(
         workload.batches.parallel[0],
-        (None, vec![System(1), Step::Regroup(0)])
+        (None, vec![Step::Regroup(0), System(1)])
     );
 
     let result = run(&workload, &world);

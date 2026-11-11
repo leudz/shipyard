@@ -16,6 +16,7 @@ As long as the "parallel" feature is set (enabled by default) workloads will try
 - A system's [`run_if`](https://docs.rs/shipyard/latest/shipyard/scheduler/trait.SystemModificator.html#tymethod.run_if) or `skip_if` condition runs right before it, on the same thread. What the condition borrows counts as if the system borrowed it.\
   A condition that has to run on the calling thread, because it borrows `AllStorages` or a storage that isn't `Send`/`Sync`, keeps its system there too.
 - A nested workload's condition is added to each of its systems' conditions, so a condition that has to run on the calling thread keeps all of them there.
+- Workloads using [groups](https://docs.rs/shipyard/latest/shipyard/world/struct.WorldBuilder.html#method.with_group) add regroups between systems. A regroup borrows every storage of its connected set exclusively.
 
 When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.\
 [`add_to_world`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html#method.add_to_world) returns information about these batches and why each system didn't get into the previous batch.

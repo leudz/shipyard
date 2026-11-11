@@ -26,10 +26,6 @@ pub(crate) struct Batches {
     pub(crate) sequential_run_if: Vec<usize>,
     /// Occurrence of each step of `sequential`, `usize::MAX` for regroups.
     pub(crate) sequential_occurrences: Vec<usize>,
-    /// What each occurrence's conditions borrow, indexed by occurrence.
-    ///
-    /// The regroup planner keeps regroups apart from them, they don't trigger regroups.
-    pub(crate) conditions_borrow: Vec<Vec<TypeInfo>>,
     pub(crate) workload_run_if: Option<Box<dyn WorkloadRunIfFn>>,
     pub(crate) systems_run_if: Vec<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>,
     /// The regroups `Step::Regroup` points to.
