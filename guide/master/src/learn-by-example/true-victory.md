@@ -193,7 +193,7 @@ Apart from organization, [`Workload`](https://docs.rs/shipyard/latest/shipyard/s
 
 The last touch is to handle `check_game_over`'s return value.\
 A [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) drops what its systems return, except for `Result<(), SystemError>`: an error stops the [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) and is returned by [`run_workload`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run_workload).\
-That's why `check_game_over` converts `GameOver` into a [`SystemError`](https://docs.rs/shipyard/latest/shipyard/error/struct.SystemError.html) instead of returning it as is, a `Result<(), GameOver>` would be dropped.
+That's why `check_game_over` converts `GameOver` into a `SystemError` instead of returning it as is, a `Result<(), GameOver>` would be dropped.
 
 ```rust,noplaypen
 async fn main() {
