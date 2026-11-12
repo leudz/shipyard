@@ -32,6 +32,7 @@
     - [More Resources](./going-further/more-resources.md)
 - [Going Deeper](./going-deeper.md)
     - [Sparse Set](./going-deeper/sparse-set.md)
+    - [Grouping](./going-deeper/grouping.md)
 - [Recipes](./recipes.md)
     - [Hierarchy](./recipes/hierarchy.md)
     - [Entity-less serialization](./recipes/entity-less-serde.md)
