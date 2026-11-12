@@ -13,13 +13,14 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      code: ${{ steps.filter.outputs.code }}
-      deploy: ${{ steps.filter.outputs.deploy }}
-      visualizer: ${{ steps.filter.outputs.visualizer }}
+      code: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.code == 'true' }}
+      deploy: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.deploy == 'true' }}
+      visualizer: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.visualizer == 'true' }}
     steps:
     - uses: actions/checkout@v3
     - uses: dorny/paths-filter@v2
       id: filter
+      if: github.event_name != 'workflow_dispatch'
       with:
         filters: |
           code:
@@ -113,7 +114,7 @@ jobs:
   guide_master:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -136,7 +137,7 @@ jobs:
   guide_0_5_0:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -159,7 +160,7 @@ jobs:
   guide_0_6:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -182,7 +183,7 @@ jobs:
   guide_0_7:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -205,7 +206,7 @@ jobs:
   guide_0_8:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -228,7 +229,7 @@ jobs:
   guide_0_9:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -251,7 +252,7 @@ jobs:
   guide_0_10:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -274,7 +275,7 @@ jobs:
   guide_0_11:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -297,7 +298,7 @@ jobs:
   bunny_demo:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -319,7 +320,7 @@ jobs:
   square_eater:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -335,7 +336,7 @@ jobs:
   visualizer:
     runs-on: ubuntu-latest
     needs: changes
-    # Bundled on PRs touching the visualizer too, only the deploy job is restricted to pushes.
+    # Bundled on manual runs and PRs touching the visualizer too; publishing is gated below.
     if: needs.changes.outputs.visualizer == 'true' || (github.event_name == 'push' && needs.changes.outputs.deploy == 'true')
     steps:
       - uses: actions/checkout@v3
@@ -375,7 +376,9 @@ jobs:
       square_eater,
       visualizer
     ]
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    if: >-
+      (github.event_name == 'push' && needs.changes.outputs.deploy == 'true') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
     steps:
       - name: load guide master
         uses: actions/download-artifact@v4
