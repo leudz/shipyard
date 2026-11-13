@@ -60,6 +60,10 @@ name = "workload_regroup"
 harness = false
 
 [[bench]]
+name = "regroup"
+harness = false
+
+[[bench]]
 name = "entity_deletion"
 harness = false
 
