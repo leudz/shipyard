@@ -12,6 +12,10 @@
 //! Sparse arrays and `Groups` are left as regroup found them, frozen rows are read against them.
 //! The only change is attaching the unions that don't exist yet, as empty ranges holding no row.
 
+#[cfg(test)]
+#[path = "tests/discovery_observer.rs"]
+pub(super) mod test_observer;
+
 use super::{Selected, original_row};
 use crate::entity_id::EntityId;
 use crate::sparse_set::{Groups, Ring, SparseArray};
@@ -37,7 +41,7 @@ pub(super) struct Memberships<'a> {
     /// more than its sparse lookups.
     members: Vec<Vec<usize>>,
     /// For each storage, `true` when it holds a single range whose members hold no other range.
-    alone: Vec<bool>,
+    pub(super) alone: Vec<bool>,
 }
 
 impl<'a> Memberships<'a> {
@@ -181,9 +185,6 @@ pub(super) struct Discovery {
     probes: Vec<(usize, bool)>,
     /// One classification tree per storage position. Empty until the first classification.
     trees: Vec<Tree>,
-    /// Unit tests use this to check that learning doesn't repeat the walk's sparse lookups.
-    #[cfg(test)]
-    pub(super) checks: usize,
 }
 
 impl Discovery {
@@ -231,9 +232,7 @@ impl Discovery {
             match nodes[node] {
                 Node::Probe { position, next } => {
                     #[cfg(test)]
-                    {
-                        self.checks += 1;
-                    }
+                    test_observer::sparse_check();
                     let present = memberships.storages[position].sparse.contains(entity);
 
                     node = next[usize::from(present)];
@@ -335,9 +334,7 @@ impl Discovery {
                         Some(&(_, present)) => present,
                         None => {
                             #[cfg(test)]
-                            {
-                                self.checks += 1;
-                            }
+                            test_observer::sparse_check();
                             memberships.storages[position].sparse.contains(entity)
                         }
                     };
@@ -392,9 +389,7 @@ impl Discovery {
                             Some(&(_, present)) => present,
                             None => {
                                 #[cfg(test)]
-                                {
-                                    self.checks += 1;
-                                }
+                                test_observer::sparse_check();
                                 memberships.storages[*position].sparse.contains(entity)
                             }
                         };
@@ -489,6 +484,12 @@ pub(super) struct StoragePlan {
     pub(super) storage_id: StorageId,
     /// Number of components of the ungrouped region that have to join a group.
     pub(super) promoted: usize,
+    /// The rows whose destination isn't the one partition assumes, sorted by row, with that
+    /// destination: a group's plan position, `None` for the ungrouped region.
+    ///
+    /// They're the rows the evaluated scan found in a range whose group isn't their destination,
+    /// then, in an alone storage, the unevaluated rows going to the ungrouped region.
+    pub(super) exceptions: Vec<(usize, Option<usize>)>,
 }
 
 /// What regroup has to change.
@@ -544,6 +545,7 @@ impl Plan {
             .map(|membership| StoragePlan {
                 storage_id: membership.storage_id,
                 promoted: 0,
+                exceptions: Vec::new(),
             })
             .collect();
 
@@ -631,20 +633,74 @@ impl Plan {
 
     /// Counts where every unevaluated component goes, and the components their entity moves
     /// out of kept prefixes and ungrouped regions.
+    ///
+    /// In an alone storage, records the unevaluated rows going to the ungrouped region in the
+    /// storage's plan. A component added with all its group's members, at the same offset of
+    /// each unevaluated region, doesn't need a classification, see below.
     fn scan_unevaluated(&mut self, frozen: &Frozen<'_>, discovery: &mut Discovery) {
+        // The other members' unevaluated regions, reused across storages.
+        let mut others: Vec<&[EntityId]> = Vec::new();
+
         let storages = frozen.memberships.storages.iter().zip(&frozen.dense);
         for (index, (membership, dense)) in storages.enumerate() {
-            for &entity in &dense[membership.groups.unevaluated_start..] {
-                let storage_id = &membership.storage_id;
+            let storage_id = &membership.storage_id;
+            let alone = frozen.memberships.alone[index];
+            let unevaluated_start = membership.groups.unevaluated_start;
+            let mut exceptions = Vec::new();
+
+            // An alone storage's single group is the only one its components can join, and they
+            // join it when their entity owns every member.
+            let alone_group = alone.then(|| self.group_index(&membership.groups.ranges[0].group));
+            let can_pair = alone;
+            others.clear();
+            if can_pair {
+                for &position in &frozen.memberships.members[index] {
+                    if position == index {
+                        continue;
+                    }
+
+                    let other = frozen.memberships.storages[position].groups;
+                    others.push(&frozen.dense[position][other.unevaluated_start..]);
+                }
+            }
+
+            for (row, &entity) in (unevaluated_start..).zip(&dense[unevaluated_start..]) {
+                let offset = row - unevaluated_start;
+
+                // Equal ids prove the entity owns every member. Its components there are all
+                // unevaluated, so none departs a kept prefix or an ungrouped region.
+                // Pairing by offset only decides how often we find them.
+                if can_pair
+                    && let Some(group_index) = alone_group
+                    && others
+                        .iter()
+                        .all(|other| other.get(offset) == Some(&entity))
+                {
+                    if self.groups[group_index].group[0] == *storage_id {
+                        self.groups[group_index].incoming += 1;
+                    }
+
+                    continue;
+                }
+
                 let Some(group_index) = self.count(&frozen.memberships, discovery, index, entity)
                 else {
+                    // Partition assumes an alone storage's unevaluated rows join its group.
+                    if alone {
+                        exceptions.push((row, None));
+                    }
+
                     continue;
                 };
+                debug_assert!(alone_group.is_none_or(|alone_group| alone_group == group_index));
 
                 if self.is_first_unevaluated(&frozen.memberships, group_index, storage_id, entity) {
                     self.count_departures(&frozen.memberships, group_index, storage_id, entity);
                 }
             }
+
+            // Rows only grow, they're sorted already.
+            self.storage_mut(storage_id).exceptions = exceptions;
         }
     }
 
@@ -727,7 +783,8 @@ impl Plan {
         }
     }
 
-    /// Counts where every component past its range's kept prefix goes.
+    /// Counts where every component past its range's kept prefix goes, and records in each
+    /// storage's plan the ones that don't go to their range's group.
     ///
     /// A row whose entity sits in the range of the same group in every other member doesn't
     /// need a classification when we know that group is still its destination, see below.
@@ -749,6 +806,8 @@ impl Plan {
 
         let storages = frozen.memberships.storages.iter().zip(&frozen.dense);
         for (index, (membership, dense)) in storages.enumerate() {
+            let mut exceptions = Vec::new();
+
             // The positions of each range's members follow each other.
             let mut positions = frozen.memberships.members[index].as_slice();
             for range in &membership.groups.ranges {
@@ -780,7 +839,8 @@ impl Plan {
 
                 let is_first = range.group[0] == membership.storage_id;
                 for logical in kept..range.len {
-                    let entity = dense[ring.physical_of(logical)];
+                    let row = ring.physical_of(logical);
+                    let entity = dense[row];
 
                     // Equal ids prove the entity owns every member, whatever their positions.
                     // Pairing by logical position only decides how often we find them.
@@ -796,9 +856,18 @@ impl Plan {
                         continue;
                     }
 
-                    self.count(&frozen.memberships, discovery, index, entity);
+                    let destination = self.count(&frozen.memberships, discovery, index, entity);
+                    if destination != Some(group_index) {
+                        exceptions.push((row, destination));
+                    }
                 }
             }
+
+            // Partition reads them by row. The unevaluated scan's come after every range's rows.
+            exceptions.sort_unstable_by_key(|&(row, _)| row);
+            let storage_plan = self.storage_mut(&membership.storage_id);
+            exceptions.append(&mut storage_plan.exceptions);
+            storage_plan.exceptions = exceptions;
         }
     }
 

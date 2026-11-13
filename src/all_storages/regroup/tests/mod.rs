@@ -4,10 +4,12 @@ mod clone;
 mod compiled;
 mod declaration;
 mod discovery;
+mod exceptions;
 mod guarded;
 mod layout;
 mod matched;
 mod original_row;
+mod paired;
 mod promotion;
 mod regroup_set;
 mod removals;
@@ -261,10 +263,11 @@ fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
     let mut expected_lens: BTreeMap<Vec<StorageId>, usize> = BTreeMap::new();
     let mut expected_leaving: BTreeMap<Vec<StorageId>, usize> = BTreeMap::new();
 
-    for (membership, dense) in memberships.storages.iter().zip(&frozen.dense) {
+    for (index, (membership, dense)) in memberships.storages.iter().zip(&frozen.dense).enumerate() {
         let storage_id = membership.storage_id;
         let groups = membership.groups;
         let mut promoted = 0;
+        let mut exceptions = Vec::new();
 
         for (row, &entity) in dense.iter().enumerate() {
             let expected = expected_union(declared, storage_id, |member_id| {
@@ -280,8 +283,20 @@ fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
                 if leaves && range.group[0] == storage_id {
                     *expected_leaving.entry(range.group.to_vec()).or_default() += 1;
                 }
+
+                if range.ring().logical_of(row) >= kept
+                    && expected.as_deref() != Some(&range.group[..])
+                {
+                    let destination = expected.as_ref().map(|members| plan.find(members).unwrap());
+                    exceptions.push((row, destination));
+                }
             } else if row < groups.unevaluated_start && expected.is_some() {
                 promoted += 1;
+            } else if row >= groups.unevaluated_start
+                && memberships.alone[index]
+                && expected.is_none()
+            {
+                exceptions.push((row, None));
             }
 
             if let Some(expected) = expected
@@ -295,6 +310,11 @@ fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
             plan.storage(&storage_id).promoted,
             promoted,
             "promoted in {storage_id:?}"
+        );
+        assert_eq!(
+            plan.storage(&storage_id).exceptions,
+            exceptions,
+            "exceptions in {storage_id:?}"
         );
     }
 
@@ -502,6 +522,39 @@ fn assert_classified(world: &World) {
             }
         }
     }
+}
+
+/// Checks a regroup's plan and memberships while preserving survivors and component contents.
+fn regroup_checked(world: &mut World, declared: &[&[StorageId]]) {
+    let state = |world: &World| {
+        let (entities, a, b) = world
+            .borrow::<(crate::EntitiesView<'_>, View<'_, A>, View<'_, B>)>()
+            .unwrap();
+        (
+            sorted(entities.iter().collect()),
+            a.iter()
+                .with_id()
+                .map(|(id, a)| (id, a.0))
+                .collect::<BTreeMap<_, _>>(),
+            b.iter()
+                .with_id()
+                .map(|(id, b)| (id, b.0))
+                .collect::<BTreeMap<_, _>>(),
+            [
+                sorted(dense_of::<C>(world)),
+                sorted(dense_of::<D>(world)),
+                sorted(dense_of::<E>(world)),
+            ],
+        )
+    };
+    let before = state(world);
+
+    assert_plan(world, declared);
+    world.regroup();
+
+    assert_regrouped(world);
+    assert_memberships(world, declared);
+    assert_eq!(state(world), before);
 }
 
 /// Returns a world with the disjoint AB and CD, three unevaluated entities in each.

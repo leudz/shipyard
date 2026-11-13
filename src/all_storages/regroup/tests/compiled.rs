@@ -1,4 +1,5 @@
 use super::*;
+use crate::all_storages::regroup::analysis::test_observer::SparseChecks;
 
 /// Returns a world grouping AB and AC.
 fn crossing() -> World {
@@ -156,17 +157,18 @@ fn compiled_walk() {
     let frozen = Frozen::new(&selected);
     let index = frozen.memberships.position(&id::<A>());
     let mut discovery = Discovery::default();
+    let checks = SparseChecks::start();
 
     assert_eq!(
         discovery.classify(&frozen.memberships, index, first, |_| 0),
         None
     );
-    let learned = discovery.checks;
+    let learned = checks.count();
     assert_eq!(
         discovery.classify(&frozen.memberships, index, second, |_| 0),
         None
     );
-    let walked = discovery.checks - learned;
+    let walked = checks.count() - learned;
 
     assert_eq!(walked + 1, learned);
 }
@@ -184,17 +186,18 @@ fn compiled_known() {
     let frozen = Frozen::new(&selected);
     let index = frozen.memberships.position(&id::<A>());
     let mut discovery = Discovery::default();
+    let checks = SparseChecks::start();
 
     assert_eq!(
         discovery.classify(&frozen.memberships, index, paired, |_| 0),
         Some(0)
     );
-    assert_eq!(discovery.checks, 1);
+    assert_eq!(checks.count(), 1);
     assert_eq!(
         discovery.classify(&frozen.memberships, index, lone, |_| 0),
         None
     );
-    assert_eq!(discovery.checks, 2);
+    assert_eq!(checks.count(), 2);
 }
 
 /// Asserts that forgetting learned AB results lets a rebuilt membership discover a new ABC union.

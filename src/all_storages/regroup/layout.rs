@@ -14,8 +14,13 @@
 //! 4. Copy: the members of each group copy the order of one of them, its reference.
 //!
 //! Gathering only reaches what it moves through the unevaluated regions, so trusted prefixes and
-//! ungrouped regions are never scanned. Every scratch buffer scales with storages and ranges,
-//! except classification trees, which scale with the component combinations they encounter.
+//! ungrouped regions are never scanned. Scratch buffers hold storage and range metadata,
+//! learned classification trees, and exception partition queues. The trees grow with component
+//! combinations, and the queues can grow with the free rows being partitioned.
+
+#[cfg(test)]
+#[path = "tests/partition_observer.rs"]
+pub(super) mod test_observer;
 
 use super::analysis::{Discovery, Membership, Memberships, Plan};
 use super::{Selected, original_row};
@@ -630,6 +635,16 @@ impl<'a, 'p> Builder<'a, 'p> {
         }
         let ungrouped = placements.len();
 
+        if self.exceptions_cover(index, placements) {
+            #[cfg(test)]
+            self.observe_partition(index, placements, true);
+            self.partition_exceptions(index, placements, &regions, &range_regions);
+            return;
+        }
+
+        #[cfg(test)]
+        self.observe_partition(index, placements, false);
+
         for region in 0..regions.len() {
             while regions[region].filled < regions[region].len() {
                 let slot = regions[region].slot(regions[region].filled);
@@ -660,6 +675,137 @@ impl<'a, 'p> Builder<'a, 'p> {
 
                 self.swap(index, slot, target);
                 regions[destination].filled += 1;
+            }
+        }
+    }
+
+    /// Returns `true` when the exceptions analysis recorded for the storage at `index` tell where
+    /// every row partition can meet goes.
+    ///
+    /// That's when every id is still in the row analysis read it from, nothing is promoted and
+    /// no group of its ranges has entities leaving, and the storage either has no unevaluated row
+    /// or is alone. Then a row goes where its exception says, and without one:
+    /// - a row of an old range goes to its range's group, kept prefixes included,
+    /// - a row of the old ungrouped region stays ungrouped,
+    /// - an unevaluated row goes to the alone storage's single group.
+    fn exceptions_cover(&self, index: usize, placements: &[Placement]) -> bool {
+        let membership = self.memberships.storages[index];
+        let plan = self.plan;
+
+        (membership.groups.unevaluated_start == self.dense[index].len()
+            || self.memberships.alone[index])
+            && self.touched[index].is_none()
+            && plan.storage(&membership.storage_id).promoted == 0
+            && placements
+                .iter()
+                .all(|placement| plan.groups[placement.group_index].leaving == 0)
+    }
+
+    /// Does what `partition`'s loop does to the storage at `index`, the same swaps in the same
+    /// order, without classifying anything. [`exceptions_cover`](Self::exceptions_cover) has to
+    /// accept the storage.
+    ///
+    /// The loop only swaps the occupants of free slots that go to another region, so we list
+    /// those up front, each with its destination, in the order the loop meets them. Free slots
+    /// whose occupant stays are the ones it skips.
+    fn partition_exceptions(
+        &mut self,
+        index: usize,
+        placements: &[Placement],
+        regions: &[Free],
+        range_regions: &[Option<usize>],
+    ) {
+        let plan = self.plan;
+        let membership = self.memberships.storages[index];
+        let exceptions = &plan.storage(&membership.storage_id).exceptions;
+        let ungrouped = placements.len();
+        let region_of = |destination: Option<usize>| match destination {
+            Some(group_index) => {
+                range_regions[group_index].expect("every member holds a range for its group")
+            }
+            None => ungrouped,
+        };
+
+        // Every row as regroup found it, with the region it goes to without an exception.
+        // A range's region is at its position. Only an alone storage has unevaluated rows here,
+        // they go to its single range.
+        let len = self.dense[index].len();
+        let unevaluated_start = membership.groups.unevaluated_start;
+        debug_assert!(unevaluated_start == len || self.memberships.alone[index]);
+        let mut sources: Vec<(Range<usize>, usize)> = placements
+            .iter()
+            .enumerate()
+            .map(|(region, placement)| (placement.old.start..placement.old.end(), region))
+            .collect();
+        sources.push((
+            membership.groups.grouped_end()..unevaluated_start,
+            ungrouped,
+        ));
+        sources.push((unevaluated_start..len, 0));
+
+        let mut queues: Vec<Vec<(usize, usize)>> = Vec::with_capacity(regions.len());
+        for (region, free) in regions.iter().enumerate() {
+            let mut queue = Vec::new();
+            let mut covered = 0;
+
+            for part in &free.parts {
+                for (source, default) in &sources {
+                    let rows = part.start.max(source.start)..part.end.min(source.end);
+                    if rows.is_empty() {
+                        continue;
+                    }
+                    covered += rows.len();
+                    let end = rows.end;
+
+                    let first = exceptions.partition_point(|&(row, _)| row < rows.start);
+                    let mut listed = exceptions[first..]
+                        .iter()
+                        .take_while(|&&(row, _)| row < end)
+                        .peekable();
+
+                    // Where rows go to this region by default, only the exceptions leave.
+                    if *default == region {
+                        queue.extend(
+                            listed.map(|&(row, destination)| (row, region_of(destination))),
+                        );
+                        continue;
+                    }
+
+                    for row in rows {
+                        let destination = match listed.next_if(|&&(listed, _)| listed == row) {
+                            Some(&(_, destination)) => region_of(destination),
+                            None => *default,
+                        };
+
+                        if destination != region {
+                            queue.push((row, destination));
+                        }
+                    }
+                }
+            }
+
+            debug_assert_eq!(covered, free.len());
+            queues.push(queue);
+        }
+
+        // The loop of `partition`, where a free slot whose occupant stays isn't listed.
+        // Only the slots at the cursors change, the entries past them stay right.
+        let mut cursors = alloc::vec![0; queues.len()];
+        for region in 0..queues.len() {
+            while let Some(&(slot, destination)) = queues[region].get(cursors[region]) {
+                if destination == region {
+                    cursors[region] += 1;
+                    continue;
+                }
+
+                // Earlier regions are complete, the entity can only belong to a later one.
+                let &(target, next) = queues[destination]
+                    .get(cursors[destination])
+                    .expect("the plan counts every entity of a region");
+
+                self.swap(index, slot, target);
+                cursors[destination] += 1;
+                queues[region][cursors[region]].1 = next;
             }
         }
     }
