@@ -1,0 +1,361 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>0.4 migration - Shipyard User&#x27;s Guide</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../welcome.html">Welcome</a></li><li class="chapter-item expanded "><a href="../fundamentals.html"><strong aria-hidden="true">1.</strong> Fundamentals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../fundamentals/world.html"><strong aria-hidden="true">1.1.</strong> World</a></li><li class="chapter-item expanded "><a href="../fundamentals/add-entity.html"><strong aria-hidden="true">1.2.</strong> Add Entity</a></li><li class="chapter-item expanded "><a href="../fundamentals/delete-entity.html"><strong aria-hidden="true">1.3.</strong> Delete Entity</a></li><li class="chapter-item expanded "><a href="../fundamentals/add-components.html"><strong aria-hidden="true">1.4.</strong> Add Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/remove-components.html"><strong aria-hidden="true">1.5.</strong> Remove Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/delete-components.html"><strong aria-hidden="true">1.6.</strong> Delete Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/get-and-modify.html"><strong aria-hidden="true">1.7.</strong> Get and Modify Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/iterators.html"><strong aria-hidden="true">1.8.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="../fundamentals/uniques.html"><strong aria-hidden="true">1.9.</strong> Uniques</a></li><li class="chapter-item expanded "><a href="../fundamentals/systems.html"><strong aria-hidden="true">1.10.</strong> Systems</a></li></ol></li><li class="chapter-item expanded "><a href="../going-further.html"><strong aria-hidden="true">2.</strong> Going Further</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../going-further/tracking.html"><strong aria-hidden="true">2.1.</strong> Tracking</a></li><li class="chapter-item expanded "><a href="../going-further/parallelism.html"><strong aria-hidden="true">2.2.</strong> Parallelism</a></li><li class="chapter-item expanded "><a href="../going-further/custom-views.html"><strong aria-hidden="true">2.3.</strong> Custom Views</a></li><li class="chapter-item expanded "><a href="../going-further/non-send-sync.html"><strong aria-hidden="true">2.4.</strong> !Send and !Sync Components</a></li><li class="chapter-item expanded "><a href="../going-further/performance-tips.html"><strong aria-hidden="true">2.5.</strong> Performance Tips</a></li></ol></li><li class="chapter-item expanded "><a href="../going-deeper.html"><strong aria-hidden="true">3.</strong> Going Deeper</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../going-deeper/workload-creation.html"><strong aria-hidden="true">3.1.</strong> Workload creation</a></li><li class="chapter-item expanded "><a href="../going-deeper/sparse-set.html"><strong aria-hidden="true">3.2.</strong> Sparse Set</a></li></ol></li><li class="chapter-item expanded "><a href="../recipes.html"><strong aria-hidden="true">4.</strong> Recipes</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../recipes/hierarchy.html"><strong aria-hidden="true">4.1.</strong> Hierarchy</a></li><li class="chapter-item expanded "><a href="../recipes/seed.html"><strong aria-hidden="true">4.2.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../recipes/0.4-migration.html" class="active"><strong aria-hidden="true">4.3.</strong> 0.4 migration</a></li></ol></li><li class="chapter-item expanded "><a href="../pilgrimage.html"><strong aria-hidden="true">5.</strong> Pilgrimage</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../pilgrimage/more-resources.html"><strong aria-hidden="true">5.1.</strong> More Resources</a></li><li class="chapter-item expanded "><a href="../pilgrimage/related-crates.html"><strong aria-hidden="true">5.2.</strong> Shipyard Related Crates</a></li><li class="chapter-item expanded "><a href="../pilgrimage/projects-using-shipyard.html"><strong aria-hidden="true">5.3.</strong> Projects using Shipyard</a></li></ol></li><li class="chapter-item expanded "><a href="../contributors.html"><strong aria-hidden="true">6.</strong> Contributors</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Shipyard User&#x27;s Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/leudz/shipyard" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/leudz/shipyard/edit/master/guide/master/src/recipes/0.4-migration.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <p>0.4 comes with a few big changes, this chapter aims to facilitate the transition.</p>
+<h2 id="imports"><a class="header" href="#imports">Imports</a></h2>
+<p>Let's start small, prelude and internal no longer exist, you just have to replace all <code>shipyard::prelude</code> and <code>shipyard::internal</code> by <code>shipyard</code>.</p>
+<h2 id="systems"><a class="header" href="#systems">Systems</a></h2>
+<p>Following <a href="https://github.com/leudz/shipyard/issues/75">an issue</a> opened by <a href="https://github.com/cart">@cart</a>, systems will become functions instead of an instance of the <code>System</code> trait.</p>
+<p>To make this work, borrowing is now done with the actual types you get when you borrow a storage instead of using references.</p>
+<p>In 0.3:</p>
+<pre><code class="language-rust  noplaypen">struct MySystem;
+impl&lt;'sys&gt; System&lt;'sys&gt; for MySystem {
+    type Data = (
+        EntitiesMut,
+        &amp;mut usize,
+    );
+    fn run((mut entities, mut usizes): &lt;Self::Data as SystemData&lt;'sys&gt;&gt;::View) {}
+}
+
+// or with the macro
+
+#[system(MySystem)]
+fn run(mut entities: &amp;mut Entities, mut usizes: &amp;mut usize) {}</code></pre>
+<p>In 0.4:</p>
+<pre><code class="language-rust  noplaypen">fn my_system(mut entities: EntitiesViewMut, mut usizes: ViewMut&lt;usize&gt;) {}</code></pre>
+<p>This change also affects <code>run</code> and <code>borrow</code>.<br />
+<code>World::run_system</code> is no longer needed and you can run systems with <code>run</code> directly.</p>
+<pre><code class="language-rust  noplaypen">world.run(my_system);
+
+// and closures still work
+
+world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut&lt;usize&gt;| {});</code></pre>
+<p><code>run</code> has the same return type as the system or closure and it doesn't require any tuple most of the time.</p>
+<p>Here's the complete list:</p>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: center">0.3</th><th style="text-align: center">0.4</th></tr></thead><tbody>
+<tr><td style="text-align: center"><code>AllStorages</code> / <code>&amp;mut AllStorages</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.AllStoragesViewMut.html"><code>AllStoragesViewMut</code></a></td></tr>
+<tr><td style="text-align: center"><code>Entities</code> / <code>&amp;Entities</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.EntitiesView.html"><code>EntitiesView</code></a></td></tr>
+<tr><td style="text-align: center"><code>EntitiesMut</code> / <code>&amp;mut Entities</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html"><code>EntitiesViewMut</code></a></td></tr>
+<tr><td style="text-align: center"><code>&amp;T</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.View.html"><code>View&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>&amp;mut T</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html"><code>ViewMut&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>ThreadPool</code> / <code>&amp;ThreadPool</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.ThreadPoolView.html"><code>ThreadPoolView</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;&amp;T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.UniqueView.html"><code>UniqueView&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;&amp;mut T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.UniqueViewMut.html"><code>UniqueViewMut&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>NonSend&lt;&amp;T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;View&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>NonSend&lt;&amp;mut T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;ViewMut&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;NonSend&lt;&amp;T&gt;&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;UniqueView&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;NonSend&lt;&amp;mut T&gt;&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;UniqueViewMut&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>FakeBorrow&lt;T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.FakeBorrow.html"><code>FakeBorrow&lt;T&gt;</code></a></td></tr>
+</tbody></table>
+</div>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSync.html"><code>NonSync</code></a> and <a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSendSync.html"><code>NonSendSync</code></a> follow the same pattern as <code>NonSend</code>.</p>
+<h2 id="macro"><a class="header" href="#macro">Macro</a></h2>
+<p>The system proc macro doesn't exist anymore. With the new system design the advantage it provides are not great enough to justify it.</p>
+<h2 id="workloads"><a class="header" href="#workloads">Workloads</a></h2>
+<h3 id="the-ugly"><a class="header" href="#the-ugly">The ugly</a></h3>
+<p>Workloads are the only one suffering a downgrade. You'll have to give all systems twice to the function plus a few things.</p>
+<p>In 0.3:</p>
+<pre><code class="language-rust  noplaypen">world.add_workload&lt;(Sys1, Sys2), _&gt;(&quot;Workload1&quot;);</code></pre>
+<p>In 0.4:</p>
+<pre><code class="language-rust  noplaypen">world
+    .add_workload(&quot;Workload1&quot;)
+    .with_system((
+        |world: &amp;World| world.try_run(sys1),
+        sys1
+    ))
+    .with_system((
+        |world: &amp;World| world.try_run(sys2),
+        sys2
+    ))
+    .build();
+
+// with a macro
+
+world
+    .add_workload(&quot;Workload1&quot;)
+    .with_system(system!(sys1))
+    .with_system(system!(sys2))
+    .build();</code></pre>
+<p>⚠️ The two arguments are wrapped in a tuple.</p>
+<p>This repetition will disappear someday but I don't expect it to be soon.<br />
+You don't have to use a closure, any function with <code>&amp;World</code> as argument and returning <code>Result&lt;(), shipyard::error::Run&gt;</code> are valid.<br />
+It's very important to pass the same function twice, the workload might always error if this isn't the case.</p>
+<h3 id="the-good"><a class="header" href="#the-good">The good</a></h3>
+<p>Workloads don't come with only a downgrade. You can now return errors from systems inside workloads.</p>
+<pre><code class="language-rust  noplaypen">#[derive(Debug)]
+struct TerribleError;
+
+impl Display for TerribleError {
+    fn fmt(&amp;self, fmt: &amp;mut Formatter&lt;'_&gt;) -&gt; Result&lt;(), core::fmt::Error&gt; {
+        Debug::fmt(self, fmt)
+    }
+}
+impl Error for TerribleError {}
+
+fn my_sys(mut entities: EntitiesViewMut) -&gt; Result&lt;(), TerribleError&gt; {
+    Err(TerribleError)
+}
+
+fn main() {
+    use shipyard::error::{Run, RunWorkload};
+
+    let world = World::new();
+    world
+        .add_workload(&quot;May fail&quot;)
+        .with_system((
+            |world: &amp;World| world.try_run(my_sys)?.map_err(Run::from_custom),
+            my_sys,
+        ))
+        .build();
+    match world.try_run_default().map_err(RunWorkload::custom_error) {
+        Err(Some(error)) =&gt; {
+            assert!(error.is::&lt;TerribleError&gt;());
+        }
+        _ =&gt; {}
+    }
+}</code></pre>
+<p>The error has to be anonymized so you'll get back a <code>Box&lt;dyn Error + Send&gt;</code> with std and a <code>Box&lt;dyn Any + Send&gt;</code> with no_std.<br />
+Workloads stop at the first error encountered, just like 0.3.<br />
+You can also use the <code>try_system!</code> macro the same way as <code>system!</code>.</p>
+<pre><code class="language-rust  noplaypen">world
+    .add_workload(&quot;May fail&quot;)
+    .with_system(try_system!(my_sys))
+    .build();</code></pre>
+<p>It'll generate the same code as above.</p>
+<h2 id="iterator"><a class="header" href="#iterator">Iterator</a></h2>
+<p>You can now use <code>std::iter::Iterator</code> and <code>for loop</code> with views without having to call <code>into_iter</code>.<br />
+All iteration code from 0.3 will still work.</p>
+<pre><code class="language-rust  noplaypen">fn my_sys((mut usizes, u32s): (ViewMut&lt;usize&gt;, View&lt;u32&gt;)) {
+    for (i, &amp;j) in (&amp;mut usizes, &amp;u32s).iter() {
+        *i += j as usize;
+    }
+}</code></pre>
+<h2 id="get"><a class="header" href="#get">Get</a></h2>
+<p>The <code>GetComponent</code> trait has been renamed <code>Get</code>.</p>
+<p>What follows is only true for 0.4. 0.5 went back to <code>get</code> returning a <code>Result</code>.<br />
+<code>Get::get</code> has been renamed <code>try_get</code> and a new <code>get</code> method has been added to unwrap errors.</p>
+<p>If you used <code>get</code> followed by <code>unwrap</code>, you can simply remove the <code>unwrap</code>.<br />
+If you used another error handling method you'll have to replace <code>get</code> by <code>try_get</code>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../recipes/seed.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../pilgrimage.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../recipes/seed.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../pilgrimage.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
