@@ -1,3 +1,4 @@
+mod captain_first;
 mod grouping_automatic;
 mod grouping_bulk;
 mod grouping_differential;

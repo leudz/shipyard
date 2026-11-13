@@ -71,6 +71,10 @@ harness = false
 name = "storage_access"
 harness = false
 
+[[bench]]
+name = "tracking_captain"
+harness = false
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

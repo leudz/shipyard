@@ -165,14 +165,27 @@ macro_rules! impl_shiperator_output {
                 entities: &EntityCursor,
                 index: usize,
             ) -> Option<($($type::Index,)+)> {
+                // Check cheap filters first; keep tuple order for potentially costly joins.
+                let captain_indices = ($(
+                    if $index == CAPTAIN && $type::PREFER_CAPTAIN_FIRST {
+                        // SAFE: Our caller's guarantees are the captain's own.
+                        Some(unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?)
+                    } else {
+                        None
+                    },
+                )+);
+
                 // SAFE: Our caller guarantees `entities` isn't empty.
                 let eid = unsafe { entities.current() };
 
                 // `$index == CAPTAIN` is a constant, each child keeps a single arm.
                 Some(($(
                     if $index == CAPTAIN {
-                        // SAFE: Our caller's guarantees are the captain's own.
-                        unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?
+                        match captain_indices.$index {
+                            Some(resolved) => resolved,
+                            // SAFE: Our caller's guarantees are the captain's own.
+                            None => unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?,
+                        }
                     } else {
                         self.shiperator.$index.sailor_indices_of(eid)?
                     },

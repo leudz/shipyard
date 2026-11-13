@@ -26,6 +26,15 @@ pub trait Shiperator {
     /// This is often `usize` or a tuple of `usize` for multiple storages.
     type Index;
 
+    /// Prefers evaluating this captain before sailors on the single-captain fast path.
+    /// The planner still selects the captain; matching results stay unchanged.
+    ///
+    /// ### Implementations
+    ///
+    /// Enable for filters whose rejection is cheaper than a sailor lookup.
+    /// The default preserves tuple order. Wrappers should account for their own lookup costs.
+    const PREFER_CAPTAIN_FIRST: bool = false;
+
     /// Returns the number of nodes in this Shiperator's tree, itself included.
     ///
     /// Plan rows hold one state per node, in preorder.\

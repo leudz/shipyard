@@ -27,6 +27,8 @@ macro_rules! impl_tracking_filter {
             type Out = <$window<'tmp, T, Track> as Shiperator>::Out;
             type Index = usize;
 
+            const PREFER_CAPTAIN_FIRST: bool = true;
+
             #[inline]
             fn node_count() -> usize {
                 1
