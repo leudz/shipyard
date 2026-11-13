@@ -14,7 +14,8 @@
 //! 4. Copy: the members of each group copy the order of one of them, its reference.
 //!
 //! Gathering only reaches what it moves through the unevaluated regions, so trusted prefixes and
-//! ungrouped regions are never scanned. Every scratch buffer scales with storages and ranges.
+//! ungrouped regions are never scanned. Every scratch buffer scales with storages and ranges,
+//! except classification trees, which scale with the component combinations they encounter.
 
 use super::analysis::{Discovery, Membership, Memberships, Plan};
 use super::{Selected, original_row};
@@ -280,13 +281,13 @@ impl<'a, 'p> Builder<'a, 'p> {
     /// Returns the position of the plan of the group `entity`'s component in the storage at
     /// `index` goes to, `None` when it goes to the ungrouped region.
     fn classify(&mut self, index: usize, entity: EntityId) -> Option<usize> {
-        let members = self.discovery.discover(&self.memberships, index, entity)?;
+        let plan = self.plan;
 
-        Some(
-            self.plan
-                .find(members)
-                .expect("analysis attached every group an entity needs"),
-        )
+        self.discovery
+            .classify(&self.memberships, index, entity, |members| {
+                plan.find(members)
+                    .expect("analysis attached every group an entity needs")
+            })
     }
 
     /// Swaps the ids at rows `a` and `b` of the storage at `index`.
@@ -622,10 +623,18 @@ impl<'a, 'p> Builder<'a, 'p> {
             filled: 0,
         });
 
+        // Classification gives a group; this maps it to a region without another search.
+        let mut range_regions = alloc::vec![None; self.plan.groups.len()];
+        for (region, placement) in placements.iter().enumerate() {
+            range_regions[placement.group_index] = Some(region);
+        }
+        let ungrouped = placements.len();
+
         for region in 0..regions.len() {
             while regions[region].filled < regions[region].len() {
                 let slot = regions[region].slot(regions[region].filled);
-                let destination = self.region_of(index, self.dense[index][slot], placements);
+                let entity = self.dense[index][slot];
+                let destination = self.region_of(index, entity, &range_regions, ungrouped);
 
                 if destination == region {
                     regions[region].filled += 1;
@@ -642,7 +651,8 @@ impl<'a, 'p> Builder<'a, 'p> {
                     );
                     let target = free.slot(free.filled);
 
-                    if self.region_of(index, self.dense[index][target], placements) != destination {
+                    let entity = self.dense[index][target];
+                    if self.region_of(index, entity, &range_regions, ungrouped) != destination {
                         break target;
                     }
                     regions[destination].filled += 1;
@@ -654,17 +664,22 @@ impl<'a, 'p> Builder<'a, 'p> {
         }
     }
 
-    /// Returns the position of the region `entity`'s component in the storage at `index` goes to,
-    /// one past the ranges for the ungrouped region.
-    fn region_of(&mut self, index: usize, entity: EntityId, placements: &[Placement]) -> usize {
+    /// Returns the destination region of `entity`'s component in the storage at `index`.
+    ///
+    /// `range_regions` maps plan group indices to regions in this storage. Groups the storage
+    /// doesn't belong to have no region. `ungrouped` is the position of the ungrouped region.
+    fn region_of(
+        &mut self,
+        index: usize,
+        entity: EntityId,
+        range_regions: &[Option<usize>],
+        ungrouped: usize,
+    ) -> usize {
         let Some(group_index) = self.classify(index, entity) else {
-            return placements.len();
+            return ungrouped;
         };
 
-        placements
-            .iter()
-            .position(|placement| placement.group_index == group_index)
-            .expect("every member holds a range for its group")
+        range_regions[group_index].expect("every member holds a range for its group")
     }
 
     /// Makes every member of each group copy the order of its reference,

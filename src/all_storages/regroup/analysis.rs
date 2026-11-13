@@ -130,7 +130,41 @@ impl<'a> Frozen<'a> {
     }
 }
 
+/// A step of a storage's classification tree.
+#[derive(Clone, Copy)]
+enum Node {
+    /// No entity got here yet.
+    Unexplored,
+    /// Checks whether the entity owns a component in the storage at `position`,
+    /// `next[present]` is the node after it.
+    Probe { position: usize, next: [usize; 2] },
+    /// Where the classification ends: the position of the group's plan,
+    /// `None` for the ungrouped region.
+    Leaf(Option<usize>),
+}
+
+/// What classifications from one storage found, as a tree of lookups whose root is node 0.
+struct Tree {
+    nodes: Vec<Node>,
+    /// The probe leading to each node, at the same position. The root's is itself.
+    ///
+    /// Only learning a new path reads it, walks don't.
+    parents: Vec<usize>,
+}
+
+impl Tree {
+    fn new() -> Tree {
+        Tree {
+            nodes: alloc::vec![Node::Unexplored],
+            parents: alloc::vec![0],
+        }
+    }
+}
+
 /// Scratch buffers finding the storages an entity has to be grouped in, reused across entities.
+///
+/// It also remembers what each discovery found, see [`classify`](Self::classify). What it
+/// remembers only holds for the `Memberships` it was found with, [`forget`](Self::forget) drops it.
 #[derive(Default)]
 pub(super) struct Discovery {
     /// Positions in `Memberships::storages` of the members of the groups found so far,
@@ -140,9 +174,137 @@ pub(super) struct Discovery {
     checked: Vec<*const StorageId>,
     /// The ids of the sorted `members`.
     ids: Vec<StorageId>,
+    /// Answers discovery uses without a lookup, as storage position and presence.
+    known: Vec<(usize, bool)>,
+    /// The storage position and presence of every answer the last discovery used, in order,
+    /// known ones included.
+    probes: Vec<(usize, bool)>,
+    /// One classification tree per storage position. Empty until the first classification.
+    trees: Vec<Tree>,
+    /// Unit tests use this to check that learning doesn't repeat the walk's sparse lookups.
+    #[cfg(test)]
+    pub(super) checks: usize,
 }
 
 impl Discovery {
+    /// Returns the position of the plan of the group `entity`'s component in the storage at
+    /// `index` of `memberships` goes to, `None` when it goes to the ungrouped region.
+    ///
+    /// `entity` has to own a component in that storage, generation included.
+    ///
+    /// It's [`traverse`](Self::traverse) with `resolve` turning the sorted member ids it finds
+    /// into a plan position, but it remembers the answers. `resolve` is only called for entities
+    /// that answer differently from every one classified from the same storage before.
+    /// It has to give the same position for the same members as long as we remember.
+    pub(super) fn classify(
+        &mut self,
+        memberships: &Memberships<'_>,
+        index: usize,
+        entity: EntityId,
+        mut resolve: impl FnMut(&[StorageId]) -> usize,
+    ) -> Option<usize> {
+        self.walk(memberships, index, entity, &mut resolve)
+    }
+
+    /// Classifies `entity` by walking the tree of the storage at `index`,
+    /// growing it with a discovery when it gets somewhere unexplored.
+    ///
+    /// The lookups discovery makes only depend on where it starts and the answers it got so far,
+    /// so entities answering the same go down the same path. Each node checks a storage the path
+    /// didn't check yet, so a walk never makes more lookups than discovery, often fewer.
+    fn walk(
+        &mut self,
+        memberships: &Memberships<'_>,
+        index: usize,
+        entity: EntityId,
+        resolve: &mut impl FnMut(&[StorageId]) -> usize,
+    ) -> Option<usize> {
+        if self.trees.is_empty() {
+            self.trees = (0..memberships.storages.len())
+                .map(|_| Tree::new())
+                .collect();
+        }
+
+        let nodes = &self.trees[index].nodes;
+        let mut node = 0;
+        loop {
+            match nodes[node] {
+                Node::Probe { position, next } => {
+                    #[cfg(test)]
+                    {
+                        self.checks += 1;
+                    }
+                    let present = memberships.storages[position].sparse.contains(entity);
+
+                    node = next[usize::from(present)];
+                }
+                Node::Leaf(group_index) => return group_index,
+                Node::Unexplored => break,
+            }
+        }
+
+        self.learn(memberships, index, entity, node, resolve)
+    }
+
+    /// Classifies `entity` with a discovery, then grows the tree of the storage at `index` with
+    /// its path from `node`, the unexplored node the walk stopped at.
+    fn learn(
+        &mut self,
+        memberships: &Memberships<'_>,
+        index: usize,
+        entity: EntityId,
+        node: usize,
+        resolve: &mut impl FnMut(&[StorageId]) -> usize,
+    ) -> Option<usize> {
+        // We read the walk's answers back from the tree, discovery doesn't look them up again.
+        let tree = &self.trees[index];
+        self.known.clear();
+        let mut child = node;
+        while child != 0 {
+            let parent = tree.parents[child];
+            let Node::Probe { position, next } = tree.nodes[parent] else {
+                unreachable!("only probes lead to other nodes");
+            };
+
+            self.known.push((position, child == next[1]));
+            child = parent;
+        }
+        let walked = self.known.len();
+
+        let group_index = self.traverse(memberships, index, entity).map(resolve);
+
+        // A path checks each storage once, the answer can't change within a discovery.
+        // Discovery starts with the walk's answers, they're its first `walked` ones.
+        let probes = &self.probes;
+        let first_probes = probes
+            .iter()
+            .enumerate()
+            .filter(|&(i, &(position, _))| probes[..i].iter().all(|&(seen, _)| seen != position))
+            .map(|(_, &probe)| probe)
+            .skip(walked);
+
+        let tree = &mut self.trees[index];
+        let mut node = node;
+        for (position, present) in first_probes {
+            let absent = tree.nodes.len();
+            tree.nodes.extend([Node::Unexplored, Node::Unexplored]);
+            tree.parents.extend([node, node]);
+            tree.nodes[node] = Node::Probe {
+                position,
+                next: [absent, absent + 1],
+            };
+            node = absent + usize::from(present);
+        }
+        tree.nodes[node] = Node::Leaf(group_index);
+
+        group_index
+    }
+
+    /// Drops what classifications found, for when the `Memberships` they were found with change.
+    pub(super) fn forget(&mut self) {
+        self.trees.clear();
+    }
+
     /// Returns the sorted ids of the storages `entity` has to be grouped in, starting from its
     /// component in the storage at `index` of `memberships`.
     ///
@@ -152,18 +314,37 @@ impl Discovery {
     /// through other groups it satisfies. Groups it doesn't satisfy don't connect anything,
     /// and owning the components of two disjoint groups doesn't merge them.\
     /// Returns `None` when `entity` satisfies none of that storage's groups.
-    pub(super) fn discover(
+    ///
+    /// It takes the answers in `known` as they are, without a lookup. Every answer it uses ends up
+    /// in `probes`, in order.
+    fn traverse(
         &mut self,
         memberships: &Memberships<'_>,
         index: usize,
         entity: EntityId,
     ) -> Option<&[StorageId]> {
+        self.probes.clear();
+
         // Groups only connect through shared members, nothing connects to a group whose members
         // are in no other group. Checking it is all there is to do, and it's the common case.
         if memberships.alone[index] {
             let positions = &memberships.members[index];
             let satisfied = positions.iter().all(|&position| {
-                position == index || memberships.storages[position].sparse.contains(entity)
+                position == index || {
+                    let present = match self.known.iter().find(|&&(known, _)| known == position) {
+                        Some(&(_, present)) => present,
+                        None => {
+                            #[cfg(test)]
+                            {
+                                self.checks += 1;
+                            }
+                            memberships.storages[position].sparse.contains(entity)
+                        }
+                    };
+                    self.probes.push((position, present));
+
+                    present
+                }
             });
             if !satisfied {
                 return None;
@@ -205,8 +386,22 @@ impl Discovery {
                 // Every storage in `members` holds a component of `entity`,
                 // we only look at the others.
                 let satisfied = group_positions.iter().all(|position| {
-                    self.members.contains(position)
-                        || memberships.storages[*position].sparse.contains(entity)
+                    self.members.contains(position) || {
+                        let present = match self.known.iter().find(|&(known, _)| known == position)
+                        {
+                            Some(&(_, present)) => present,
+                            None => {
+                                #[cfg(test)]
+                                {
+                                    self.checks += 1;
+                                }
+                                memberships.storages[*position].sparse.contains(entity)
+                            }
+                        };
+                        self.probes.push((*position, present));
+
+                        present
+                    }
                 });
                 if !satisfied {
                     continue;
@@ -385,11 +580,12 @@ impl Plan {
         entity: EntityId,
     ) -> Option<usize> {
         let storage_id = memberships.storages[index].storage_id;
-        let members = discovery.discover(memberships, index, entity)?;
-        let group_index = self.find_or_add(members);
+        let group_index = discovery.classify(memberships, index, entity, |members| {
+            self.find_or_add(members)
+        })?;
 
         // Every member holds a component of the entity, we count it from the first one only.
-        if members[0] == storage_id {
+        if self.groups[group_index].group[0] == storage_id {
             self.groups[group_index].incoming += 1;
         }
 
@@ -549,7 +745,9 @@ pub(super) fn analyze(selected: &mut Selected<'_>) -> Option<Plan> {
 
     // Suffixes don't overlap the unevaluated regions, kept prefixes or ungrouped regions,
     // nothing is counted twice.
+    // New unions change memberships, so we forget classifications from the first scan.
     let frozen = Frozen::new(selected);
+    discovery.forget();
     plan.scan_evaluated(&frozen, &mut discovery);
     drop(frozen);
     plan.attach_new(selected);

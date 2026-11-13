@@ -1,18 +1,25 @@
 use super::*;
 
 /// Returns the storages `entity` has to be grouped in, starting from its component in `storage_id`.
-fn discover(world: &World, storage_id: StorageId, entity: EntityId) -> Option<Vec<StorageId>> {
+fn classify(world: &World, storage_id: StorageId, entity: EntityId) -> Option<Vec<StorageId>> {
+    assert_classified(world);
+
     let mut all_storages = world.all_storages_mut().unwrap();
     let selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
     let frozen = Frozen::new(&selected);
 
-    Discovery::default()
-        .discover(
-            &frozen.memberships,
-            frozen.memberships.position(&storage_id),
-            entity,
-        )
-        .map(<[StorageId]>::to_vec)
+    let mut members = None;
+    Discovery::default().classify(
+        &frozen.memberships,
+        frozen.memberships.position(&storage_id),
+        entity,
+        |ids| {
+            members = Some(ids.to_vec());
+            0
+        },
+    );
+
+    members
 }
 
 /// Asserts that with AB and AC, an entity holding A, B and C has to be grouped in all three,
@@ -25,8 +32,8 @@ fn discover_overlapping() {
     attach_ids(&world, &[id::<A>(), id::<C>()]);
     let abc = sorted_ids(vec![id::<A>(), id::<B>(), id::<C>()]);
 
-    assert_eq!(discover(&world, id::<A>(), entity), Some(abc.clone()));
-    assert_eq!(discover(&world, id::<C>(), entity), Some(abc));
+    assert_eq!(classify(&world, id::<A>(), entity), Some(abc.clone()));
+    assert_eq!(classify(&world, id::<C>(), entity), Some(abc));
 }
 
 /// Asserts that with AB and AC, an entity holding A, B and C has to be grouped in all three
@@ -39,7 +46,7 @@ fn discover_shared_member() {
     attach_ids(&world, &[id::<A>(), id::<C>()]);
 
     assert_eq!(
-        discover(&world, id::<B>(), entity),
+        classify(&world, id::<B>(), entity),
         Some(sorted_ids(vec![id::<A>(), id::<B>(), id::<C>()]))
     );
 }
@@ -54,7 +61,7 @@ fn discover_one_satisfied() {
     attach_ids(&world, &[id::<A>(), id::<C>()]);
 
     assert_eq!(
-        discover(&world, id::<A>(), entity),
+        classify(&world, id::<A>(), entity),
         Some(sorted_ids(vec![id::<A>(), id::<B>()]))
     );
 }
@@ -68,7 +75,7 @@ fn discover_none() {
     attach_ids(&world, &[id::<A>(), id::<B>()]);
     attach_ids(&world, &[id::<A>(), id::<C>()]);
 
-    assert_eq!(discover(&world, id::<A>(), entity), None);
+    assert_eq!(classify(&world, id::<A>(), entity), None);
 }
 
 /// Asserts that with AB, BC and CD, an entity holding all four is grouped in all of them,
@@ -82,8 +89,8 @@ fn discover_chain() {
     attach_ids(&world, &[id::<C>(), id::<D>()]);
     let abcd = sorted_ids(vec![id::<A>(), id::<B>(), id::<C>(), id::<D>()]);
 
-    assert_eq!(discover(&world, id::<A>(), entity), Some(abcd.clone()));
-    assert_eq!(discover(&world, id::<D>(), entity), Some(abcd));
+    assert_eq!(classify(&world, id::<A>(), entity), Some(abcd.clone()));
+    assert_eq!(classify(&world, id::<D>(), entity), Some(abcd));
 }
 
 /// Asserts that groups an entity doesn't satisfy don't connect anything:
@@ -99,11 +106,11 @@ fn discover_unsatisfied_link() {
     attach_ids(&world, &[id::<C>(), id::<D>()]);
 
     assert_eq!(
-        discover(&world, id::<A>(), entity),
+        classify(&world, id::<A>(), entity),
         Some(sorted_ids(vec![id::<A>(), id::<B>()]))
     );
     assert_eq!(
-        discover(&world, id::<D>(), entity),
+        classify(&world, id::<D>(), entity),
         Some(sorted_ids(vec![id::<C>(), id::<D>()]))
     );
 }
@@ -117,11 +124,11 @@ fn discover_disjoint() {
     attach_ids(&world, &[id::<C>(), id::<D>()]);
 
     assert_eq!(
-        discover(&world, id::<A>(), entity),
+        classify(&world, id::<A>(), entity),
         Some(sorted_ids(vec![id::<A>(), id::<B>()]))
     );
     assert_eq!(
-        discover(&world, id::<C>(), entity),
+        classify(&world, id::<C>(), entity),
         Some(sorted_ids(vec![id::<C>(), id::<D>()]))
     );
 }
@@ -136,11 +143,11 @@ fn discover_subset() {
     attach_ids(&world, &[id::<A>(), id::<B>(), id::<C>()]);
 
     assert_eq!(
-        discover(&world, id::<A>(), abc_entity),
+        classify(&world, id::<A>(), abc_entity),
         Some(sorted_ids(vec![id::<A>(), id::<B>(), id::<C>()]))
     );
     assert_eq!(
-        discover(&world, id::<A>(), ab_entity),
+        classify(&world, id::<A>(), ab_entity),
         Some(sorted_ids(vec![id::<A>(), id::<B>()]))
     );
 }
@@ -162,5 +169,5 @@ fn discover_stale_generation() {
         .add_component_unchecked(deleted, B(0));
     attach_ids(&world, &[id::<A>(), id::<B>()]);
 
-    assert_eq!(discover(&world, id::<A>(), entity), None);
+    assert_eq!(classify(&world, id::<A>(), entity), None);
 }

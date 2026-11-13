@@ -1,6 +1,7 @@
 mod analysis;
 mod churn;
 mod clone;
+mod compiled;
 mod declaration;
 mod discovery;
 mod guarded;
@@ -452,6 +453,54 @@ fn snapshot<T: Component + Send + Sync>(world: &World) -> Snapshot {
         .collect();
 
     (view.dense.to_vec(), ranges, view.groups.unevaluated_start)
+}
+
+/// Checks each component's classification against its ownership, then repeats with learned trees.
+///
+/// Expected unions come from group declarations and sparse presence, without discovery's traversal.
+fn assert_classified(world: &World) {
+    let mut all_storages = world.all_storages_mut().unwrap();
+    let selected = Selected::all(&mut all_storages.storages.get_mut().components_and_custom);
+    let frozen = Frozen::new(&selected);
+    let memberships = &frozen.memberships;
+    let declared: Vec<&[StorageId]> = memberships
+        .storages
+        .iter()
+        .flat_map(|membership| {
+            membership
+                .groups
+                .ranges
+                .iter()
+                .map(|range| &range.group[..])
+        })
+        .collect();
+
+    let mut groups: Vec<Vec<StorageId>> = Vec::new();
+    let mut compiled = Discovery::default();
+    for _ in 0..2 {
+        for (index, dense) in frozen.dense.iter().enumerate() {
+            for &entity in dense.iter() {
+                let found = compiled.classify(memberships, index, entity, |members| {
+                    if let Some(index) = groups.iter().position(|group| group == members) {
+                        return index;
+                    }
+
+                    groups.push(members.to_vec());
+                    groups.len() - 1
+                });
+                let expected =
+                    expected_union(&declared, memberships.storages[index].storage_id, |id| {
+                        memberships.get(id).sparse.contains(entity)
+                    });
+
+                assert_eq!(
+                    found.map(|index| &groups[index]),
+                    expected.as_ref(),
+                    "{entity:?} from {index}"
+                );
+            }
+        }
+    }
 }
 
 /// Returns a world with the disjoint AB and CD, three unevaluated entities in each.
