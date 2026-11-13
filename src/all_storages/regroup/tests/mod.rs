@@ -185,9 +185,12 @@ fn pairs_in(
     (world, entities)
 }
 
-/// The `(A, B)` group, for [`assert_memberships`] and [`assert_plan`].
+/// The `(A, B)` group in storage id order, as stored in group ranges.
 fn ab() -> [StorageId; 2] {
-    [id::<A>(), id::<B>()]
+    let mut ids = [id::<A>(), id::<B>()];
+    // TypeId order can change between builds; A doesn't necessarily sort before B.
+    ids.sort_unstable();
+    ids
 }
 
 /// Returns the sorted members of the union an entity has to be grouped in from `storage_id`,
