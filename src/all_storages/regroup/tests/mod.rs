@@ -6,6 +6,7 @@ mod declaration;
 mod discovery;
 mod guarded;
 mod layout;
+mod matched;
 mod original_row;
 mod promotion;
 mod regroup_set;

@@ -14,7 +14,7 @@
 
 use super::{Selected, original_row};
 use crate::entity_id::EntityId;
-use crate::sparse_set::{Groups, SparseArray};
+use crate::sparse_set::{Groups, Ring, SparseArray};
 use crate::storage::StorageId;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -433,6 +433,43 @@ impl Discovery {
     }
 }
 
+/// A range's ids in logical order, as the two pieces its wrap point splits them in.
+///
+/// Finding a logical position in a ring divides, this does it once per range instead of per row.
+#[derive(Clone, Copy)]
+struct Logical<'a> {
+    /// Logical positions `0..head.len()`, from the wrap point to the end of the range.
+    head: &'a [EntityId],
+    /// The logical positions after them, from the start of the range to the wrap point.
+    tail: &'a [EntityId],
+}
+
+impl<'a> Logical<'a> {
+    fn new(dense: &'a [EntityId], ring: Ring) -> Logical<'a> {
+        if ring.len == 0 {
+            return Logical {
+                head: &[],
+                tail: &[],
+            };
+        }
+
+        let wrap_point = ring.start + ring.wrap_offset();
+
+        Logical {
+            head: &dense[wrap_point..ring.end()],
+            tail: &dense[ring.start..wrap_point],
+        }
+    }
+
+    /// Returns the id at `logical`, `None` past the range's end.
+    fn get(&self, logical: usize) -> Option<EntityId> {
+        match self.head.get(logical) {
+            Some(&entity) => Some(entity),
+            None => self.tail.get(logical - self.head.len()).copied(),
+        }
+    }
+}
+
 /// What regroup decided for a group, the same in each of its members.
 ///
 /// The range ends up holding `kept - leaving + incoming` entities.
@@ -691,15 +728,74 @@ impl Plan {
     }
 
     /// Counts where every component past its range's kept prefix goes.
+    ///
+    /// A row whose entity sits in the range of the same group in every other member doesn't
+    /// need a classification when we know that group is still its destination, see below.
     fn scan_evaluated(&mut self, frozen: &Frozen<'_>, discovery: &mut Discovery) {
+        // Every component added since the last regroup is unevaluated. With none, no entity
+        // gained a component since, and the ones in a range had that range's group as their
+        // destination. Owning fewer components can't make a group they still own all the
+        // members of anything but their destination: what they satisfy only shrinks.
+        // Rows in a range only move within it or leave it, so a row found in a range was there.
+        let all_evaluated = frozen
+            .memberships
+            .storages
+            .iter()
+            .zip(&frozen.dense)
+            .all(|(membership, dense)| membership.groups.unevaluated_start == dense.len());
+
+        // The other members' ranges, in logical order, reused across ranges.
+        let mut others: Vec<Logical<'_>> = Vec::new();
+
         let storages = frozen.memberships.storages.iter().zip(&frozen.dense);
         for (index, (membership, dense)) in storages.enumerate() {
+            // The positions of each range's members follow each other.
+            let mut positions = frozen.memberships.members[index].as_slice();
             for range in &membership.groups.ranges {
-                let kept = self.groups[self.group_index(&range.group)].kept;
+                let (group_positions, rest) = positions.split_at(range.group.len());
+                positions = rest;
+
+                let group_index = self.group_index(&range.group);
+                let kept = self.groups[group_index].kept;
                 let ring = range.ring();
 
+                // For a storage whose only group connects to nothing, owning every member
+                // is the whole answer, unevaluated rows or not.
+                let can_match = all_evaluated || frozen.memberships.alone[index];
+
+                others.clear();
+                if can_match {
+                    for &position in group_positions {
+                        if position == index {
+                            continue;
+                        }
+
+                        let other = frozen.memberships.storages[position]
+                            .groups
+                            .range(&range.group)
+                            .expect("every member holds a range for its group");
+                        others.push(Logical::new(frozen.dense[position], other.ring()));
+                    }
+                }
+
+                let is_first = range.group[0] == membership.storage_id;
                 for logical in kept..range.len {
                     let entity = dense[ring.physical_of(logical)];
+
+                    // Equal ids prove the entity owns every member, whatever their positions.
+                    // Pairing by logical position only decides how often we find them.
+                    if can_match
+                        && others
+                            .iter()
+                            .all(|other| other.get(logical) == Some(entity))
+                    {
+                        if is_first {
+                            self.groups[group_index].incoming += 1;
+                        }
+
+                        continue;
+                    }
+
                     self.count(&frozen.memberships, discovery, index, entity);
                 }
             }
