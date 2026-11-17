@@ -32,8 +32,8 @@ impl<T: ?Sized> core::ops::Deref for Mut<'_, T> {
 impl<T: ?Sized> core::ops::DerefMut for Mut<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        if let Some(flag) = &mut self.flag {
-            **flag = self.current;
+        if let Some(flag) = self.flag.take() {
+            *flag = self.current;
         }
 
         self.data
@@ -50,8 +50,8 @@ impl<T: ?Sized> AsRef<T> for Mut<'_, T> {
 impl<T: ?Sized> AsMut<T> for Mut<'_, T> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
-        if let Some(flag) = &mut self.flag {
-            **flag = self.current;
+        if let Some(flag) = self.flag.take() {
+            *flag = self.current;
         }
 
         self.data
