@@ -219,3 +219,24 @@ fn delete_multiple() {
         assert_eq!(u32s.len(), 0, "Second component was not deleted.");
     });
 }
+
+/// Asserts that deleting a tuple through the world removes both components and keeps the entity alive.
+#[test]
+fn delete_tuple() {
+    struct Marker;
+    impl Component for Marker {
+        type Tracking = track::Untracked;
+    }
+
+    let mut world = World::new();
+    let entity = world.add_entity((U32(0), Marker));
+
+    world.delete_component::<(U32, Marker)>(entity);
+
+    let (entities, u32s, markers) = world
+        .borrow::<(EntitiesView, View<U32>, View<Marker>)>()
+        .unwrap();
+    assert!(entities.is_alive(entity));
+    assert!(u32s.get(entity).is_err());
+    assert!(markers.get(entity).is_err());
+}

@@ -33,7 +33,7 @@ macro_rules! impl_delete_component {
                     all_storages
                         .exclusive_component_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::<$type>::new)
                         .dyn_delete(entity, current)
-                )||+
+                )|+
             }
         }
     };
