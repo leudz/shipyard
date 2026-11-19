@@ -20,7 +20,7 @@ fn no_pack() {
     });
 
     assert!(world.get::<&U32>(eid0).is_err());
-    assert_eq!(*world.get::<&U32>(eid1).unwrap(), &U32(2));
+    assert_eq!(*world.get::<&U32>(eid1).unwrap(), U32(2));
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn track() {
     });
 
     assert!(world.get::<&U32>(eid0).is_err());
-    assert_eq!(*world.get::<&U32>(eid1).unwrap(), &U32(2));
+    assert_eq!(*world.get::<&U32>(eid1).unwrap(), U32(2));
     world.run(|v_u32: View<U32, track::All>| {
         let mut deleted = v_u32.deleted();
         assert_eq!(deleted.next(), Some((eid0, &U32(0))));

@@ -159,6 +159,6 @@ fn move_between_worlds() {
     world2.spawn(entity1);
     world2.add_component(entity1, world1.remove::<(USIZE, U32)>(entity1));
 
-    assert_eq!(*world2.get::<&USIZE>(entity1).unwrap(), &USIZE(1));
-    assert_eq!(*world2.get::<&U32>(entity1).unwrap(), &U32(2));
+    assert_eq!(*world2.get::<&USIZE>(entity1).unwrap(), USIZE(1));
+    assert_eq!(*world2.get::<&U32>(entity1).unwrap(), U32(2));
 }

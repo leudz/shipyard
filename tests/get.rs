@@ -140,3 +140,59 @@ fn old_id() {
         assert!(u32s.get(entity1).is_err());
     });
 }
+
+/// Asserts that tuple lookups expose components through all three thread-local wrappers.
+#[cfg(feature = "thread_local")]
+#[test]
+fn thread_local_tuple() {
+    use core::cell::Cell;
+    use core::marker::PhantomData;
+    use shipyard::advanced::get_component::RefMut;
+    use shipyard::borrow::{NonSend, NonSendSync, NonSync};
+    use std::rc::Rc;
+    use std::sync::MutexGuard;
+
+    struct Value<M>(u32, PhantomData<M>);
+    impl<M: 'static> Component for Value<M> {
+        type Tracking = track::Untracked;
+    }
+
+    type SyncOnly = Value<MutexGuard<'static, ()>>;
+    type SendOnly = Value<Cell<()>>;
+    type Local = Value<Rc<()>>;
+
+    let world = World::new();
+    let entity = world.run(
+        |mut entities: EntitiesViewMut,
+         mut sync_only: NonSend<ViewMut<SyncOnly>>,
+         mut send_only: NonSync<ViewMut<SendOnly>>,
+         mut local: NonSendSync<ViewMut<Local>>| {
+            entities.add_entity(
+                (&mut *sync_only, &mut *send_only, &mut *local),
+                (
+                    Value(1, PhantomData),
+                    Value(2, PhantomData),
+                    Value(3, PhantomData),
+                ),
+            )
+        },
+    );
+
+    {
+        let (sync_only, mut send_only, mut local) = world
+            .get::<(
+                NonSend<&mut SyncOnly>,
+                NonSync<&mut SendOnly>,
+                NonSendSync<&mut Local>,
+            )>(entity)
+            .unwrap();
+        *RefMut::map(sync_only, |value| &mut value.0) += 3;
+        send_only.as_mut().0 += 3;
+        local.0 += 3;
+    }
+
+    let (sync_only, send_only, local) = world
+        .get::<(NonSend<&SyncOnly>, NonSync<&SendOnly>, NonSendSync<&Local>)>(entity)
+        .unwrap();
+    assert_eq!((sync_only.0, send_only.0, local.0), (4, 5, 6));
+}

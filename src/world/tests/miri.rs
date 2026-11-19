@@ -81,9 +81,95 @@ fn get_refs() {
     let values = Ref::map(world.get::<&Heap>(entity).unwrap(), |heap| &heap.0);
     assert!(world.borrow::<ViewMut<'_, Heap>>().is_err());
     assert!(world.borrow::<AllStoragesViewMut<'_>>().is_err());
-    assert_eq!(**values, [1, 2]);
+    assert_eq!(*values, [1, 2]);
     drop(values);
 
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
+}
+
+/// Asserts that shared and mutable projections can borrow a slice of a component field.
+#[test]
+fn get_refs_slice() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity(Heap(vec![1, 2, 3]));
+
+    let heap = world.get::<&mut Heap>(entity).unwrap();
+    let mut values = RefMut::map(heap, |heap| &mut heap.0[1..]);
+    assert_eq!(values.as_ref(), &[2, 3]);
+    values.as_mut()[0] = 4;
+    drop(values);
+
+    let values = Ref::map(world.get::<&Heap>(entity).unwrap(), |heap| &heap.0[..2]);
+    assert_eq!(values.as_ref(), &[1, 4]);
+}
+
+/// Asserts that a write inside a projection is untracked, while mutable access through the
+/// projected guard marks the original component as modified.
+#[test]
+fn get_refs_tracking() {
+    let mut world = World::new_for_test();
+    world.track_modification::<Heap>();
+    let in_projection = world.add_entity(Heap(vec![1]));
+    let via_deref = world.add_entity(Heap(vec![1]));
+    let via_as_mut = world.add_entity(Heap(vec![1]));
+
+    let heap = world.get::<&mut Heap>(in_projection).unwrap();
+    let value = RefMut::map(heap, |heap| {
+        heap.0[0] = 2;
+        &mut heap.0[0]
+    });
+    assert_eq!(*value, 2);
+    drop(value);
+
+    let heap = world.get::<&mut Heap>(via_deref).unwrap();
+    let mut value = RefMut::map(heap, |heap| &mut heap.0[0]);
+    *value = 3;
+    drop(value);
+
+    let heap = world.get::<&mut Heap>(via_as_mut).unwrap();
+    let mut value = RefMut::map(heap, |heap| &mut heap.0[0]);
+    *value.as_mut() = 4;
+    drop(value);
+
+    let heaps = world
+        .borrow::<View<'_, Heap, track::Modification>>()
+        .unwrap();
+    assert!(!heaps.is_modified(in_projection));
+    assert!(heaps.is_modified(via_deref));
+    assert!(heaps.is_modified(via_as_mut));
+}
+
+/// Asserts that an unwinding shared projection releases the storage and registry borrows.
+#[cfg(feature = "std")]
+#[test]
+fn get_refs_shared_unwind() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity(Heap(vec![1]));
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        let _ = Ref::map::<Heap, _>(world.get::<&Heap>(entity).unwrap(), |_| {
+            panic!("shared projection panicked");
+        });
+    }));
+    assert!(result.is_err());
+    assert!(world.get::<&mut Heap>(entity).is_ok());
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
+}
+
+/// Asserts that an unwinding mutable projection releases the storage and registry borrows.
+#[cfg(feature = "std")]
+#[test]
+fn get_refs_mut_unwind() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity(Heap(vec![1]));
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        let _ = RefMut::map::<Heap, _>(world.get::<&mut Heap>(entity).unwrap(), |_| {
+            panic!("mutable projection panicked");
+        });
+    }));
+    assert!(result.is_err());
+    assert!(world.get::<&mut Heap>(entity).is_ok());
     assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
 }
 

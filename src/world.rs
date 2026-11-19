@@ -1483,8 +1483,8 @@ let entity = world.add_entity((USIZE(0), U32(1)));
 
 let (i, j) = world.get::<(&USIZE, &mut U32)>(entity).unwrap();
 
-assert!(*i == &USIZE(0));
-assert!(*j == &U32(1));
+assert_eq!(*i, USIZE(0));
+assert_eq!(*j, U32(1));
 ```"]
     #[cfg_attr(
         feature = "thread_local",
@@ -1711,7 +1711,7 @@ for (i, j) in &mut iter {
     /// world1.move_entity(&mut world2, entity);
     ///
     /// assert!(!world1.is_entity_alive(entity));
-    /// assert_eq!(world2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(world2.get::<&USIZE>(entity).as_deref(), Ok(&USIZE(1)));
     /// ```
     #[inline]
     #[track_caller]
@@ -1747,7 +1747,7 @@ for (i, j) in &mut iter {
     /// world1.move_components(&mut world2, from, to);
     ///
     /// assert!(world1.get::<&USIZE>(from).is_err());
-    /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&USIZE(1)));
     /// ```
     #[inline]
     #[track_caller]
@@ -1815,8 +1815,8 @@ for (i, j) in &mut iter {
     ///
     /// world1.clone_entity_to(&mut world2, entity);
     ///
-    /// assert_eq!(world1.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
-    /// assert_eq!(world2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(world1.get::<&USIZE>(entity).as_deref(), Ok(&USIZE(1)));
+    /// assert_eq!(world2.get::<&USIZE>(entity).as_deref(), Ok(&USIZE(1)));
     #[inline]
     #[track_caller]
     pub fn clone_entity_to(&self, other: &mut World, entity: EntityId) {
@@ -1859,8 +1859,8 @@ for (i, j) in &mut iter {
     ///
     /// world1.clone_components_to(&mut world2, from, to);
     ///
-    /// assert_eq!(world1.get::<&USIZE>(from).as_deref(), Ok(&&USIZE(1)));
-    /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(world1.get::<&USIZE>(from).as_deref(), Ok(&USIZE(1)));
+    /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&USIZE(1)));
     /// ```
     #[inline]
     #[track_caller]

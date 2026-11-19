@@ -1,3 +1,7 @@
+#[cfg(doctest)]
+#[path = "get_component/tests/compile_fail.rs"]
+mod compile_fail_tests;
+
 use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, ARefMut};
 use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
@@ -18,12 +22,12 @@ pub struct Ref<'a, T> {
     borrow: SharedBorrow<'a>,
 }
 
-impl<'a, T> Ref<'a, T> {
-    /// Makes a new [`Ref`].
+impl<'a, T: ?Sized> Ref<'a, &'a T> {
+    /// Projects this guard onto a reference into the component.
     ///
-    /// This is an associated function that needs to be used as `Ref::map(...)`. A method would interfere with methods of the same name used through Deref.
+    /// Call this as `Ref::map(guard, projection)` to avoid collisions with methods on the component.
     #[inline]
-    pub fn map<U, F: FnOnce(T) -> U>(orig: Self, f: F) -> Ref<'a, U> {
+    pub fn map<U: ?Sized, F: for<'b> FnOnce(&'b T) -> &'b U>(orig: Self, f: F) -> Ref<'a, &'a U> {
         Ref {
             inner: f(orig.inner),
             all_borrow: orig.all_borrow,
@@ -32,19 +36,19 @@ impl<'a, T> Ref<'a, T> {
     }
 }
 
-impl<'a, T> Deref for Ref<'a, T> {
+impl<T: ?Sized> Deref for Ref<'_, &T> {
     type Target = T;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        self.inner
     }
 }
 
-impl<'a, T> AsRef<T> for Ref<'a, T> {
+impl<T: ?Sized> AsRef<T> for Ref<'_, &T> {
     #[inline]
     fn as_ref(&self) -> &T {
-        &self.inner
+        self
     }
 }
 
@@ -57,12 +61,18 @@ pub struct RefMut<'a, T> {
     borrow: ExclusiveBorrow<'a>,
 }
 
-impl<'a, T> RefMut<'a, T> {
-    /// Makes a new [`RefMut`], the component will not be flagged if its modified inside `f`.
+impl<'a, T: ?Sized> RefMut<'a, &'a mut T> {
+    /// Projects this guard onto a mutable reference into the component.
     ///
-    /// This is an associated function that needs to be used as `RefMut::map(...)`. A method would interfere with methods of the same name used through Deref.
+    /// Modification tracking begins with mutable access through the returned guard.
+    /// Writes inside the projection itself are untracked.
+    ///
+    /// Call this as `RefMut::map(guard, projection)` to avoid collisions with methods on the component.
     #[inline]
-    pub fn map<U, F: FnOnce(T) -> U>(orig: Self, f: F) -> RefMut<'a, U> {
+    pub fn map<U: ?Sized, F: for<'b> FnOnce(&'b mut T) -> &'b mut U>(
+        orig: Self,
+        f: F,
+    ) -> RefMut<'a, &'a mut U> {
         RefMut {
             inner: f(orig.inner),
             flag: orig.flag,
@@ -73,41 +83,37 @@ impl<'a, T> RefMut<'a, T> {
     }
 }
 
-impl<'a, T> Deref for RefMut<'a, T> {
+impl<T: ?Sized> Deref for RefMut<'_, &mut T> {
     type Target = T;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        self.inner
     }
 }
 
-impl<'a, T> AsRef<T> for RefMut<'a, T> {
+impl<T: ?Sized> AsRef<T> for RefMut<'_, &mut T> {
     #[inline]
     fn as_ref(&self) -> &T {
-        &self.inner
+        self
     }
 }
 
-impl<'a, T> DerefMut for RefMut<'a, T> {
+impl<T: ?Sized> DerefMut for RefMut<'_, &mut T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let Some(flag) = &mut self.flag {
             **flag = self.current;
         }
 
-        &mut self.inner
+        self.inner
     }
 }
 
-impl<'a, T> AsMut<T> for RefMut<'a, T> {
+impl<T: ?Sized> AsMut<T> for RefMut<'_, &mut T> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
-        if let Some(flag) = &mut self.flag {
-            **flag = self.current;
-        }
-
-        &mut self.inner
+        self
     }
 }
 

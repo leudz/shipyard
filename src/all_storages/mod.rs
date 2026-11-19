@@ -1543,8 +1543,8 @@ let entity = all_storages.add_entity((USIZE(0), U32(1)));
 
 let (i, j) = all_storages.get::<(&USIZE, &mut U32)>(entity).unwrap();
 
-assert!(*i == &USIZE(0));
-assert!(*j == &U32(1));
+assert_eq!(*i, USIZE(0));
+assert_eq!(*j, U32(1));
 ```"]
     #[cfg_attr(
         feature = "thread_local",
@@ -1741,7 +1741,7 @@ for (i, j) in &mut iter {
     /// all_storages1.move_entity(&mut all_storages2, entity);
     ///
     /// assert!(!all_storages1.is_entity_alive(entity));
-    /// assert_eq!(all_storages2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(all_storages2.get::<&USIZE>(entity).as_deref(), Ok(&USIZE(1)));
     /// ```
     #[track_caller]
     pub fn move_entity(&mut self, other: &mut AllStorages, entity: EntityId) {
@@ -1799,7 +1799,7 @@ for (i, j) in &mut iter {
     /// all_storages1.move_components(&mut all_storages2, from, to);
     ///
     /// assert!(all_storages1.get::<&USIZE>(from).is_err());
-    /// assert_eq!(all_storages2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(all_storages2.get::<&USIZE>(to).as_deref(), Ok(&USIZE(1)));
     /// ```
     #[track_caller]
     pub fn move_components(&mut self, other: &mut AllStorages, from: EntityId, to: EntityId) {

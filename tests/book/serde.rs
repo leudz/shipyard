@@ -109,7 +109,7 @@ world
 assert_eq!(world.get::<&Name>(eid1).unwrap().0, "Alice");
 assert_eq!(
     *world.get::<&FavoriteLanguage>(eid1).unwrap(),
-    &FavoriteLanguage::Rust
+    FavoriteLanguage::Rust
 );
 assert_eq!(world.get::<&Name>(eid2).unwrap().0, "Bob");
 assert!(matches!(
