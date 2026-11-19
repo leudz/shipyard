@@ -1,6 +1,6 @@
 use shipyard::{
-    AllStoragesView, AllStoragesViewMut, Component, EntityId, IntoIter, Unique, UniqueStorage,
-    UniqueViewMut, View, World, sparse_set::SparseSet, track,
+    AllStoragesView, AllStoragesViewMut, Component, Delete, EntityId, IntoIter, Remove, Unique,
+    UniqueStorage, UniqueViewMut, View, ViewMut, World, sparse_set::SparseSet, track,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -65,6 +65,57 @@ fn clone_world() {
 
         assert_eq!(usizes[eid], USIZE(1));
     });
+}
+
+/// Asserts that a clone keeps runtime tracking, treats copied components as newly inserted,
+/// and starts its modification, removal, and deletion history fresh.
+#[test]
+fn clone_tracking() {
+    let mut source = World::new();
+    source.track_all::<USIZE>();
+    source.register_clone::<SparseSet<USIZE>>();
+
+    let removed_in_source = source.add_entity(USIZE(1));
+    let deleted_in_source = source.add_entity(USIZE(2));
+    let removed_in_clone = source.add_entity(USIZE(3));
+    let deleted_in_clone = source.add_entity(USIZE(4));
+
+    {
+        let mut values = source.borrow::<ViewMut<'_, USIZE, track::All>>().unwrap();
+        values[removed_in_clone] = USIZE(30);
+        assert!(values.is_modified(removed_in_clone));
+        assert_eq!(values.remove(removed_in_source), Some(USIZE(1)));
+        assert!(values.delete(deleted_in_source));
+    }
+
+    let clone = source.clone();
+    {
+        let values = clone.borrow::<View<'_, USIZE, track::All>>().unwrap();
+        assert!(values.is_inserted(removed_in_clone));
+        assert!(values.is_inserted(deleted_in_clone));
+        assert_eq!(values[removed_in_clone], USIZE(30));
+    }
+
+    // Copied source events could initially be beyond the clone's tracking window.
+    let source_time = source.get_tracking_timestamp();
+    while clone.get_tracking_timestamp().is_older_than(source_time) {
+        clone.borrow::<()>().unwrap();
+    }
+
+    let mut values = clone.borrow::<ViewMut<'_, USIZE, track::All>>().unwrap();
+    assert!(!values.is_modified(removed_in_clone));
+    assert_eq!(values.removed().next(), None);
+    assert_eq!(values.deleted().next(), None);
+
+    values[removed_in_clone] = USIZE(31);
+    assert!(values.is_modified(removed_in_clone));
+    assert_eq!(values.remove(removed_in_clone), Some(USIZE(31)));
+    assert!(values.delete(deleted_in_clone));
+    assert_eq!(values.removed().collect::<Vec<_>>(), [removed_in_clone]);
+    assert_eq!(
+        values.deleted().collect::<Vec<_>>(),
+        [(deleted_in_clone, &USIZE(4))]
+    );
 }
 
 #[test]

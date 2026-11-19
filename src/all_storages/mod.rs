@@ -1843,7 +1843,8 @@ for (i, j) in &mut iter {
 
     /// Clones all storages with a registered clone function from this `AllStorages` to `other`.
     ///
-    /// Tracking is not cloned. Components will count as inserted in `other`.\
+    /// Copied component storages keep their enabled tracking modes. Components count as
+    /// inserted in `other` and start with empty modification, removal, and deletion history.\
     /// `other` keeps its own groups, copied components only move to them at `other`'s next regroup.
     #[track_caller]
     pub fn clone_storages_to(&self, other: &mut AllStorages) {

@@ -1302,6 +1302,11 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
         self.clone.as_ref().map(|clone| {
             let mut sparse_set = SparseSet::<T>::new();
 
+            sparse_set.is_tracking_insertion = self.is_tracking_insertion;
+            sparse_set.is_tracking_modification = self.is_tracking_modification;
+            sparse_set.is_tracking_deletion = self.is_tracking_deletion;
+            sparse_set.is_tracking_removal = self.is_tracking_removal;
+
             sparse_set.sparse = self.sparse.clone();
             sparse_set.dense = self.dense.clone();
             sparse_set.data = (clone.clone_storage)(&self.data);
