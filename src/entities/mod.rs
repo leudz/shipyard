@@ -158,7 +158,7 @@ impl Entities {
         }
     }
 
-    fn generate_fresh(&mut self) -> EntityId {
+    pub(crate) fn generate_fresh(&mut self) -> EntityId {
         let entity_id = EntityId::new(self.data.len() as u64);
         self.data.push(entity_id);
         entity_id

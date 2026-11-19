@@ -124,6 +124,20 @@ impl<T: Send + Sync + Component> BulkInsert for T {
             component_storage_or_insert_mut_in(&all_storages.storages, SparseSet::<T>::new)
                 .unwrap();
 
+        if sparse_set.on_insertion.is_some() {
+            let start = entities.data.len();
+            for value in iter {
+                let entity = entities.generate_fresh();
+                let _ = sparse_set.insert(entity, value, current);
+            }
+
+            let new_entities = &entities.data[start..];
+            return BulkEntityIter {
+                iter: new_entities.iter().copied(),
+                slice: new_entities,
+            };
+        }
+
         let pending = PendingComponents::new(&mut sparse_set.data);
         pending.data.extend(iter);
         let new_entities_count = pending.added();
@@ -170,6 +184,21 @@ macro_rules! impl_bulk_insert {
                 $(
                     let mut $sparse_set = component_storage_or_insert_mut_in(&all_storages.storages, SparseSet::<$type>::new).unwrap();
                 )*
+
+                if $sparse_set1.on_insertion.is_some() $(|| $sparse_set.on_insertion.is_some())* {
+                    let start = entities.data.len();
+                    for ($type1, $($type,)*) in iter {
+                        let entity = entities.generate_fresh();
+                        let _ = $sparse_set1.insert(entity, $type1, current);
+                        $(let _ = $sparse_set.insert(entity, $type, current);)*
+                    }
+
+                    let new_entities = &entities.data[start..];
+                    return BulkEntityIter {
+                        iter: new_entities.iter().copied(),
+                        slice: new_entities,
+                    };
+                }
 
                 $sparse_set1.reserve(size_hint);
                 $(

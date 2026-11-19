@@ -933,7 +933,7 @@ impl World {
         self.all_storages.get_mut().add_entity(component)
     }
     /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.
-    /// `source` must always yield a tuple, even for a single component.
+    /// `source` can yield a component or a tuple of components.
     ///
     /// ### Example
     ///
