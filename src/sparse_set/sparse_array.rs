@@ -119,13 +119,18 @@ impl SparseArray {
             }
         }
     }
+
+    /// Returns whether this array has a live entry for `entity`.
     #[inline]
-    #[allow(missing_docs)]
     pub fn contains(&self, entity: EntityId) -> bool {
-        if let Some(sparse_entity) = self.get(entity) {
-            sparse_entity.generation() == entity.generation()
-        } else {
-            false
+        if entity.is_dead() {
+            return false;
         }
+
+        let Some(sparse_entity) = self.get(entity) else {
+            return false;
+        };
+
+        sparse_entity.generation() == entity.generation()
     }
 }

@@ -278,13 +278,14 @@ fn generation_matching() {
     assert_eq!(calls.load(AtomicOrdering::Relaxed), 1);
 }
 
-/// Asserts that removing with a newer generation removes the stale component from its range
-/// but doesn't hand it back nor call the removal callback.
+/// Asserts that removing with the newest valid generation removes the stale component from its
+/// range but doesn't hand it back or call the removal callback.
 #[test]
 fn generation_newer() {
     let (mut sparse_set, calls) = generations();
 
-    let removed = assert_removal(&mut sparse_set, EntityId::new_from_parts(1, 3), int_value);
+    let newer = EntityId::new_from_parts(1, EntityId::max_gen());
+    let removed = assert_removal(&mut sparse_set, newer, int_value);
 
     assert_eq!(removed, None);
     assert_eq!(sparse_set.index_of(EntityId::new_from_parts(1, 2)), None);
@@ -306,6 +307,57 @@ fn generation_older() {
         Some(&I32(1))
     );
     assert_eq!(calls.load(AtomicOrdering::Relaxed), 0);
+}
+
+/// Asserts that removals and deletions for missing or reserved-generation handles leave
+/// neighboring components and their tracking records intact.
+#[test]
+fn missing_remove() {
+    let mut sparse_set = SparseSet::new();
+    let live = EntityId::new(0);
+    let distant = EntityId::new(2 * PAGE_LEN as u64);
+    let inserted = TrackingTimestamp::new(1);
+    let modified = TrackingTimestamp::new(2);
+    let current = TrackingTimestamp::new(3);
+
+    sparse_set
+        .insert(live, TrackedI32(10), inserted)
+        .assert_inserted();
+    sparse_set
+        .insert(distant, TrackedI32(20), inserted)
+        .assert_inserted();
+    sparse_set.modification_data[0] = modified;
+
+    for entity in [
+        EntityId::new(PAGE_LEN as u64),
+        EntityId::new(1),
+        EntityId::new_from_parts(0, u16::MAX),
+        EntityId::new_from_parts(1, u16::MAX),
+    ] {
+        assert_eq!(sparse_set.dyn_remove(entity, current), None);
+        assert!(!sparse_set.dyn_delete(entity, current));
+        sparse_set.strip_delete(entity, current);
+    }
+
+    assert_eq!(sparse_set.dense, [live, distant]);
+    assert_eq!(sparse_set.as_slice(), &[TrackedI32(10), TrackedI32(20)]);
+    let insertion_times: Vec<_> = sparse_set
+        .insertion_data
+        .iter()
+        .map(|time| time.get())
+        .collect();
+    let modification_times: Vec<_> = sparse_set
+        .modification_data
+        .iter()
+        .map(|time| time.get())
+        .collect();
+    assert_eq!(insertion_times, [inserted.get(), inserted.get()]);
+    assert_eq!(
+        modification_times,
+        [modified.get(), TrackingTimestamp::origin().get()]
+    );
+    assert!(sparse_set.removal_data.is_empty());
+    assert!(sparse_set.deletion_data.is_empty());
 }
 
 /// Asserts that `retain` on a grouped storage visits every component exactly once

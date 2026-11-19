@@ -148,15 +148,19 @@ impl<T: Component> SparseSet<T> {
     /// This index is only valid for this storage and until a modification happens.
     #[inline]
     pub fn index_of(&self, entity: EntityId) -> Option<usize> {
-        if let Some(sparse_entity) = self.sparse.get(entity) {
-            if entity.generation() == sparse_entity.generation() {
-                Some(sparse_entity.uindex())
-            } else {
-                None
-            }
-        } else {
-            None
+        if entity.is_dead() {
+            return None;
         }
+
+        let Some(sparse_entity) = self.sparse.get(entity) else {
+            return None;
+        };
+
+        if sparse_entity.generation() != entity.generation() {
+            return None;
+        }
+
+        Some(sparse_entity.uindex())
     }
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
     /// This index is only valid for this storage and until a modification happens.
@@ -425,12 +429,15 @@ impl<T: Component> SparseSet<T> {
     /// The entry is live: it points to a component of this storage.
     #[inline]
     fn removable_entry(&self, entity: EntityId) -> Option<EntityId> {
+        if entity.is_dead() {
+            return None;
+        }
+
         let Some(sparse_entity) = self.sparse.get(entity) else {
             return None;
         };
 
         // An older handle can't remove a newer entity's component.
-        // Dead slots hold `EntityId::dead()`, with the maximum generation, so they stop here too.
         if entity.generation() < sparse_entity.generation() {
             return None;
         }

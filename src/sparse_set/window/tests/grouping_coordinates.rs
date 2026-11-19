@@ -7,6 +7,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
 use crate::iter::Shiperator;
+use crate::sparse_set::PAGE_LEN;
 use crate::track;
 use crate::tracking::Modified;
 use crate::views::{View, ViewMut};
@@ -110,6 +111,47 @@ fn sailor_absolute() {
     assert_eq!(index, 1);
     // SAFE: `index` was returned by `sailor_indices_of`.
     assert_eq!(unsafe { a_window.get_data(index) }, &A(1));
+}
+
+/// Asserts that shared and mutable windows resolve a live neighbor and skip absent pages,
+/// vacant slots, and reserved generations without marking a component as modified.
+#[test]
+fn sailor_vacant() {
+    let mut world = World::new_for_test();
+    let live = world.add_entity(Tracked(10));
+    let vacant = world.add_entity(());
+    let distant = EntityId::new(2 * PAGE_LEN as u64);
+    assert!(world.spawn(distant));
+    world.add_component(distant, Tracked(20));
+
+    let missing = [
+        EntityId::new(PAGE_LEN as u64),
+        vacant,
+        EntityId::new_from_parts(vacant.index(), u16::MAX),
+        EntityId::new_from_parts(live.index(), u16::MAX),
+    ];
+    {
+        let view = world.borrow::<View<'_, Tracked>>().unwrap();
+        let window = FullRawWindow::from_view(&view);
+        for entity in missing {
+            assert_eq!(window.sailor_indices_of(entity), None);
+        }
+        assert_eq!(window.sailor_indices_of(live), Some(0));
+        assert_eq!(window.sailor_indices_of(distant), Some(1));
+    }
+    {
+        let mut view = world.borrow::<ViewMut<'_, Tracked>>().unwrap();
+        let window = FullRawWindowMut::new(&mut view);
+        for entity in missing {
+            assert_eq!(window.sailor_indices_of(entity), None);
+        }
+        assert_eq!(window.sailor_indices_of(live), Some(0));
+        assert_eq!(window.sailor_indices_of(distant), Some(1));
+        assert_eq!(view.get(live), Ok(&Tracked(10)));
+        assert_eq!(view.get(distant), Ok(&Tracked(20)));
+        assert!(!view.is_modified(live));
+        assert!(!view.is_modified(distant));
+    }
 }
 
 /// Asserts that resolving indices and creating `Mut`s without writing through them

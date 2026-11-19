@@ -341,6 +341,52 @@ fn insert() {
     assert_eq!(array.private_get(EntityId::new_from_parts(4, 0)), None);
 }
 
+/// Asserts that sparse and component lookups miss an absent page, a vacant slot, and
+/// reserved-generation handles while still finding the neighboring live component.
+#[test]
+fn vacant_lookup() {
+    use crate::{View, World};
+
+    let mut world = World::new_for_test();
+    let live = world.add_entity(TrackedI32(10));
+    let vacant = world.add_entity(());
+    let distant = EntityId::new(2 * PAGE_LEN as u64);
+    assert!(world.spawn(distant));
+    world.add_component(distant, TrackedI32(20));
+
+    let missing = [
+        EntityId::new(PAGE_LEN as u64),
+        vacant,
+        EntityId::new_from_parts(vacant.index(), u16::MAX),
+        EntityId::new_from_parts(live.index(), u16::MAX),
+    ];
+
+    {
+        let view = world.borrow::<View<'_, TrackedI32>>().unwrap();
+        for entity in missing {
+            assert_eq!(view.index_of(entity), None);
+            assert!(!view.contains(entity));
+            assert!(!view.sparse.contains(entity));
+        }
+        assert_eq!(view.index_of(live), Some(0));
+        assert!(view.contains(live));
+        assert!(view.sparse.contains(live));
+    }
+
+    for entity in missing {
+        assert!(world.get::<&TrackedI32>(entity).is_err());
+        assert!(world.get::<&mut TrackedI32>(entity).is_err());
+    }
+    assert_eq!(
+        world.get::<&TrackedI32>(live).as_deref(),
+        Ok(&TrackedI32(10))
+    );
+    assert_eq!(
+        world.get::<&mut TrackedI32>(live).as_deref(),
+        Ok(&TrackedI32(10))
+    );
+}
+
 #[test]
 fn remove() {
     let mut array = SparseSet::new();

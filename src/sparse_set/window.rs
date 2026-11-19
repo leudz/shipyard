@@ -156,15 +156,19 @@ impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
 
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
-        if let Some(sparse_entity) = self.sparse_index(entity) {
-            if entity.generation() == sparse_entity.generation() {
-                Some(sparse_entity.uindex())
-            } else {
-                None
-            }
-        } else {
-            None
+        if entity.is_dead() {
+            return None;
         }
+
+        let Some(sparse_entity) = self.sparse_index(entity) else {
+            return None;
+        };
+
+        if sparse_entity.generation() != entity.generation() {
+            return None;
+        }
+
+        Some(sparse_entity.uindex())
     }
 
     #[inline]
@@ -403,15 +407,19 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
 
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
-        if let Some(sparse_entity) = self.sparse_index(entity) {
-            if entity.generation() == sparse_entity.generation() {
-                Some(sparse_entity.uindex())
-            } else {
-                None
-            }
-        } else {
-            None
+        if entity.is_dead() {
+            return None;
         }
+
+        let Some(sparse_entity) = self.sparse_index(entity) else {
+            return None;
+        };
+
+        if sparse_entity.generation() != entity.generation() {
+            return None;
+        }
+
+        Some(sparse_entity.uindex())
     }
 
     #[inline]
