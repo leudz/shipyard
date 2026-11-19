@@ -133,6 +133,33 @@ fn bulk() {
     assert_eq!(usizes.len(), 4);
 }
 
+/// Asserts that bulk insertion consumes every component when the lower bound is zero.
+#[test]
+fn bulk_filtered() {
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+
+    let input = (0..3).map(U32).filter(|_| true);
+    let ids = entities.bulk_add_entity(&mut u32s, input);
+    let values = ids.map(|id| u32s.get(id).unwrap().0).collect::<Vec<_>>();
+
+    assert_eq!(values, [0, 1, 2]);
+}
+
+/// Asserts that bulk insertion keeps the first component after the reserved IDs run out.
+#[test]
+fn bulk_chained() {
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+
+    let tail = (1..3).map(U32).filter(|_| true);
+    let input = core::iter::once(U32(0)).chain(tail);
+    let ids = entities.bulk_add_entity(&mut u32s, input);
+    let values = ids.map(|id| u32s.get(id).unwrap().0).collect::<Vec<_>>();
+
+    assert_eq!(values, [0, 1, 2]);
+}
+
 #[test]
 fn bulk_unequal_length() {
     #[allow(unused)]

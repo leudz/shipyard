@@ -281,7 +281,7 @@ impl Entities {
         let new_entities = self.bulk_generate(len);
 
         storages.bulk_reserve(new_entities);
-        for (component, id) in (&mut iter).zip(new_entities.iter().copied()) {
+        for (id, component) in new_entities.iter().copied().zip(&mut iter) {
             AddEntity::add_entity(&mut storages, id, component);
         }
 
