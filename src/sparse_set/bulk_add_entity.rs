@@ -40,19 +40,13 @@ impl BulkInsert for () {
     where
         Self: Sized,
     {
-        let iter = iter.into_iter();
-        let len = iter.size_hint().0;
-
+        let count = iter.into_iter().count();
         let entities = all_storages.entities.get_mut();
-        let entities_len = entities.data.len();
+        let new_entities = entities.bulk_generate(count);
 
-        entities.bulk_generate(len);
-        for _ in iter.skip(len) {
-            entities.generate();
-        }
         BulkEntityIter {
-            iter: entities.data[entities_len..].iter().copied(),
-            slice: &entities.data[entities_len..],
+            iter: new_entities.iter().copied(),
+            slice: new_entities,
         }
     }
 }

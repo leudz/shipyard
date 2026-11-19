@@ -173,6 +173,26 @@ fn bulk() {
     assert_eq!(usizes.len(), 10);
 }
 
+/// Asserts that bulk inserting empty entities through a filter appends fresh IDs and leaves the
+/// vacant slot available for the next individual insertion.
+#[test]
+fn bulk_fresh() {
+    let mut world = World::new();
+    let deleted = world.add_entity(());
+    world.add_entity(());
+    assert!(world.delete_entity(deleted));
+
+    let input = [(), ()].into_iter().filter(|_| true);
+    let ids = world.bulk_add_entity(input);
+    let expected = [
+        EntityId::new_from_index_and_gen(2, 0),
+        EntityId::new_from_index_and_gen(3, 0),
+    ];
+    assert_eq!(ids.collect::<Vec<_>>(), expected);
+
+    assert_eq!(world.add_entity(()), EntityId::new_from_index_and_gen(0, 1));
+}
+
 /// Asserts that bulk adding entities with multiple components marks every component as inserted
 /// in each storage.
 #[test]

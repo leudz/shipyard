@@ -160,6 +160,33 @@ fn bulk_chained() {
     assert_eq!(values, [0, 1, 2]);
 }
 
+/// Asserts that bulk insertion appends fresh IDs even when the size hint underestimates the input,
+/// leaving the vacant slot available for the next individual insertion.
+#[test]
+fn bulk_fresh() {
+    let mut world = World::new();
+    let deleted = world.add_entity(());
+    world.add_entity(());
+    assert!(world.delete_entity(deleted));
+
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+    let tail = core::iter::once(U32(20)).filter(|_| true);
+    let input = core::iter::once(U32(10)).chain(tail);
+    let ids = entities.bulk_add_entity(&mut u32s, input);
+
+    let expected = [
+        EntityId::new_from_index_and_gen(2, 0),
+        EntityId::new_from_index_and_gen(3, 0),
+    ];
+    assert_eq!(ids.as_slice(), &expected);
+    assert_eq!(ids.collect::<Vec<_>>(), expected);
+    assert_eq!(u32s.get(expected[0]), Ok(&U32(10)));
+    assert_eq!(u32s.get(expected[1]), Ok(&U32(20)));
+
+    let reused = entities.add_entity(&mut u32s, U32(30));
+    assert_eq!(reused, EntityId::new_from_index_and_gen(0, 1));
+}
+
 #[test]
 fn bulk_unequal_length() {
     #[allow(unused)]

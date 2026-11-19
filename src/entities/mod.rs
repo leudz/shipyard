@@ -16,7 +16,6 @@ use crate::tracking::TrackingTimestamp;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::type_name;
-use core::iter::repeat_with;
 use core::mem::size_of;
 
 /// Holds the handles to all entities: living, removed and dead.
@@ -155,11 +154,16 @@ impl Entities {
                 *self.data.get_unchecked(old_index)
             }
         } else {
-            let entity_id = EntityId::new(self.data.len() as u64);
-            self.data.push(entity_id);
-            entity_id
+            self.generate_fresh()
         }
     }
+
+    fn generate_fresh(&mut self) -> EntityId {
+        let entity_id = EntityId::new(self.data.len() as u64);
+        self.data.push(entity_id);
+        entity_id
+    }
+
     pub(crate) fn bulk_generate(&mut self, count: usize) -> &[EntityId] {
         self.data
             .extend((self.data.len() as u64..(self.data.len() + count) as u64).map(EntityId::new));
@@ -285,8 +289,8 @@ impl Entities {
             AddEntity::add_entity(&mut storages, id, component);
         }
 
-        // have to use two loops because of self borrow
-        for (component, id) in iter.zip(repeat_with(|| self.generate())) {
+        for component in iter {
+            let id = self.generate_fresh();
             AddEntity::add_entity(&mut storages, id, component);
         }
 
