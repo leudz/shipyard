@@ -985,14 +985,15 @@ fn owned_route() {
     let all_storages = world.borrow::<AllStoragesView<'_>>().unwrap();
     let current = TrackingTimestamp::origin();
 
-    let (mixed, _, _, _, metadata) =
-        <(&A, &B) as IterComponent>::into_shiperator(&all_storages, None, current).unwrap();
-    assert_grouped_wins(&metadata, 0b11);
+    let pair = <(&A, &B) as IterComponent>::into_shiperator(&all_storages, None, current).unwrap();
+    let (mixed, _, _, _, metadata) = &pair;
+    assert_grouped_wins(metadata, 0b11);
     assert_eq!(mixed.captain_mask, 0b10);
 
-    let (mixed, _, _, _, metadata) =
+    let triple =
         <(&A, &B, &C) as IterComponent>::into_shiperator(&all_storages, None, current).unwrap();
-    assert_ordinary_wins(&metadata, 2);
+    let (mixed, _, _, _, metadata) = &triple;
+    assert_ordinary_wins(metadata, 2);
     assert_eq!(mixed.captain_mask, 0b100);
 }
 

@@ -239,8 +239,8 @@ unsafe impl IterComponent for CustomA {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),

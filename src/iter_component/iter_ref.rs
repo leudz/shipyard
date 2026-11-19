@@ -6,8 +6,9 @@ use core::marker::PhantomData;
 #[allow(missing_docs)]
 pub struct IntoIterRef<'a, T: IterComponent> {
     pub(crate) shiperator: T::Shiperator<'a>,
-    pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: T::Borrow<'a>,
+    // The registry borrow keeps the storages alive while their borrows are released.
+    pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     /// Entities each iterator starts from, never consumed.
     ///
     /// Only execution state, the construction metadata was dropped once the query was built.

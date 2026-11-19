@@ -65,9 +65,30 @@ fn as_view() {
     assert_eq!((&heaps).get(entity).unwrap().0, [1, 2]);
 }
 
-/// Asserts that `World::get` hands out references that hold both their storage borrow and the
-/// `AllStorages` borrow, still after `RefMut::map`/`Ref::map` narrow them to a field, and that
-/// both are released once the reference is dropped.
+/// Asserts that the last component guard in a tuple keeps the registry borrowed and that
+/// dropping each guard releases its storage borrow.
+#[test]
+fn get_refs_tuple() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity((Heap(vec![1]), Other(2)));
+
+    let (heap, mut other) = world.get::<(&Heap, &mut Other)>(entity).unwrap();
+    assert_eq!(heap.0, [1]);
+    other.0 = 3;
+    assert!(world.borrow::<ViewMut<'_, Heap>>().is_err());
+    assert!(world.borrow::<View<'_, Other>>().is_err());
+
+    drop(heap);
+    assert!(world.borrow::<ViewMut<'_, Heap>>().is_ok());
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_err());
+
+    drop(other);
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
+    assert_eq!(world.get::<&Other>(entity).unwrap().0, 3);
+}
+
+/// Asserts that projecting a shared or exclusive guard to a field preserves both borrows and
+/// that dropping the projection releases both.
 #[test]
 fn get_refs() {
     let mut world = World::new_for_test();
@@ -76,7 +97,9 @@ fn get_refs() {
     let mut values = RefMut::map(world.get::<&mut Heap>(entity).unwrap(), |heap| &mut heap.0);
     values.push(2);
     assert!(world.borrow::<View<'_, Heap>>().is_err());
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_err());
     drop(values);
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
 
     let values = Ref::map(world.get::<&Heap>(entity).unwrap(), |heap| &heap.0);
     assert!(world.borrow::<ViewMut<'_, Heap>>().is_err());
@@ -184,6 +207,18 @@ fn get_missing() {
 
     assert!(world.borrow::<ViewMut<'_, Heap>>().is_ok());
     assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
+}
+
+/// Asserts that when the second component in a tuple is missing, the first component's
+/// exclusive borrow and the registry borrow are released.
+#[test]
+fn get_refs_tuple_error() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity(Heap(vec![1]));
+
+    assert!(world.get::<(&mut Heap, &Other)>(entity).is_err());
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
+    assert!(world.get::<&mut Heap>(entity).is_ok());
 }
 
 /// Asserts that a tuple borrow failing partway releases the views it already acquired:

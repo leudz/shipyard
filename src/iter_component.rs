@@ -51,8 +51,8 @@ use core::any::type_name;
 ///     ) -> Result<
 ///         (
 ///             Self::Shiperator<'a>,
-///             Option<SharedBorrow<'a>>,
 ///             Self::Borrow<'a>,
+///             Option<SharedBorrow<'a>>,
 ///             RawEntityIdAccess,
 ///             ConstructionMetadata,
 ///         ),
@@ -72,6 +72,9 @@ use core::any::type_name;
 /// let sum: f32 = world.iter::<&Pos>().iter().map(|pos| pos.0).sum();
 /// assert_eq!(sum, 2.0);
 /// ```
+///
+/// The result places the storage borrow before the registry borrow so the storage
+/// stays allocated while its borrow is released.
 ///
 /// ### Safety
 ///
@@ -115,8 +118,8 @@ pub unsafe trait IterComponent {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -132,22 +135,25 @@ pub(crate) fn into_iter<'a, T: IterComponent>(
 where
     <T as IterComponent>::Shiperator<'a>: Shiperator,
 {
-    let (mut shiperator, all_borrow, borrow, entities, metadata) =
-        T::into_shiperator(all_storages, all_borrow, current)?;
+    let mut parts = T::into_shiperator(all_storages, all_borrow, current)?;
+    // Keep the shiperator and both guards together in drop order during planning.
+    let (ref mut shiperator, _, _, entities, metadata) = parts;
 
     // We're the query's root, every node has been built and nothing will pick another walk.
     // The metadata ends here, every iterator starts from these entities.
-    // SAFE: All three come from the `into_shiperator` call above.
-    let entities = unsafe { planner::install_winner(&mut shiperator, entities, metadata) };
-    let is_exact_sized = is_exact_traversal(&shiperator, &entities);
+    // SAFE: The shiperator, entities, and metadata come from the same call. Both guards
+    // stay in `parts` while the planner reads the storages.
+    let entities = unsafe { planner::install_winner(shiperator, entities, metadata) };
+    let is_exact_sized = is_exact_traversal(shiperator, &entities);
 
+    let (shiperator, borrow, all_borrow, ..) = parts;
     Ok(IntoIterRef {
         // Holds the first segment's state, each iterator starts from a clone of it.
         // Our borrows keep the storages from changing layout, so the state and any plan built
         // from them stay accurate, and `entities` keeps that plan alive.
         shiperator,
-        _all_borrow: all_borrow,
         _borrow: borrow,
+        _all_borrow: all_borrow,
         entities,
         is_exact_sized,
         phantom: core::marker::PhantomData,
@@ -169,20 +175,15 @@ unsafe impl<T: Component + Send + Sync> IterComponent for &'_ T {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
         error::GetStorage,
     > {
         let view = View::<'a, T>::borrow(all_storages, all_borrow, None, current)?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindow::from_owned_view(view))
     }
 }
 
@@ -199,20 +200,15 @@ unsafe impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
         error::GetStorage,
     > {
         let view = NonSend::<View<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindow::from_owned_view(view.0))
     }
 }
 
@@ -229,20 +225,15 @@ unsafe impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
         error::GetStorage,
     > {
         let view = NonSync::<View<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindow::from_owned_view(view.0))
     }
 }
 
@@ -259,20 +250,15 @@ unsafe impl<T: Component> IterComponent for NonSendSync<&'_ T> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
         error::GetStorage,
     > {
         let view = NonSendSync::<View<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindow::from_owned_view(view.0))
     }
 }
 
@@ -290,8 +276,8 @@ unsafe impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -306,11 +292,7 @@ unsafe impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
             );
         }
 
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view))
     }
 }
 
@@ -327,8 +309,8 @@ unsafe impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -343,11 +325,7 @@ unsafe impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
             );
         }
 
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view.0))
     }
 }
 
@@ -364,8 +342,8 @@ unsafe impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -380,11 +358,7 @@ unsafe impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
             );
         }
 
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view.0))
     }
 }
 
@@ -401,8 +375,8 @@ unsafe impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -417,11 +391,7 @@ unsafe impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
             );
         }
 
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view.0))
     }
 }
 
@@ -437,8 +407,8 @@ unsafe impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -446,11 +416,7 @@ unsafe impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
     > {
         let view =
             ViewMut::<'a, T, track::Modification>::borrow(all_storages, all_borrow, None, current)?;
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view))
     }
 }
 
@@ -467,8 +433,8 @@ unsafe impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -480,11 +446,7 @@ unsafe impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
             None,
             current,
         )?;
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view.0))
     }
 }
 
@@ -501,8 +463,8 @@ unsafe impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -514,11 +476,7 @@ unsafe impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
             None,
             current,
         )?;
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view.0))
     }
 }
 
@@ -535,8 +493,8 @@ unsafe impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
     ) -> Result<
         (
             Self::Shiperator<'a>,
-            Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
+            Option<SharedBorrow<'a>>,
             RawEntityIdAccess,
             ConstructionMetadata,
         ),
@@ -548,11 +506,7 @@ unsafe impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
             None,
             current,
         )?;
-        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
-
-        let entities = window.entity_iter();
-
-        Ok((window, all_borrow, borrow, entities, metadata))
+        Ok(FullRawWindowMut::new_owned(view.0))
     }
 }
 
@@ -574,15 +528,22 @@ macro_rules! impl_iter_component {
             ) -> Result<
                 (
                     Self::Shiperator<'a>,
-                    Option<SharedBorrow<'a>>,
                     Self::Borrow<'a>,
+                    Option<SharedBorrow<'a>>,
                     RawEntityIdAccess,
                     ConstructionMetadata,
                 ),
                 error::GetStorage,
             > {
                 $(
-                    let ($raw_window, _, $borrow, $entity_iter, $metadata) = $type::into_shiperator(all_storages, all_borrow.clone(), current)?;
+                    // If a later child fails, drop the shiperator before its storage
+                    // guard. The original registry guard stays alive until they drop.
+                    let $borrow;
+                    let $raw_window;
+                    let $entity_iter;
+                    let $metadata;
+                    ($raw_window, $borrow, _, $entity_iter, $metadata) =
+                        $type::into_shiperator(all_storages, all_borrow.clone(), current)?;
                 )+
 
                 // Owned iteration only builds windows and tuples of them,
@@ -622,7 +583,7 @@ macro_rules! impl_iter_component {
                 let mixed = Mixed::new(($($raw_window,)+), captain_mask);
                 let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
 
-                Ok((mixed, all_borrow, ($($borrow,)+), entity_iter, metadata))
+                Ok((mixed, ($($borrow,)+), all_borrow, entity_iter, metadata))
             }
         }
     }

@@ -18,8 +18,9 @@ use core::ops::{Deref, DerefMut};
 /// Shared reference to a component.
 pub struct Ref<'a, T> {
     inner: T,
-    all_borrow: Option<SharedBorrow<'a>>,
     borrow: SharedBorrow<'a>,
+    // The registry borrow keeps the storage alive while its borrow is released.
+    all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl<'a, T: ?Sized> Ref<'a, &'a T> {
@@ -30,8 +31,8 @@ impl<'a, T: ?Sized> Ref<'a, &'a T> {
     pub fn map<U: ?Sized, F: for<'b> FnOnce(&'b T) -> &'b U>(orig: Self, f: F) -> Ref<'a, &'a U> {
         Ref {
             inner: f(orig.inner),
-            all_borrow: orig.all_borrow,
             borrow: orig.borrow,
+            all_borrow: orig.all_borrow,
         }
     }
 }
@@ -57,8 +58,9 @@ pub struct RefMut<'a, T> {
     inner: T,
     flag: Option<&'a mut TrackingTimestamp>,
     current: TrackingTimestamp,
-    all_borrow: Option<SharedBorrow<'a>>,
     borrow: ExclusiveBorrow<'a>,
+    // The registry borrow keeps the storage alive while its borrow is released.
+    all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl<'a, T: ?Sized> RefMut<'a, &'a mut T> {
@@ -77,8 +79,8 @@ impl<'a, T: ?Sized> RefMut<'a, &'a mut T> {
             inner: f(orig.inner),
             flag: orig.flag,
             current: orig.current,
-            all_borrow: orig.all_borrow,
             borrow: orig.borrow,
+            all_borrow: orig.all_borrow,
         }
     }
 }
@@ -154,8 +156,8 @@ impl<T: Component + Send + Sync> GetComponent for &'_ T {
                     id: entity,
                     name: type_name::<T>(),
                 })?,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }
@@ -183,8 +185,8 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ T> {
                     id: entity,
                     name: type_name::<T>(),
                 })?,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }
@@ -212,8 +214,8 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ T> {
                     id: entity,
                     name: type_name::<T>(),
                 })?,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }
@@ -241,8 +243,8 @@ impl<T: Component> GetComponent for NonSendSync<&'_ T> {
                     id: entity,
                     name: type_name::<T>(),
                 })?,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }
@@ -280,8 +282,8 @@ impl<T: Component + Send + Sync> GetComponent for &'_ mut T {
             flag: is_tracking_modification
                 .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
             current,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }
@@ -321,8 +323,8 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
             flag: is_tracking_modification
                 .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
             current,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }
@@ -362,8 +364,8 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
             flag: is_tracking_modification
                 .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
             current,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }
@@ -403,8 +405,8 @@ impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
             flag: is_tracking_modification
                 .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
             current,
-            all_borrow,
             borrow,
+            all_borrow,
         })
     }
 }

@@ -19,8 +19,9 @@ use core::ops::Deref;
 /// Shared view over a component storage.
 pub struct View<'a, T: Component, Track = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a SparseSet<T>,
-    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: SharedBorrow<'a>,
+    // The registry borrow keeps the storage alive while its borrow is released.
+    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) last_insertion: TrackingTimestamp,
     pub(crate) last_modification: TrackingTimestamp,
     pub(crate) last_removal_or_deletion: TrackingTimestamp,
@@ -182,8 +183,8 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
 
             Ok(View {
                 sparse_set,
-                all_borrow: Some(all_borrow),
                 borrow,
+                all_borrow: Some(all_borrow),
                 last_insertion: TrackingTimestamp::new(0),
                 last_modification: TrackingTimestamp::new(0),
                 last_removal_or_deletion: TrackingTimestamp::new(0),

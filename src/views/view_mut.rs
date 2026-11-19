@@ -21,8 +21,9 @@ use core::ops::{Deref, DerefMut};
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T: Component, Track = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
-    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: ExclusiveBorrow<'a>,
+    // The registry borrow keeps the storage alive while its borrow is released.
+    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) last_insertion: TrackingTimestamp,
     pub(crate) last_modification: TrackingTimestamp,
     pub(crate) last_removal_or_deletion: TrackingTimestamp,
@@ -61,8 +62,8 @@ where
     pub fn as_view(&self) -> View<'_, T, Track> {
         View {
             sparse_set: self.sparse_set,
-            all_borrow: self.all_borrow.as_ref().cloned(),
             borrow: self.borrow.shared_reborrow(),
+            all_borrow: self.all_borrow.as_ref().cloned(),
             last_insertion: self.last_insertion,
             last_modification: self.last_modification,
             last_removal_or_deletion: self.last_removal_or_deletion,
@@ -171,8 +172,8 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
         if let Some(sparse_set) = storage.any_mut().downcast_mut() {
             Ok(ViewMut {
                 sparse_set,
-                all_borrow: Some(all_borrow),
                 borrow,
+                all_borrow: Some(all_borrow),
                 last_insertion: TrackingTimestamp::new(0),
                 last_modification: TrackingTimestamp::new(0),
                 last_removal_or_deletion: TrackingTimestamp::new(0),

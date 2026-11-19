@@ -90,7 +90,14 @@ impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
     #[inline]
     pub(crate) fn from_owned_view(
         view: View<'_, T, Track>,
-    ) -> (Self, Option<SharedBorrow<'_>>, SharedBorrow<'_>) {
+    ) -> (
+        Self,
+        SharedBorrow<'_>,
+        Option<SharedBorrow<'_>>,
+        RawEntityIdAccess,
+        ConstructionMetadata,
+    ) {
+        // Local bindings drop in reverse order if building the window unwinds.
         let View {
             sparse_set,
             all_borrow,
@@ -105,24 +112,24 @@ impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
         let sparse: *const Option<Box<Page>> = sparse_set.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
 
-        (
-            FullRawWindow {
-                sparse,
-                sparse_len,
-                dense: NonNull::new(sparse_set.dense.as_ptr().cast_mut()).unwrap(),
-                dense_len: sparse_set.dense.len(),
-                segment_start: 0,
-                data: sparse_set.data.as_ptr(),
-                insertion_data: sparse_set.insertion_data.as_ptr(),
-                modification_data: sparse_set.modification_data.as_ptr(),
-                last_insertion,
-                last_modification,
-                current,
-                _phantom: PhantomData,
-            },
-            all_borrow,
-            borrow,
-        )
+        let window = FullRawWindow {
+            sparse,
+            sparse_len,
+            dense: NonNull::new(sparse_set.dense.as_ptr().cast_mut()).unwrap(),
+            dense_len: sparse_set.dense.len(),
+            segment_start: 0,
+            data: sparse_set.data.as_ptr(),
+            insertion_data: sparse_set.insertion_data.as_ptr(),
+            modification_data: sparse_set.modification_data.as_ptr(),
+            last_insertion,
+            last_modification,
+            current,
+            _phantom: PhantomData,
+        };
+        let entities = window.entity_iter();
+        let metadata = ConstructionMetadata::window(sparse_set);
+
+        (window, borrow, all_borrow, entities, metadata)
     }
 
     #[inline]
@@ -343,17 +350,19 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
         }
     }
 
-    /// Returns the window over `view`'s storage, the guards keeping it borrowed and the storage's
-    /// construction metadata.
+    /// Returns the window over `view`'s storage, its borrow guards, entity access, and construction
+    /// metadata.
     #[inline]
     pub(crate) fn new_owned(
         view: ViewMut<'_, T, Track>,
     ) -> (
         Self,
-        Option<SharedBorrow<'_>>,
         ExclusiveBorrow<'_>,
+        Option<SharedBorrow<'_>>,
+        RawEntityIdAccess,
         ConstructionMetadata,
     ) {
+        // Local bindings drop in reverse order if building the window unwinds.
         let ViewMut {
             sparse_set,
             all_borrow,
@@ -383,12 +392,13 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
             is_tracking_modification: sparse_set.is_tracking_modification(),
             _phantom: PhantomData,
         };
+        let entities = window.entity_iter();
         // The metadata points to the storage, our caller can't take it before handing us the
         // view: moving it in reborrows the storage exclusively. The window only points into
         // the storage's allocations.
         let metadata = ConstructionMetadata::window(sparse_set);
 
-        (window, all_borrow, borrow, metadata)
+        (window, borrow, all_borrow, entities, metadata)
     }
 
     #[inline]

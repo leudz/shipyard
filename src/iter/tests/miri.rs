@@ -6,6 +6,7 @@
 //! released too early shows up as a wrong value or a Miri error.
 
 use crate::all_storages::AllStorages;
+use crate::atomic_refcell::{ARef, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
@@ -19,7 +20,8 @@ use crate::iter::{
 use crate::iter_component::into_iter;
 use crate::sparse_set::FullRawWindow;
 use crate::track;
-use crate::views::{AllStoragesView, View, ViewMut};
+use crate::tracking::TrackingTimestamp;
+use crate::views::{AllStoragesView, AllStoragesViewMut, View, ViewMut};
 use crate::world::World;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -110,21 +112,23 @@ where
     T::Shiperator<'a>: Shiperator,
 {
     let current = all_storages.get_current();
-    let (mut mixed, all_borrow, borrow, _, metadata) =
-        T::into_shiperator(all_storages, None, current).unwrap();
+    let mut parts = T::into_shiperator(all_storages, None, current).unwrap();
+    let (ref mut mixed, _, _, _, metadata) = parts;
     let NodeMetadata::GroupedMixed(selection) = metadata.0 else {
         panic!("the query has a grouped alternative");
     };
     let alternative = selection.cheapest().unwrap();
 
-    // SAFE: `mixed` and `selection` come from the same `into_shiperator` call.
-    let entities = unsafe { grouped_entities(&mut mixed, &selection, alternative) };
-    let is_exact_sized = is_exact_traversal(&mixed, &entities);
+    // SAFE: `mixed` and `selection` come from the same call and the returned guards
+    // in `parts` keep those storages borrowed.
+    let entities = unsafe { grouped_entities(mixed, &selection, alternative) };
+    let is_exact_sized = is_exact_traversal(mixed, &entities);
 
+    let (mixed, borrow, all_borrow, ..) = parts;
     IntoIterRef {
         shiperator: mixed,
-        _all_borrow: all_borrow,
         _borrow: borrow,
+        _all_borrow: all_borrow,
         entities,
         is_exact_sized,
         phantom: core::marker::PhantomData,
@@ -850,22 +854,25 @@ fn split_remaining_drop_either() {
 }
 
 /// Asserts that an owned query whose second member fails to borrow releases the first member's
-/// exclusive borrow along with its construction metadata, and that the next query borrows the
-/// storage again and reads its group metadata to place every grouped walk.
+/// exclusive borrow and the registry borrow, and that the next query can read the storages'
+/// group metadata to place every grouped walk.
 #[test]
 fn owned_borrow_error() {
     let (world, e) = partial_world();
 
     {
-        let all_storages = world.borrow::<AllStoragesView<'_>>().unwrap();
+        let _b = world.borrow::<View<'_, B>>().unwrap();
+        // SAFE: The query takes the registry guard together with the reference.
+        let (all_storages, all_borrow) =
+            unsafe { ARef::destructure(world.all_storages().unwrap()) };
         let current = all_storages.get_current();
+        let query = into_iter::<(&mut A, &mut B)>(all_storages, Some(all_borrow), current);
+        assert!(query.is_err());
+    }
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
 
-        {
-            let _b = all_storages.borrow::<View<'_, B>>().unwrap();
-            let query = into_iter::<(&mut A, &mut B)>(&all_storages, None, current);
-            assert!(query.is_err());
-        }
-
+    {
+        let all_storages = world.borrow::<AllStoragesView<'_>>().unwrap();
         let mut iter = grouped_owned::<(&mut A, &mut B)>(&all_storages);
         let items: Vec<(&mut A, &mut B)> = iter.iter().collect();
         assert_eq!(items.len(), e.len());
@@ -876,6 +883,58 @@ fn owned_borrow_error() {
     }
 
     assert_written(&world, &e);
+}
+
+/// Asserts that the owned iterator releases its storage borrow while the registry is still
+/// borrowed and allows exclusive registry access after both guards are dropped.
+#[test]
+fn owned_drop_order() {
+    struct CheckRegistry<'a>(&'a World);
+
+    impl Drop for CheckRegistry<'_> {
+        fn drop(&mut self) {
+            assert!(self.0.borrow::<AllStoragesViewMut<'_>>().is_err());
+        }
+    }
+
+    // SAFE: This test constructs the wrapper directly. The trait method never returns
+    // a shiperator or a guard.
+    unsafe impl IterComponent for CheckRegistry<'_> {
+        type Shiperator<'a> = ();
+        type Borrow<'a> = CheckRegistry<'a>;
+
+        fn into_shiperator<'a>(
+            _: &'a AllStorages,
+            _: Option<SharedBorrow<'a>>,
+            _: TrackingTimestamp,
+        ) -> Result<
+            (
+                Self::Shiperator<'a>,
+                Self::Borrow<'a>,
+                Option<SharedBorrow<'a>>,
+                RawEntityIdAccess,
+                ConstructionMetadata,
+            ),
+            crate::error::GetStorage,
+        > {
+            unreachable!("the test constructs the wrapper directly");
+        }
+    }
+
+    let world = World::new_for_test();
+    // SAFE: We discard the registry reference and keep only the borrow token.
+    let (_, all_borrow) = unsafe { ARef::destructure(world.all_storages().unwrap()) };
+    let iter = IntoIterRef::<CheckRegistry<'_>> {
+        shiperator: (),
+        _borrow: CheckRegistry(&world),
+        _all_borrow: Some(all_borrow),
+        entities: RawEntityIdAccess::empty(),
+        is_exact_sized: true,
+        phantom: core::marker::PhantomData,
+    };
+
+    drop(iter);
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
 }
 
 /// Asserts that `World::iter` over exclusive views of a fully grouped pair picks its aligned walk
