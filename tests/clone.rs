@@ -282,3 +282,160 @@ fn clone_storages_borrowed_unique() {
     let mut other_storages = other.borrow::<AllStoragesViewMut>().unwrap();
     all_storages.clone_storages_to(&mut other_storages);
 }
+
+#[cfg(feature = "thread_local")]
+mod thread_local {
+    use shipyard::{
+        Component, EntitiesViewMut, View, ViewMut, World,
+        borrow::{NonSend, NonSendSync, NonSync},
+        error::{Borrow, GetStorage},
+        sparse_set::SparseSet,
+        track,
+    };
+    use std::{cell::Cell, marker::PhantomData, rc::Rc, sync::MutexGuard, thread};
+
+    /// Asserts that registering a `!Send` component before or after insertion preserves shared
+    /// access from other threads and keeps exclusive access on the clone's thread.
+    #[test]
+    fn non_send() {
+        #[derive(Clone)]
+        struct SyncOnly(u32, PhantomData<MutexGuard<'static, ()>>);
+
+        impl Component for SyncOnly {
+            type Tracking = track::Untracked;
+        }
+
+        for register_first in [true, false] {
+            let mut world = World::new();
+            if register_first {
+                world.register_clone::<NonSend<SparseSet<SyncOnly>>>();
+            }
+            let entity = world.run(
+                |mut entities: EntitiesViewMut, mut values: NonSend<ViewMut<SyncOnly>>| {
+                    entities.add_entity(&mut *values, SyncOnly(1, PhantomData))
+                },
+            );
+            if !register_first {
+                world.register_clone::<NonSend<SparseSet<SyncOnly>>>();
+            }
+
+            let clone = world.clone();
+            thread::scope(|scope| {
+                scope.spawn(|| {
+                    let values = clone.borrow::<NonSend<View<SyncOnly>>>().unwrap();
+                    assert_eq!(values[entity].0, 1);
+                    drop(values);
+                    assert!(matches!(
+                        clone.borrow::<NonSend<ViewMut<SyncOnly>>>(),
+                        Err(GetStorage::StorageBorrow {
+                            borrow: Borrow::WrongThread,
+                            ..
+                        })
+                    ));
+                });
+            });
+            assert!(clone.borrow::<NonSend<ViewMut<SyncOnly>>>().is_ok());
+        }
+    }
+
+    /// Asserts that registering a `!Sync` component before or after insertion lets another
+    /// thread borrow the clone once the current shared borrow is released.
+    #[test]
+    fn non_sync() {
+        #[derive(Clone)]
+        struct SendOnly(Cell<u32>);
+
+        impl Component for SendOnly {
+            type Tracking = track::Untracked;
+        }
+
+        for register_first in [true, false] {
+            let mut world = World::new();
+            if register_first {
+                world.register_clone::<NonSync<SparseSet<SendOnly>>>();
+            }
+            let entity = world.run(
+                |mut entities: EntitiesViewMut, mut values: NonSync<ViewMut<SendOnly>>| {
+                    entities.add_entity(&mut *values, SendOnly(Cell::new(2)))
+                },
+            );
+            if !register_first {
+                world.register_clone::<NonSync<SparseSet<SendOnly>>>();
+            }
+
+            let clone = world.clone();
+            thread::scope(|scope| {
+                let values = clone.borrow::<NonSync<View<SendOnly>>>().unwrap();
+                scope
+                    .spawn(|| {
+                        assert!(matches!(
+                            clone.borrow::<NonSync<View<SendOnly>>>(),
+                            Err(GetStorage::StorageBorrow {
+                                borrow: Borrow::Shared,
+                                ..
+                            })
+                        ));
+                    })
+                    .join()
+                    .unwrap();
+                drop(values);
+
+                scope.spawn(|| {
+                    let values = clone.borrow::<NonSync<ViewMut<SendOnly>>>().unwrap();
+                    assert_eq!(values[entity].0.get(), 2);
+                });
+            });
+        }
+    }
+
+    /// Asserts that registering a `!Send + !Sync` component before or after insertion keeps
+    /// both shared and exclusive access to the clone on its thread.
+    #[test]
+    fn non_send_sync() {
+        #[derive(Clone)]
+        struct Local(Rc<u32>);
+
+        impl Component for Local {
+            type Tracking = track::Untracked;
+        }
+
+        for register_first in [true, false] {
+            let mut world = World::new();
+            if register_first {
+                world.register_clone::<NonSendSync<SparseSet<Local>>>();
+            }
+            let entity = world.run(
+                |mut entities: EntitiesViewMut, mut values: NonSendSync<ViewMut<Local>>| {
+                    entities.add_entity(&mut *values, Local(Rc::new(3)))
+                },
+            );
+            if !register_first {
+                world.register_clone::<NonSendSync<SparseSet<Local>>>();
+            }
+
+            let clone = world.clone();
+            thread::scope(|scope| {
+                scope.spawn(|| {
+                    assert!(matches!(
+                        clone.borrow::<NonSendSync<View<Local>>>(),
+                        Err(GetStorage::StorageBorrow {
+                            borrow: Borrow::WrongThread,
+                            ..
+                        })
+                    ));
+                    assert!(matches!(
+                        clone.borrow::<NonSendSync<ViewMut<Local>>>(),
+                        Err(GetStorage::StorageBorrow {
+                            borrow: Borrow::WrongThread,
+                            ..
+                        })
+                    ));
+                });
+            });
+            let values = clone.borrow::<NonSendSync<View<Local>>>().unwrap();
+            assert_eq!(*values[entity].0, 3);
+            drop(values);
+            assert!(clone.borrow::<NonSendSync<ViewMut<Local>>>().is_ok());
+        }
+    }
+}

@@ -51,34 +51,37 @@ impl<T: Component + Clone + Send + Sync> TupleClone for SparseSet<T> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Component + Clone + Send + Sync> TupleClone for NonSend<SparseSet<T>> {
+impl<T: Component + Clone + Sync> TupleClone for NonSend<SparseSet<T>> {
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_component_or_insert_mut(StorageId::of::<NonSend<SparseSet<T>>>(), || {
-                NonSend(SparseSet::<T>::new())
-            })
+            .exclusive_component_or_insert_non_send_mut(
+                StorageId::of::<NonSend<SparseSet<T>>>(),
+                || NonSend(SparseSet::<T>::new()),
+            )
             .register_clone();
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Component + Clone + Send + Sync> TupleClone for NonSync<SparseSet<T>> {
+impl<T: Component + Clone + Send> TupleClone for NonSync<SparseSet<T>> {
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_component_or_insert_mut(StorageId::of::<NonSync<SparseSet<T>>>(), || {
-                NonSync(SparseSet::<T>::new())
-            })
+            .exclusive_component_or_insert_non_sync_mut(
+                StorageId::of::<NonSync<SparseSet<T>>>(),
+                || NonSync(SparseSet::<T>::new()),
+            )
             .register_clone();
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Component + Clone + Send + Sync> TupleClone for NonSendSync<SparseSet<T>> {
+impl<T: Component + Clone> TupleClone for NonSendSync<SparseSet<T>> {
     fn register_clone(all_storages: &mut AllStorages) {
         all_storages
-            .exclusive_component_or_insert_mut(StorageId::of::<NonSendSync<SparseSet<T>>>(), || {
-                NonSendSync(SparseSet::<T>::new())
-            })
+            .exclusive_component_or_insert_non_send_sync_mut(
+                StorageId::of::<NonSendSync<SparseSet<T>>>(),
+                || NonSendSync(SparseSet::<T>::new()),
+            )
             .register_clone();
     }
 }
