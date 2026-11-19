@@ -142,3 +142,23 @@ fn clear_on_deletion() {
     deleted.sort_unstable();
     assert_eq!(deleted, [entity0, entity1]);
 }
+
+/// Asserts that clearing reports only the original ID of the live entity and that a second clear
+/// reports no additional deletions.
+#[test]
+fn clear_vacant() {
+    let mut world = World::new();
+    let vacant = world.add_entity(());
+    let live = world.add_entity(());
+    assert!(world.delete_entity(vacant));
+
+    let deleted = Arc::new(Mutex::new(Vec::new()));
+    let recorder = deleted.clone();
+    world.on_deletion(move |entity| recorder.lock().unwrap().push(entity));
+
+    world.clear();
+    assert_eq!(*deleted.lock().unwrap(), [live]);
+
+    world.clear();
+    assert_eq!(*deleted.lock().unwrap(), [live]);
+}

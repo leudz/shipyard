@@ -422,10 +422,12 @@ impl Storage for Entities {
 
             if id.bump_gen().is_ok() {
                 last_alive = i as u64;
+            }
 
-                if let Some(on_deletion) = &mut self.on_deletion {
-                    (on_deletion)(id_before_bump)
-                }
+            if id_before_bump.uindex() == i
+                && let Some(on_deletion) = &mut self.on_deletion
+            {
+                on_deletion(id_before_bump);
             }
 
             id.set_index(target);
