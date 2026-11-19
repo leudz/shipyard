@@ -3,7 +3,6 @@ mod tests;
 
 use super::EntityId;
 use core::fmt;
-use core::num::NonZeroU64;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{self, MapAccess, SeqAccess, Visitor},
@@ -127,9 +126,12 @@ impl<'de> Deserialize<'de> for EntityId {
         if deserializer.is_human_readable() {
             deserializer.deserialize_struct("EntityId", FIELDS, EntityIdVisitor)
         } else {
-            let non_zero: u64 = Deserialize::deserialize(deserializer)?;
+            let wire_value: u64 = Deserialize::deserialize(deserializer)?;
+            let Some(entity) = wire_value.checked_add(1).and_then(EntityId::from_inner) else {
+                return Err(de::Error::custom("binary EntityId is out of range"));
+            };
 
-            Ok(EntityId(unsafe { NonZeroU64::new_unchecked(non_zero + 1) }))
+            Ok(entity)
         }
     }
 }
