@@ -1,6 +1,7 @@
 use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex};
 
 #[allow(unused)]
@@ -161,4 +162,39 @@ fn clear_vacant() {
 
     world.clear();
     assert_eq!(*deleted.lock().unwrap(), [live]);
+}
+
+/// Asserts that clearing a live entity at generation 65,533 reports its original ID and leaves its
+/// slot permanently vacant.
+#[test]
+fn clear_exhausted() {
+    let mut world = World::new();
+    let exhausted = EntityId::new_from_index_and_gen(0, 65_533);
+    assert!(world.spawn(exhausted));
+
+    let deleted = Arc::new(Mutex::new(Vec::new()));
+    let recorder = deleted.clone();
+    world.on_deletion(move |id| recorder.lock().unwrap().push(id));
+
+    world.clear();
+
+    assert_eq!(*deleted.lock().unwrap(), [exhausted]);
+    assert_eq!(world.borrow::<EntitiesView>().unwrap().iter().next(), None);
+    assert_eq!(world.add_entity(()), EntityId::new_from_index_and_gen(1, 0));
+}
+
+/// Asserts that a panicking clear callback leaves live IDs and the recycle list intact.
+#[test]
+fn clear_callback_panic() {
+    let mut world = World::new();
+    let vacant = world.add_entity(());
+    let live = world.add_entity(());
+    assert!(world.delete_entity(vacant));
+    world.on_deletion(|_| panic!("clear callback panicked"));
+
+    let result = catch_unwind(AssertUnwindSafe(|| world.clear()));
+
+    assert!(result.is_err());
+    assert!(world.is_entity_alive(live));
+    assert_eq!(world.add_entity(()), EntityId::new_from_index_and_gen(0, 1));
 }

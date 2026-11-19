@@ -1,6 +1,7 @@
 use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
+use std::sync::{Arc, Mutex};
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
@@ -75,6 +76,24 @@ fn update() {
         vec![(entity1, &USIZE(0))]
     );
     assert_eq!(usizes.removed().count(), 0);
+}
+
+/// Asserts that deleting an entity at generation 65,533 removes it from iteration and reports its
+/// original ID once, even if deletion is attempted again.
+#[test]
+fn delete_exhausted() {
+    let mut world = World::new();
+    let entity = EntityId::new_from_index_and_gen(0, 65_533);
+    assert!(world.spawn(entity));
+
+    let deleted = Arc::new(Mutex::new(Vec::new()));
+    let recorder = deleted.clone();
+    world.on_deletion(move |id| recorder.lock().unwrap().push(id));
+
+    assert!(world.delete_entity(entity));
+    assert!(!world.delete_entity(entity));
+    assert_eq!(world.borrow::<EntitiesView>().unwrap().iter().next(), None);
+    assert_eq!(*deleted.lock().unwrap(), [entity]);
 }
 
 /// Asserts that deleting grouped entities leaves the remaining pairs yielded with their values,

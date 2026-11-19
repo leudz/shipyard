@@ -59,7 +59,7 @@ impl EntityId {
     /// Increments the generation, returns Err if gen + 1 == gen::MAX().
     #[inline]
     pub(super) fn bump_gen(&mut self) -> Result<(), ()> {
-        if self.generation() < Self::MAX_GEN - 1 {
+        if self.generation() < Self::max_gen() - 1 {
             // SAFE never zero
             self.0 = unsafe {
                 NonZeroU64::new_unchecked(

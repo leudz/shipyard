@@ -17,12 +17,12 @@ impl<'a> IntoIterator for &'a Entities {
     type IntoIter = EntitiesIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        EntitiesIter(self.data.iter().enumerate().filter_map(filter_map))
+        EntitiesIter(self.data.iter().enumerate().filter_map(live_entity))
     }
 }
 
-fn filter_map((i, &entity): (usize, &EntityId)) -> Option<EntityId> {
-    if i == entity.uindex() {
+pub(super) fn live_entity((index, &entity): (usize, &EntityId)) -> Option<EntityId> {
+    if index == entity.uindex() && entity != EntityId::dead() {
         Some(entity)
     } else {
         None

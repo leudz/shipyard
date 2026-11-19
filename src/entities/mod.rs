@@ -54,11 +54,11 @@ impl Entities {
     /// Returns `true` if `entity` matches a living entity.
     #[inline]
     pub fn is_alive(&self, entity: EntityId) -> bool {
-        if let Some(&self_entity) = self.data.get(entity.uindex()) {
-            entity == self_entity
-        } else {
-            false
+        if entity == EntityId::dead() {
+            return false;
         }
+
+        self.data.get(entity.uindex()) == Some(&entity)
     }
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.  
@@ -173,45 +173,37 @@ impl Entities {
     /// Deletes an entity, returns true if the entity was alive.  
     /// If the entity has components, they will not be deleted and still be accessible using this id.
     pub fn delete_unchecked(&mut self, entity_id: EntityId) -> bool {
-        if self.is_alive(entity_id) {
-            // SAFE we checked for OOB
-            if unsafe {
-                self.data
-                    .get_unchecked_mut(entity_id.uindex())
-                    .bump_gen()
-                    .is_ok()
-            } {
-                if let Some((ref mut new, _)) = self.list {
-                    // SAFE new is always in bound
-                    unsafe {
-                        self.data
-                            .get_unchecked_mut(*new)
-                            .set_index(entity_id.index())
-                    };
-                    unsafe {
-                        self.data
-                            .get_unchecked_mut(entity_id.uindex())
-                            .set_index(EntityId::max_index())
-                    };
-                    *new = entity_id.uindex();
-                } else {
-                    unsafe {
-                        self.data
-                            .get_unchecked_mut(entity_id.uindex())
-                            .set_index(EntityId::max_index())
-                    };
-                    self.list = Some((entity_id.uindex(), entity_id.uindex()));
-                }
-            }
-
-            if let Some(on_deletion) = &mut self.on_deletion {
-                (on_deletion)(entity_id)
-            }
-
-            true
-        } else {
-            false
+        if entity_id == EntityId::dead() {
+            return false;
         }
+
+        let index = entity_id.uindex();
+        let Some(entry) = self.data.get_mut(index) else {
+            return false;
+        };
+        if *entry != entity_id {
+            return false;
+        }
+
+        if entry.bump_gen().is_ok() {
+            entry.set_index(EntityId::max_index());
+            if let Some((new, _)) = &mut self.list {
+                // SAFE: The tail was recorded from an existing slot, and the entity table never shrinks.
+                let tail = unsafe { self.data.get_unchecked_mut(*new) };
+                tail.set_index(entity_id.index());
+                *new = index;
+            } else {
+                self.list = Some((index, index));
+            }
+        } else {
+            *entry = EntityId::dead();
+        }
+
+        if let Some(on_deletion) = &mut self.on_deletion {
+            on_deletion(entity_id);
+        }
+
+        true
     }
     /// Stores `component` in a new entity and returns its [`EntityId`].  
     /// Multiple components can be added at the same time using a tuple.
@@ -306,10 +298,18 @@ impl Entities {
     }
     /// Make the given entity alive.  
     /// Does nothing if an entity with a greater generation is already at this index.  
-    /// Returns `true` if the entity is successfully spawned.
+    /// Returns `false` for a retired slot and `true` if the entity is successfully spawned.
     pub fn spawn(&mut self, entity: EntityId) -> bool {
+        if entity == EntityId::dead() {
+            return false;
+        }
+
         if let Some(&old_entity) = self.data.get(entity.index() as usize) {
-            if self.is_alive(old_entity) {
+            if old_entity == EntityId::dead() {
+                return false;
+            }
+
+            if old_entity.uindex() == entity.uindex() {
                 if old_entity.generation() <= entity.generation() {
                     self.data[entity.uindex()] = entity;
 
@@ -405,46 +405,42 @@ impl Entities {
 
 impl Storage for Entities {
     fn clear(&mut self, _current: TrackingTimestamp) {
-        if self.data.is_empty() {
-            return;
-        }
-
-        // the first value can be anything but self.data.len() - 1
-        // otherwise we would set data[len - 1].index to len - 1 and not delete it
-        let mut last_alive = if self.data.len() as u64 == EntityId::max_index() {
-            0
-        } else {
-            EntityId::max_index()
-        };
-        for (i, id) in self.data.iter_mut().enumerate().rev() {
-            let target = last_alive;
-            let id_before_bump = *id;
-
-            if id.bump_gen().is_ok() {
-                last_alive = i as u64;
-            }
-
-            if id_before_bump.uindex() == i
-                && let Some(on_deletion) = &mut self.on_deletion
+        // Run the callbacks first so a panic leaves the existing recycle list intact.
+        if let Some(on_deletion) = &mut self.on_deletion {
+            for entity in self
+                .data
+                .iter()
+                .enumerate()
+                .rev()
+                .filter_map(iterator::live_entity)
             {
-                on_deletion(id_before_bump);
+                on_deletion(entity);
             }
-
-            id.set_index(target);
         }
 
-        let begin = self
-            .data
-            .iter()
-            .position(|id| id.generation() < EntityId::max_gen())
-            .unwrap();
-        let end = self
-            .data
-            .iter()
-            .rev()
-            .position(|id| id.generation() < EntityId::max_gen())
-            .unwrap();
-        self.list = Some((self.data.len() - end - 1, begin));
+        let mut list = None;
+        for (index, id) in self.data.iter_mut().enumerate().rev() {
+            if id.bump_gen().is_err() {
+                *id = EntityId::dead();
+                continue;
+            }
+
+            if let Some((_, oldest)) = &mut list {
+                id.set_index(*oldest as u64);
+                *oldest = index;
+            } else {
+                // The last link must differ from its slot index so iteration skips it.
+                let end = if index as u64 == EntityId::max_index() {
+                    0
+                } else {
+                    EntityId::max_index()
+                };
+                id.set_index(end);
+                list = Some((index, index));
+            }
+        }
+
+        self.list = list;
     }
 
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
