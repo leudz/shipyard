@@ -1939,6 +1939,110 @@ impl Storage for Cloneable {
     }
 }
 
+/// Asserts that a clone of a different concrete type is rejected even when both storages
+/// expose a `u32` through `any`, leaving the destination slot intact.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn clone_wrong_type() {
+    use core::any::Any;
+
+    struct Original(u32);
+    struct Different(u32);
+
+    impl Storage for Original {
+        fn any(&self) -> &dyn Any {
+            &self.0
+        }
+
+        fn try_clone(&self, _: TrackingTimestamp) -> Option<SBoxBuilder> {
+            Some(SBoxBuilder::new(Different(self.0)))
+        }
+    }
+
+    impl Storage for Different {
+        fn any(&self) -> &dyn Any {
+            &self.0
+        }
+    }
+
+    let id = StorageId::of::<Original>();
+    let source = World::new_for_test();
+    let mut destination = World::new_for_test();
+    source.add_custom_storage(id, Original(10)).unwrap();
+    destination.add_custom_storage(id, Original(20)).unwrap();
+
+    let source_storages = source.all_storages().unwrap();
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        source_storages.clone_storages_to(destination.all_storages.get_mut());
+    }));
+    assert!(result.is_err());
+
+    let destination_storages = destination.all_storages().unwrap();
+    assert_eq!(
+        destination_storages.custom_storage::<Original>().unwrap().0,
+        20
+    );
+}
+
+/// Asserts that cloning a concrete thread-local wrapper preserves its value and allows
+/// access only on the destination world's thread.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn clone_local_type() {
+    use alloc::rc::Rc;
+    use core::any::Any;
+
+    #[derive(Clone)]
+    struct LocalClone(Rc<u32>);
+
+    impl Storage for LocalClone {
+        fn any(&self) -> &dyn Any {
+            self.0.as_ref()
+        }
+
+        fn try_clone(&self, _: TrackingTimestamp) -> Option<SBoxBuilder> {
+            Some(SBoxBuilder::new(self.clone()))
+        }
+    }
+
+    let source = World::new_for_test();
+    let source_storages = source.all_storages().unwrap();
+    source_storages
+        .custom_storage_or_insert_non_send_sync(|| LocalClone(Rc::new(10)))
+        .unwrap();
+
+    let mut destination = World::new_for_test();
+    source_storages.clone_storages_to(destination.all_storages.get_mut());
+    let destination_storages = destination.all_storages().unwrap();
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            let wrong_thread = Some(error::GetStorage::storage_borrow::<LocalClone>(
+                error::Borrow::WrongThread,
+            ));
+            assert_eq!(
+                destination_storages.custom_storage::<LocalClone>().err(),
+                wrong_thread
+            );
+            assert_eq!(
+                destination_storages
+                    .custom_storage_mut::<LocalClone>()
+                    .err(),
+                wrong_thread
+            );
+        });
+    });
+
+    let storage = destination_storages.custom_storage::<LocalClone>().unwrap();
+    assert_eq!(*storage.0, 10);
+    drop(storage);
+    assert!(
+        destination_storages
+            .custom_storage_mut::<LocalClone>()
+            .is_ok()
+    );
+}
+
 /// Asserts that cloning a unique into a world holding a custom storage under the same id
 /// replaces it: the id ends up in the unique map only and the custom storage is dropped once.
 #[test]

@@ -43,6 +43,8 @@ use crate::sparse_set::{
 };
 #[cfg(all(feature = "std", feature = "thread_local"))]
 use crate::std_thread_id_generator;
+#[cfg(feature = "thread_local")]
+use crate::storage::SizedAny;
 use crate::storage::{SBox, Storage, StorageId};
 use crate::system::AllSystem;
 use crate::tracking::{TrackingTimestamp, TupleTrack};
@@ -1905,24 +1907,20 @@ for (i, j) in &mut iter {
                     }
                     #[cfg(feature = "thread_local")]
                     {
-                        let storage_type_id = storage_borrow.any().type_id();
-                        // SAFE: `storage_builder` owns the clone's box and keeps it alive, nobody
-                        // else can reach it yet and we only borrow it through its runtime checks.
-                        let storage_clone_type_id = unsafe { &*storage_builder.sbox.0 }
-                            .borrow()
-                            .unwrap()
-                            .any()
-                            .type_id();
+                        let mut storage_builder = storage_builder;
+                        // The blanket cast identifies the storage itself. `Storage::any` may
+                        // expose a value inside it.
+                        let storage_type_id = SizedAny::as_any(&*storage_borrow).type_id();
+                        let storage_clone_type_id =
+                            SizedAny::as_any(storage_builder.sbox.storage_mut()).type_id();
 
-                        // The implementor could return another type when cloning as the type is erased.
-                        // We only check in the thread_local case because the other type could be !Send/!Sync.
-                        // If the type doesn't match there will be a panic when creating views in any case.
                         if storage_type_id != storage_clone_type_id {
                             panic!("Storage clone is not of the same type as original.")
                         }
 
-                        // SAFE
-                        // We pass the information from the original storage and the types are the same.
+                        // SAFE: The clone has the same concrete type as the original, whose
+                        // Send and Sync permissions we read above. The thread checks ensure
+                        // a !Send clone is built on the destination world's thread.
                         unsafe {
                             storage_builder.build(other_thread_id_generator, is_send, is_sync)
                         }
