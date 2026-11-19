@@ -261,3 +261,135 @@ fn bulk_empty() {
     assert_eq!(u32s.get(entity), Ok(&U32(0)));
     assert_eq!(usizes.get(entity), Ok(&USIZE(1)));
 }
+
+/// Checks that the storage's rows agree across component slices, iteration, lookups, and tracking.
+fn assert_bulk_rows<T: Component + PartialEq + std::fmt::Debug>(
+    view: &View<'_, T, track::All>,
+    expected: &[(EntityId, &T)],
+    modified: &[EntityId],
+) {
+    assert_eq!(view.len(), expected.len());
+    assert_eq!(view.as_slice().len(), expected.len());
+    assert_eq!(view.iter().with_id().collect::<Vec<_>>(), expected);
+    for (index, &(entity, value)) in expected.iter().enumerate() {
+        assert_eq!(&view.as_slice()[index], value);
+        assert_eq!(view.get(entity), Ok(value));
+        assert!(view.is_inserted(entity));
+    }
+    assert_eq!(view.modified().iter().ids().collect::<Vec<_>>(), modified);
+    assert_eq!(view.removed().next(), None);
+    assert_eq!(view.deleted().next(), None);
+}
+
+/// Asserts that unwinding from a bare-component source preserves existing rows and tracking,
+/// and that retrying returns fresh, contiguous IDs for exactly the successful input.
+#[test]
+fn bulk_single_unwind() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let mut world = World::new();
+    world.track_all::<U32>();
+    let existing = world.add_entity(U32(1));
+    let recycled = world.add_entity(());
+    world.delete_entity(recycled);
+    world.get::<&mut U32>(existing).unwrap().0 = 2;
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        world.bulk_add_entity((0..5).map(|value| {
+            assert_ne!(value, 3, "bulk source panicked");
+            U32(value + 10)
+        }));
+    }));
+    assert!(result.is_err());
+
+    {
+        let view = world.borrow::<View<'_, U32, track::All>>().unwrap();
+        assert_bulk_rows(&view, &[(existing, &U32(2))], &[existing]);
+    }
+
+    let expected = [
+        EntityId::new_from_index_and_gen(2, 0),
+        EntityId::new_from_index_and_gen(3, 0),
+    ];
+    let inserted = world.bulk_add_entity([U32(20), U32(21)]);
+    assert_eq!(inserted.as_slice(), &expected);
+    assert_eq!(inserted.collect::<Vec<_>>(), expected);
+
+    let view = world.borrow::<View<'_, U32, track::All>>().unwrap();
+    assert_bulk_rows(
+        &view,
+        &[
+            (existing, &U32(2)),
+            (expected[0], &U32(20)),
+            (expected[1], &U32(21)),
+        ],
+        &[existing],
+    );
+}
+
+/// Asserts that a panicking tuple source restores grouped storages to their distinct initial
+/// lengths, and that the next batch appends matching rows for exactly its returned IDs.
+#[test]
+fn bulk_tuple_unwind() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Other(u32);
+
+    impl Component for Other {
+        type Tracking = track::Untracked;
+    }
+
+    let mut world = World::builder().with_group::<(U32, Other)>().build();
+    world.track_all::<(U32, Other)>();
+    let pair = world.add_entity((U32(1), Other(10)));
+    let single = world.add_entity(U32(2));
+    world.regroup();
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        world.bulk_add_entity((0..5).map(|value| {
+            assert_ne!(value, 3, "bulk source panicked");
+            (U32(value + 3), Other(value + 30))
+        }));
+    }));
+    assert!(result.is_err());
+
+    {
+        let (numbers, others) = world
+            .borrow::<(View<'_, U32, track::All>, View<'_, Other, track::All>)>()
+            .unwrap();
+        assert_bulk_rows(&numbers, &[(pair, &U32(1)), (single, &U32(2))], &[]);
+        assert_bulk_rows(&others, &[(pair, &Other(10))], &[]);
+    }
+
+    let expected = [
+        EntityId::new_from_index_and_gen(2, 0),
+        EntityId::new_from_index_and_gen(3, 0),
+    ];
+    let inserted = world.bulk_add_entity([(U32(5), Other(50)), (U32(6), Other(60))]);
+    assert_eq!(inserted.as_slice(), &expected);
+    assert_eq!(inserted.collect::<Vec<_>>(), expected);
+
+    let (numbers, others) = world
+        .borrow::<(View<'_, U32, track::All>, View<'_, Other, track::All>)>()
+        .unwrap();
+    assert_bulk_rows(
+        &numbers,
+        &[
+            (pair, &U32(1)),
+            (single, &U32(2)),
+            (expected[0], &U32(5)),
+            (expected[1], &U32(6)),
+        ],
+        &[],
+    );
+    assert_bulk_rows(
+        &others,
+        &[
+            (pair, &Other(10)),
+            (expected[0], &Other(50)),
+            (expected[1], &Other(60)),
+        ],
+        &[],
+    );
+}
