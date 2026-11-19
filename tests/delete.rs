@@ -169,6 +169,30 @@ fn track_reset_with_timestamp() {
     assert_eq!(usizes.deleted().collect::<Vec<_>>(), vec![]);
 }
 
+/// Asserts that clearing tracking data through a view empties both logs after a removal and a deletion.
+#[test]
+fn clear_tracking() {
+    let mut world = World::new();
+    world.track_removal::<U32>();
+    world.track_deletion::<U32>();
+
+    let removed = world.add_entity(U32(1));
+    let deleted = world.add_entity(U32(2));
+    let mut view = world
+        .borrow::<ViewMut<U32, track::DeletionAndRemoval>>()
+        .unwrap();
+
+    assert_eq!(view.remove(removed), Some(U32(1)));
+    assert!(view.delete(deleted));
+    assert_eq!(view.removed().next(), Some(removed));
+    assert_eq!(view.deleted().next(), Some((deleted, &U32(2))));
+
+    view.clear_all_removed_and_deleted();
+
+    assert_eq!(view.removed().next(), None);
+    assert_eq!(view.deleted().next(), None);
+}
+
 #[test]
 fn track() {
     #[derive(PartialEq, Eq, Debug)]

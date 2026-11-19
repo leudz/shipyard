@@ -685,6 +685,7 @@ impl<T: Component> SparseSet<T> {
     }
     /// Clear all deletion and removal tracking data.
     pub fn clear_all_removed_and_deleted(&mut self) {
+        self.deletion_data.clear();
         self.removal_data.clear();
     }
     /// Clear all deletion and removal tracking data older than some timestamp.
