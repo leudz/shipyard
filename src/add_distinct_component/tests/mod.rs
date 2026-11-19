@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Component, EntitiesViewMut, Get, ViewMut, World, track};
+use crate::{Component, EntitiesView, EntitiesViewMut, Get, ViewMut, World, track};
 
 #[derive(PartialEq, Debug)]
 struct USIZE(usize);
@@ -134,4 +134,30 @@ fn add_larger_gen_component() {
     assert!(was_inserted);
     assert!(usizes.is_inserted(eid2));
     assert!(!usizes.is_modified(eid2));
+}
+
+/// Asserts that distinct tuple insertion adds both missing components, returns false for equal
+/// values, and replaces both components when their values change.
+#[test]
+fn add_tuple() {
+    #[derive(PartialEq, Debug)]
+    struct U32(u32);
+
+    impl Component for U32 {
+        type Tracking = track::Untracked;
+    }
+
+    let mut world = World::new_for_test();
+    let eid = world.add_entity(());
+    let (entities, mut usizes, mut u32s) = world
+        .borrow::<(EntitiesView<'_>, ViewMut<'_, USIZE>, ViewMut<'_, U32>)>()
+        .unwrap();
+
+    assert!(entities.add_distinct_component(eid, (&mut usizes, &mut u32s), (USIZE(1), U32(2))));
+    assert_eq!((&usizes, &u32s).get(eid), Ok((&USIZE(1), &U32(2))));
+
+    assert!(!entities.add_distinct_component(eid, (&mut usizes, &mut u32s), (USIZE(1), U32(2))));
+
+    assert!(entities.add_distinct_component(eid, (&mut usizes, &mut u32s), (USIZE(3), U32(4))));
+    assert_eq!((&usizes, &u32s).get(eid), Ok((&USIZE(3), &U32(4))));
 }

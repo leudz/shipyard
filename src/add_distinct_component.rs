@@ -102,7 +102,7 @@ macro_rules! impl_add_component {
             fn add_distinct_component_unchecked(&mut self, entity: EntityId, component: Self::Component) -> bool {
                 $(
                     self.$index.add_distinct_component_unchecked(entity, component.$index)
-                )||+
+                )|+
             }
         }
     }
