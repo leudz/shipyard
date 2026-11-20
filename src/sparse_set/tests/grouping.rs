@@ -188,6 +188,95 @@ fn groups_drain() {
     assert_reset(&sparse_set.groups);
 }
 
+/// Asserts that draining notifies every physical row before iteration and records their removals.
+#[cfg(feature = "std")]
+#[test]
+fn groups_drain_callbacks() {
+    use std::sync::Mutex;
+
+    let mut sparse_set = ints_with_tails(&[(3, 1)], 0, 0);
+    sparse_set.track_all();
+    let physical_rows: Vec<_> = sparse_set
+        .dense
+        .iter()
+        .zip(&sparse_set.data)
+        .map(|(&entity, value)| (entity, value.0))
+        .collect();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let recorder = calls.clone();
+    sparse_set.on_removal(move |entity, value| recorder.lock().unwrap().push((entity, value.0)));
+
+    let current = TrackingTimestamp::new(10);
+    let drain = sparse_set.private_drain(current);
+    assert_eq!(*calls.lock().unwrap(), physical_rows);
+    drop(drain);
+
+    assert!(sparse_set.is_empty());
+    assert_reset(&sparse_set.groups);
+    assert_eq!(
+        sparse_set
+            .removal_data
+            .iter()
+            .map(|&(entity, timestamp)| (entity, timestamp.get()))
+            .collect::<Vec<_>>(),
+        physical_rows
+            .iter()
+            .map(|&(entity, _)| (entity, current.get()))
+            .collect::<Vec<_>>()
+    );
+    assert!(sparse_set.deletion_data.is_empty());
+    for (entity, _) in physical_rows {
+        assert!(sparse_set.private_get(entity).is_none());
+    }
+}
+
+/// Asserts that a callback panic preserves grouped rows and tracking for a clear or drain retry.
+#[cfg(feature = "std")]
+#[test]
+fn groups_clear_and_drain_callback_panic() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::sync::Mutex;
+
+    for drain in [false, true] {
+        let mut sparse_set = storage_with_tails(&[(3, 0)], 0, 0, |index| TrackedI32(index as i32));
+        let current = TrackingTimestamp::new(103);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let recorder = calls.clone();
+        let mut panicked = false;
+        sparse_set.on_removal(move |entity, value| {
+            if value.0 == 1 && !panicked {
+                panicked = true;
+                panic!("removal callback panicked");
+            }
+            recorder.lock().unwrap().push((entity, value.0));
+        });
+
+        let empty = |sparse_set: &mut SparseSet<TrackedI32>| {
+            if drain {
+                drop(sparse_set.private_drain(current));
+            } else {
+                sparse_set.private_clear(current);
+            }
+        };
+        assert!(catch_unwind(AssertUnwindSafe(|| empty(&mut sparse_set))).is_err());
+
+        let e0 = EntityId::new(0);
+        let e1 = EntityId::new(1);
+        let e2 = EntityId::new(2);
+        assert_eq!(*calls.lock().unwrap(), [(e0, 0)]);
+        assert_untouched(&sparse_set.groups);
+        assert_eq!(sparse_set.len(), 3);
+        assert_rows(&sparse_set, |value| Some(value.0 as u64));
+        assert!(sparse_set.deletion_data.is_empty());
+        assert!(sparse_set.removal_data.is_empty());
+
+        empty(&mut sparse_set);
+        assert!(sparse_set.is_empty());
+        assert_reset(&sparse_set.groups);
+        assert_eq!(*calls.lock().unwrap(), [(e0, 0), (e0, 0), (e1, 1), (e2, 2)]);
+    }
+}
+
 /// Asserts that inserting a new entity in a grouped storage leaves its groups untouched,
 /// the component lands in the unevaluated region.
 #[test]

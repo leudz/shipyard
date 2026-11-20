@@ -1000,6 +1000,12 @@ impl<T: Component> SparseSet<T> {
 
     /// Deletes all components in this storage.
     pub(crate) fn private_clear(&mut self, current: TrackingTimestamp) {
+        if let Some(on_removal) = &mut self.on_removal {
+            for (&entity, component) in self.dense.iter().zip(&self.data) {
+                on_removal(entity, component);
+            }
+        }
+
         self.reset_groups();
 
         for &id in &self.dense {
@@ -1026,6 +1032,12 @@ impl<T: Component> SparseSet<T> {
 
     /// Creates a draining iterator that empties the storage and yields the removed items.
     pub(crate) fn private_drain(&mut self, current: TrackingTimestamp) -> SparseSetDrain<'_, T> {
+        if let Some(on_removal) = &mut self.on_removal {
+            for (&entity, component) in self.dense.iter().zip(&self.data) {
+                on_removal(entity, component);
+            }
+        }
+
         self.reset_groups();
 
         if self.is_tracking_removal {

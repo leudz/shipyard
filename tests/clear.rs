@@ -144,6 +144,40 @@ fn clear_on_deletion() {
     assert_eq!(deleted, [entity0, entity1]);
 }
 
+/// Asserts that world clear reports each component with its entity and records it as a deletion.
+#[test]
+fn world_clear_on_removal() {
+    let mut world = World::new();
+    world.track_all::<U32>();
+    let e0 = world.add_entity(U32(4));
+    let e1 = world.add_entity(U32(9));
+    world.add_entity(());
+
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let recorder = calls.clone();
+    world
+        .borrow::<ViewMut<U32>>()
+        .unwrap()
+        .on_removal(move |entity, value| recorder.lock().unwrap().push((entity, value.0)));
+
+    world.clear();
+    world.clear();
+
+    assert!(!world.is_entity_alive(e0));
+    assert!(!world.is_entity_alive(e1));
+    let view = world.borrow::<View<U32, track::All>>().unwrap();
+    let expected = [(e0, 4), (e1, 9)];
+    assert_eq!(*calls.lock().unwrap(), expected);
+    assert_eq!(
+        view.deleted()
+            .map(|(entity, value)| (entity, value.0))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(view.removed().count(), 0);
+    assert!(view.is_empty());
+}
+
 /// Asserts that clearing reports only the original ID of the live entity and that a second clear
 /// reports no additional deletions.
 #[test]
