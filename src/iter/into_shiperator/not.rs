@@ -92,6 +92,9 @@ macro_rules! impl_into_shiperator_tracking {
             type Shiperator = Not<$type<FullRawWindow<'tmp, T, Track>>>;
 
             #[inline]
+            fn planning_len(&self) -> Option<usize> { Some((self.0).0.len()) }
+
+            #[inline]
             fn into_shiperator(
                 self,
             ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
@@ -119,6 +122,9 @@ macro_rules! impl_into_shiperator_tracking {
             type Shiperator = Not<$type<FullRawWindow<'tmp, T, Track>>>;
 
             #[inline]
+            fn planning_len(&self) -> Option<usize> { Some((self.0).0.len()) }
+
+            #[inline]
             fn into_shiperator(
                 self,
             ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
@@ -144,6 +150,9 @@ macro_rules! impl_into_shiperator_tracking {
             for Not<$type<&'tmp mut ViewMut<'v, T, Track>>>
         {
             type Shiperator = Not<$type<FullRawWindowMut<'tmp, T, Track>>>;
+
+            #[inline]
+            fn planning_len(&self) -> Option<usize> { Some((self.0).0.len()) }
 
             #[inline]
             fn into_shiperator(

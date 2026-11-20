@@ -50,8 +50,10 @@ fn memory_usage() {
     let expected_sparse_memory = sparse_set.sparse.used_memory();
     let expected_dense_memory = 1 * size_of::<EntityId>();
     let expected_data_memory = 1 * size_of::<I32>();
-    let expected_insertion_tracking_memory = 1 * size_of::<TrackingTimestamp>();
-    let expected_modification_tracking_memory = 1 * size_of::<TrackingTimestamp>();
+    let expected_insertion_tracking_memory =
+        size_of::<TrackingTimestamp>() + size_of::<ChunkTimestamp>();
+    let expected_modification_tracking_memory =
+        size_of::<TrackingTimestamp>() + size_of::<ChunkTimestamp>();
     let expected_deletion_tracking_memory = 1 * size_of::<(EntityId, TrackingTimestamp, I32)>();
     let expected_removal_tracking_memory = 1 * size_of::<(EntityId, TrackingTimestamp)>();
     let expected_groups_memory = 0;
@@ -112,10 +114,12 @@ fn detailed_memory_usage() {
     let expected_sparse_allocated = sparse_set.sparse.reserved_memory();
     let expected_dense_allocated = sparse_set.dense.capacity() * size_of::<EntityId>();
     let expected_data_allocated = sparse_set.data.capacity() * size_of::<I32>();
-    let expected_insertion_allocated =
-        sparse_set.insertion_data.capacity() * size_of::<TrackingTimestamp>();
-    let expected_modification_allocated =
-        sparse_set.modification_data.capacity() * size_of::<TrackingTimestamp>();
+    let expected_insertion_allocated = sparse_set.insertion_data.capacity()
+        * size_of::<TrackingTimestamp>()
+        + sparse_set.insertion_chunks.capacity() * size_of::<ChunkTimestamp>();
+    let expected_modification_allocated = sparse_set.modification_data.capacity()
+        * size_of::<TrackingTimestamp>()
+        + sparse_set.modification_summary.capacity() * size_of::<ChunkTimestamp>();
     let expected_deletion_allocated =
         sparse_set.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, I32)>();
     let expected_removal_allocated =
@@ -124,9 +128,11 @@ fn detailed_memory_usage() {
     let expected_sparse_used = sparse_set.sparse.used_memory();
     let expected_dense_used = sparse_set.dense.len() * size_of::<EntityId>();
     let expected_data_used = sparse_set.data.len() * size_of::<I32>();
-    let expected_insertion_used = sparse_set.insertion_data.len() * size_of::<TrackingTimestamp>();
-    let expected_modification_used =
-        sparse_set.modification_data.len() * size_of::<TrackingTimestamp>();
+    let expected_insertion_used = sparse_set.insertion_data.len() * size_of::<TrackingTimestamp>()
+        + sparse_set.insertion_chunks.len() * size_of::<ChunkTimestamp>();
+    let expected_modification_used = sparse_set.modification_data.len()
+        * size_of::<TrackingTimestamp>()
+        + sparse_set.modification_summary.len() * size_of::<ChunkTimestamp>();
     let expected_deletion_used =
         sparse_set.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, I32)>();
     let expected_removal_used =

@@ -14,10 +14,30 @@ where
 {
     type Shiperator = OrWindow<(T::Shiperator, U::Shiperator)>;
 
+    fn planning_len(&self) -> Option<usize> {
+        (self.0)
+            .0
+            .planning_len()?
+            .checked_add((self.0).1.planning_len()?)
+    }
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
-        let (shiperator_a, entities_a, _) = (self.0).0.into_shiperator();
-        let (shiperator_b, entities_b, _) = (self.0).1.into_shiperator();
+        self.into_shiperator_with_budget(usize::MAX)
+    }
+    #[inline]
+    fn into_shiperator_with_budget(
+        self,
+        max_chunks: usize,
+    ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let max_chunks = max_chunks.min(super::planning_budget(self.planning_len()));
+        let (shiperator_a, mut entities_a, _) = (self.0).0.into_shiperator_with_budget(max_chunks);
+        let (shiperator_b, mut entities_b, _) = (self.0).1.into_shiperator_with_budget(max_chunks);
+        if shiperator_a.has_no_candidates() {
+            entities_a = RawEntityIdAccess::empty();
+        }
+        if shiperator_b.has_no_candidates() {
+            entities_b = RawEntityIdAccess::empty();
+        }
 
         let mut or = OrWindow {
             storages: (shiperator_a, shiperator_b),

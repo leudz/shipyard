@@ -73,7 +73,7 @@ impl<T: IntoShiperator> IntoIter for T
 where
     <T as IntoShiperator>::Shiperator: Shiperator,
 {
-    #[inline]
+    #[inline(always)]
     fn iter(self) -> Shiper<Self::Shiperator> {
         let (mut shiperator, entities, metadata) = self.into_shiperator();
 
@@ -191,6 +191,24 @@ pub unsafe trait IntoShiperator {
     /// The Shiperator's state matches the entities' first segment, follow-up segments install
     /// their own.
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata);
+    /// Returns an unfiltered driver length without reading tracking timestamps.
+    #[inline]
+    fn planning_len(&self) -> Option<usize> {
+        None
+    }
+
+    /// Builds with a per-input metadata budget. Exceeding it keeps ordinary traversal.
+    #[inline]
+    fn into_shiperator_with_budget(
+        self,
+        _max_chunks: usize,
+    ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata)
+    where
+        Self: Sized,
+    {
+        self.into_shiperator()
+    }
+
     /// Returns `true` if the Shiperator can be a captain.
     fn can_captain() -> bool;
     /// Returns `true` if the Shiperator can be a sailor.
@@ -204,6 +222,11 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for &'tmp View<'v, T, Track>
 {
     type Shiperator = FullRawWindow<'tmp, T, Track>;
+
+    #[inline]
+    fn planning_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
@@ -230,6 +253,11 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for &'tmp ViewMut<'v, T, Track>
 {
     type Shiperator = FullRawWindow<'tmp, T, Track>;
+
+    #[inline]
+    fn planning_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
@@ -260,11 +288,16 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = FullRawWindowMut<'tmp, T, Track>;
 
     #[inline]
+    fn planning_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
+
+    #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
         let window = FullRawWindowMut::new(self);
         let entities = window.entity_iter();
         // The metadata points to the storage, we take it once `new` is done reborrowing the
-        // storage exclusively. The window only points into the storage's allocations.
+        // storage exclusively.
         let metadata = ConstructionMetadata::window(self.sparse_set);
 
         (window, entities, metadata)
@@ -284,6 +317,11 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 // SAFE: The slice is its own single segment, borrowed for 'tmp. It yields entity ids by value.
 unsafe impl<'tmp> IntoShiperator for &'tmp [EntityId] {
     type Shiperator = &'tmp [EntityId];
+
+    #[inline]
+    fn planning_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
@@ -383,6 +421,15 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 unsafe impl<T: IntoShiperator> IntoShiperator for (T,) {
     type Shiperator = T::Shiperator;
 
+    fn planning_len(&self) -> Option<usize> {
+        self.0.planning_len()
+    }
+    fn into_shiperator_with_budget(
+        self,
+        max_chunks: usize,
+    ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        self.0.into_shiperator_with_budget(max_chunks)
+    }
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
         self.0.into_shiperator()
     }
@@ -418,11 +465,30 @@ macro_rules! impl_into_shiperator_tuple {
             type Shiperator = Mixed<($($type::Shiperator,)+)>;
 
             #[inline]
+            fn planning_len(&self) -> Option<usize> {
+                $(if !$type::can_sailor() { return self.$index.planning_len(); })+
+                let mut len: Option<usize> = None;
+                $(if $type::can_captain() {
+                    if let Some(candidate) = self.$index.planning_len() {
+                        len = Some(len.map_or(candidate, |len| len.min(candidate)));
+                    }
+                })+
+                len
+            }
+
+            #[inline]
             #[track_caller]
-            fn into_shiperator(
-                self,
+            fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                self.into_shiperator_with_budget(usize::MAX)
+            }
+
+            #[inline]
+            #[track_caller]
+            fn into_shiperator_with_budget(
+                self, max_chunks: usize,
             ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
-                let shiperators = ($(self.$index.into_shiperator(),)+);
+                let max_chunks = max_chunks.min(planning_budget(self.planning_len()));
+                let mut shiperators = ($(self.$index.into_shiperator_with_budget(max_chunks),)+);
 
                 let can_captains = ($(
                     $type::can_captain(),
@@ -470,6 +536,8 @@ macro_rules! impl_into_shiperator_tuple {
                     },
                 )+];
                 let (captain, metadata) = planner::choose(&mut children);
+
+                $(if captain != $index { shiperators.$index.0.unpick(); })+
 
                 // Preorder position of each child's states in the Mixed's rows.
                 let mut next_slot = 1;
@@ -537,3 +605,12 @@ into_shiperator_tuple![
     (U, 20) (V, 21) (W, 22) (X, 23) (Y, 24) (Z, 25) (AA, 26) (BB, 27) (CC, 28) (DD, 29)
     (EE, 30) (FF, 31)
 ];
+
+/// Full planning also serves captain selection and splitting; cap each input's metadata work.
+#[inline]
+pub(super) fn planning_budget(len: Option<usize>) -> usize {
+    len.map_or(
+        usize::MAX,
+        |len| if len == 0 { 0 } else { (len / 2).max(1) },
+    )
+}

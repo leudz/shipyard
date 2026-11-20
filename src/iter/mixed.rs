@@ -2,7 +2,7 @@ use crate::entity_id::EntityId;
 use crate::iter::plan::{
     Coverage, CoverageSpan, NodeKind, NodeState, PlanBuilder, SegmentSchedule,
 };
-use crate::iter::shiperator::fold_candidates;
+use crate::iter::shiperator::{fold_candidates, fold_candidates_with};
 use crate::iter::{EntityCursor, RawEntityIdAccess, SegmentEntry, SegmentRow};
 use crate::iter::{Shiperator, into_shiperator::strip_plus};
 use core::ptr::NonNull;
@@ -165,14 +165,27 @@ macro_rules! impl_shiperator_output {
                 entities: &EntityCursor,
                 index: usize,
             ) -> Option<($($type::Index,)+)> {
+                // Check cheap filters first; keep tuple order for potentially costly joins.
+                let captain_indices = ($(
+                    if $index == CAPTAIN && $type::PREFER_CAPTAIN_FIRST {
+                        // SAFE: Our caller's guarantees are the captain's own.
+                        Some(unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?)
+                    } else {
+                        None
+                    },
+                )+);
+
                 // SAFE: Our caller guarantees `entities` isn't empty.
                 let eid = unsafe { entities.current() };
 
                 // `$index == CAPTAIN` is a constant, each child keeps a single arm.
                 Some(($(
                     if $index == CAPTAIN {
-                        // SAFE: Our caller's guarantees are the captain's own.
-                        unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?
+                        match captain_indices.$index {
+                            Some(resolved) => resolved,
+                            // SAFE: Our caller's guarantees are the captain's own.
+                            None => unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?,
+                        }
                     } else {
                         self.shiperator.$index.sailor_indices_of(eid)?
                     },
@@ -330,9 +343,19 @@ macro_rules! impl_shiperator_output {
                 // Our caller keeps our plan alive. The resolver's indices come from
                 // `captain_indices_of` and `sailor_indices_of`, valid for `get_data`.
                 unsafe {
-                    fold_candidates::<Self, WITH_ID, Acc, Fold, _>(self, entities, init, f, |entities, index| {
-                        self.single_captain_indices_of::<CAPTAIN>(entities, index)
-                    })
+                    let start = entities.local_index();
+                    let range = start..start + entities.len();
+                    let accessors = ($(
+                        if $index == CAPTAIN {
+                            self.shiperator.$index.prepare_bulk(range.clone())
+                        } else {
+                            <$type as Shiperator>::get_data
+                        },
+                    )+);
+                    fold_candidates_with::<Self, WITH_ID, Acc, Fold, _, _>(self, entities, init, f,
+                        |entities, index| self.single_captain_indices_of::<CAPTAIN>(entities, index),
+                        |indices| ($(accessors.$index(&self.shiperator.$index, indices.$index),)+),
+                    )
                 }
             }
         }
@@ -340,6 +363,47 @@ macro_rules! impl_shiperator_output {
         impl<$($type: Shiperator),+> Shiperator for Mixed<($($type,)+)> {
             type Out = ($($type::Out,)+);
             type Index = ($($type::Index,)+);
+            const HAS_CANDIDATE_PLAN: bool = false $(|| $type::HAS_CANDIDATE_PLAN)+;
+
+            fn has_no_candidates(&self) -> bool { false $(|| self.shiperator.$index.has_no_candidates())+ }
+            fn unpick(&mut self) { $(self.shiperator.$index.unpick();)+ }
+
+            #[inline]
+            fn has_dense_candidates(&self) -> bool {
+                $(if self.captain_mask & (1 << $index) != 0 {
+                    return self.shiperator.$index.has_dense_candidates();
+                })+
+                false
+            }
+
+            #[inline]
+            unsafe fn candidate_count(&self, start: usize, end: usize) -> usize {
+                $(if self.captain_mask & (1 << $index) != 0 {
+                    // SAFE: Active children share this segment's local indices.
+                    return unsafe { self.shiperator.$index.candidate_count(start, end) };
+                })+
+                end - start
+            }
+            #[inline]
+            unsafe fn candidate_split_at(&self, start: usize, end: usize, count: usize) -> usize {
+                $(if self.captain_mask & (1 << $index) != 0 {
+                    // SAFE: This is the child whose candidates we count.
+                    return unsafe { self.shiperator.$index.candidate_split_at(start, end, count) };
+                })+
+                start + count
+            }
+
+
+            #[inline]
+            unsafe fn next_candidate_range(&self, index: usize, end: usize) -> core::ops::Range<usize> {
+                $(
+                    if self.captain_mask & (1 << $index) != 0 {
+                        // SAFE: Captain children resolve the same local range as this Mixed.
+                        return unsafe { self.shiperator.$index.next_candidate_range(index, end) };
+                    }
+                )+
+                index..end
+            }
 
             #[inline]
             fn node_count() -> usize {
@@ -387,6 +451,19 @@ macro_rules! impl_shiperator_output {
                 // `coverage` lives in the plan `entry` reads from, our caller keeps it alive while
                 // we resolve captain indices. A row outside any plan only gives empty slices.
                 self.set_segment_state(captain_mask, coverage);
+            }
+
+            #[inline(always)]
+            unsafe fn prepare_tracking(&mut self, range: Option<core::ops::Range<usize>>) {
+                $(
+                    let child_range = if self.captain_mask & (1 << $index) != 0 {
+                        range.clone()
+                    } else {
+                        None
+                    };
+                    // SAFE: Active children share local indices; sailors clear earlier preparation.
+                    unsafe { self.shiperator.$index.prepare_tracking(child_range) };
+                )+
             }
 
             #[inline]
@@ -472,9 +549,13 @@ macro_rules! impl_shiperator_output {
                 unsafe {
                     match self.bulk_strategy() {
                         BulkStrategy::Aligned => {
-                            fold_candidates::<Self, WITH_ID, Acc, Fold, _>(self, entities, init, f, |entities, index| {
-                                self.aligned_indices_of(entities, index)
-                            })
+                            let start = entities.local_index();
+                            let range = start..start + entities.len();
+                            let accessors = ($(self.shiperator.$index.prepare_bulk(range.clone()),)+);
+                            fold_candidates_with::<Self, WITH_ID, Acc, Fold, _, _>(self, entities, init, f,
+                                |entities, index| self.aligned_indices_of(entities, index),
+                                |indices| ($(accessors.$index(&self.shiperator.$index, indices.$index),)+),
+                            )
                         }
                         // `single_captain` holds our only captain's position and we have no coverage.
                         BulkStrategy::SingleCaptain => match self.single_captain {

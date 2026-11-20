@@ -3,6 +3,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::r#mut::Mut;
 use crate::sparse_set::SparseSet;
+use crate::sparse_set::TRACKING_CHUNK_SIZE;
 use crate::tracking::Tracking;
 use crate::views::{View, ViewMut};
 use core::any::type_name;
@@ -90,13 +91,32 @@ impl<'a, 'b, T: Component, Track: Tracking> Get for &'b mut ViewMut<'a, T, Track
         let SparseSet {
             data,
             modification_data,
+            modification_summary,
             is_tracking_modification,
             ..
         } = self.sparse_set;
 
+        let (flag, chunk) = if T::Tracking::track_modification() || *is_tracking_modification {
+            debug_assert!(index < modification_data.len());
+            debug_assert!(index / TRACKING_CHUNK_SIZE < modification_summary.len());
+            // SAFE: index_of found a live row. Declared or dynamically enabled modification
+            // tracking maintains a timestamp for each row and a summary for each chunk.
+            unsafe {
+                (
+                    Some(modification_data.get_unchecked_mut(index)),
+                    Some(
+                        modification_summary
+                            .writers()
+                            .get_unchecked(index / TRACKING_CHUNK_SIZE),
+                    ),
+                )
+            }
+        } else {
+            (None, None)
+        };
         Ok(Mut {
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
+            flag,
+            chunk,
             current: self.current,
             data: unsafe { data.get_unchecked_mut(index) },
         })

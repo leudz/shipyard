@@ -86,6 +86,7 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
                     .resize(self.dense.len(), TrackingTimestamp::origin());
             }
 
+            sparse_set.refresh_tracking_chunks(0..sparse_set.len());
             SBoxBuilder::new(NonSend(sparse_set))
         })
     }
@@ -209,6 +210,7 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
                     .resize(self.dense.len(), TrackingTimestamp::origin());
             }
 
+            sparse_set.refresh_tracking_chunks(0..sparse_set.len());
             SBoxBuilder::new(NonSync(sparse_set))
         })
     }
@@ -334,6 +336,7 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
                     .resize(self.dense.len(), TrackingTimestamp::origin());
             }
 
+            sparse_set.refresh_tracking_chunks(0..sparse_set.len());
             SBoxBuilder::new(NonSendSync(sparse_set))
         })
     }

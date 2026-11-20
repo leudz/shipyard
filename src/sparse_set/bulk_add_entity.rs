@@ -81,6 +81,8 @@ fn publish_batch<T: Component>(
             .resize(end, TrackingTimestamp::origin());
     }
 
+    sparse_set.refresh_tracking_chunks(start..end);
+
     let sparse = &mut sparse_set.sparse;
     sparse.bulk_allocate(new_entities[0], new_entities[new_entities.len() - 1]);
     for (offset, &entity) in new_entities.iter().enumerate() {

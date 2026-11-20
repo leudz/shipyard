@@ -4,8 +4,8 @@ mod tests;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::{MemoryUsageDetail, StorageMemoryUsage};
-use crate::sparse_set::SparseSet;
 use crate::sparse_set::groups::GroupRange;
+use crate::sparse_set::{ChunkTimestamp, SparseSet};
 use crate::tracking::TrackingTimestamp;
 use core::any::type_name;
 use core::fmt;
@@ -25,8 +25,10 @@ impl<T: Component> SparseSet<T> {
         self.sparse.reserved_memory()
             + (self.dense.capacity() * size_of::<EntityId>())
             + (self.data.capacity() * size_of::<T>())
-            + (self.insertion_data.capacity() * size_of::<TrackingTimestamp>())
-            + (self.modification_data.capacity() * size_of::<TrackingTimestamp>())
+            + (self.insertion_data.capacity() * size_of::<TrackingTimestamp>()
+                + self.insertion_chunks.capacity() * size_of::<ChunkTimestamp>())
+            + (self.modification_data.capacity() * size_of::<TrackingTimestamp>()
+                + self.modification_summary.capacity() * size_of::<ChunkTimestamp>())
             + (self.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, T)>())
             + (self.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>())
             + (self.groups.ranges.capacity() * size_of::<GroupRange>())
@@ -37,8 +39,10 @@ impl<T: Component> SparseSet<T> {
         self.sparse.used_memory()
             + (self.dense.len() * size_of::<EntityId>())
             + (self.data.len() * size_of::<T>())
-            + (self.insertion_data.len() * size_of::<TrackingTimestamp>())
-            + (self.modification_data.len() * size_of::<TrackingTimestamp>())
+            + (self.insertion_data.len() * size_of::<TrackingTimestamp>()
+                + self.insertion_chunks.len() * size_of::<ChunkTimestamp>())
+            + (self.modification_data.len() * size_of::<TrackingTimestamp>()
+                + self.modification_summary.len() * size_of::<ChunkTimestamp>())
             + (self.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, T)>())
             + (self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>())
             + (self.groups.ranges.len() * size_of::<GroupRange>())
@@ -73,9 +77,9 @@ pub struct SparseSetMemory {
     pub dense: usize,
     #[allow(missing_docs)]
     pub data: usize,
-    #[allow(missing_docs)]
+    /// Insertion timestamps and chunk summaries.
     pub insertion_data: usize,
-    #[allow(missing_docs)]
+    /// Modification timestamps and chunk summaries.
     pub modification_data: usize,
     #[allow(missing_docs)]
     pub deletion_data: usize,
@@ -106,9 +110,11 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                 sparse: self.sparse.reserved_memory(),
                 dense: self.dense.capacity() * size_of::<EntityId>(),
                 data: self.data.capacity() * size_of::<T>(),
-                insertion_data: self.insertion_data.capacity() * size_of::<TrackingTimestamp>(),
-                modification_data: self.modification_data.capacity()
-                    * size_of::<TrackingTimestamp>(),
+                insertion_data: (self.insertion_data.capacity() * size_of::<TrackingTimestamp>()
+                    + self.insertion_chunks.capacity() * size_of::<ChunkTimestamp>()),
+                modification_data: (self.modification_data.capacity()
+                    * size_of::<TrackingTimestamp>()
+                    + self.modification_summary.capacity() * size_of::<ChunkTimestamp>()),
                 deletion_data: self.deletion_data.capacity()
                     * size_of::<(EntityId, TrackingTimestamp, T)>(),
                 removal_data: self.removal_data.capacity()
@@ -120,8 +126,10 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                 sparse: self.sparse.used_memory(),
                 dense: self.dense.len() * size_of::<EntityId>(),
                 data: self.data.len() * size_of::<T>(),
-                insertion_data: self.insertion_data.len() * size_of::<TrackingTimestamp>(),
-                modification_data: self.modification_data.len() * size_of::<TrackingTimestamp>(),
+                insertion_data: (self.insertion_data.len() * size_of::<TrackingTimestamp>()
+                    + self.insertion_chunks.len() * size_of::<ChunkTimestamp>()),
+                modification_data: (self.modification_data.len() * size_of::<TrackingTimestamp>()
+                    + self.modification_summary.len() * size_of::<ChunkTimestamp>()),
                 deletion_data: self.deletion_data.len()
                     * size_of::<(EntityId, TrackingTimestamp, T)>(),
                 removal_data: self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>(),

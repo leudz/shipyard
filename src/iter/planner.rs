@@ -816,7 +816,7 @@ impl Selection {
 /// ### Safety
 ///
 /// `root`, `entities` and `metadata` must come from the same `into_shiperator` call.
-#[inline]
+#[inline(always)]
 pub(crate) unsafe fn install_winner<S: Shiperator>(
     root: &mut S,
     entities: RawEntityIdAccess,

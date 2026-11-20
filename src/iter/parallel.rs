@@ -46,7 +46,21 @@ pub(super) struct Piece<P> {
     pub(super) min_len: usize,
 }
 
-impl<P: UnindexedProducer + Iterator> UnindexedProducer for Piece<P> {
+pub(super) trait CandidateProducer {
+    fn candidate_work(&self) -> Option<usize>;
+}
+impl<S: Shiperator + Clone> CandidateProducer for Shiper<S> {
+    fn candidate_work(&self) -> Option<usize> {
+        Shiper::candidate_work(self)
+    }
+}
+impl<S: Shiperator + Clone> CandidateProducer for WithId<Shiper<S>> {
+    fn candidate_work(&self) -> Option<usize> {
+        self.0.candidate_work()
+    }
+}
+
+impl<P: UnindexedProducer + Iterator + CandidateProducer> UnindexedProducer for Piece<P> {
     type Item = <P as UnindexedProducer>::Item;
 
     #[inline]
@@ -55,8 +69,7 @@ impl<P: UnindexedProducer + Iterator> UnindexedProducer for Piece<P> {
         // We can still split when they can't count them.
         let too_small = self
             .producer
-            .size_hint()
-            .1
+            .candidate_work()
             .is_some_and(|candidates| candidates < 2 * self.min_len);
         if too_small {
             return (self, None);
@@ -101,7 +114,17 @@ impl<S: Shiperator> Shiper<S> {
                     return folder;
                 }
 
-                let chunk_len = self.cursor.len().min(FOLD_CHUNK);
+                let start = self.cursor.local_index();
+                // SAFE: This is the remaining range of our installed segment.
+                let range = unsafe {
+                    self.shiperator
+                        .next_candidate_range(start, start + self.cursor.len())
+                };
+                self.cursor.advance_by(range.start - start);
+                if self.cursor.is_empty() {
+                    break;
+                }
+                let chunk_len = (range.end - range.start).min(FOLD_CHUNK);
                 let (mut chunk, rest) = self.cursor.split_at(chunk_len);
                 self.cursor = rest;
 
@@ -286,7 +309,7 @@ where
         C: UnindexedConsumer<Self::Item>,
     {
         let WithId(ParShiperator(producer)) = self;
-        let min_len = min_piece_len(producer.size_hint().1);
+        let min_len = min_piece_len(producer.candidate_work());
         let producer = WithId(producer);
 
         // This has to match `opt_len`, see `ParShiperator::drive_unindexed`.
@@ -316,7 +339,7 @@ where
         C: UnindexedConsumer<Self::Item>,
     {
         let producer = self.0;
-        let min_len = min_piece_len(producer.size_hint().1);
+        let min_len = min_piece_len(producer.candidate_work());
 
         // Once `opt_len` reports a length, consumers like `collect`'s may only be split with their
         // indexed methods. Both use `exact_len` on the same state so they always agree.

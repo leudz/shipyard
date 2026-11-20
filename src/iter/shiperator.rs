@@ -7,9 +7,9 @@ use crate::entity_id::EntityId;
 use crate::iter::{EntityCursor, SegmentEntry, SegmentRow};
 use crate::r#mut::Mut;
 use crate::optional::Optional;
-use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut, TRACKING_CHUNK_SIZE};
 use crate::track;
-use crate::tracking::Tracking;
+use crate::tracking::{ModificationTracking, Tracking};
 
 /// Provides iteration costs, component lookup, and data access for a storage iterator.
 ///
@@ -25,6 +25,104 @@ pub trait Shiperator {
     /// Type this Shiperator is indexed with.\
     /// This is often `usize` or a tuple of `usize` for multiple storages.
     type Index;
+
+    /// Prefers evaluating this captain before sailors on the single-captain fast path.
+    /// The planner still selects the captain; matching results stay unchanged.
+    ///
+    /// ### Implementations
+    ///
+    /// Enable for filters whose rejection is cheaper than a sailor lookup.
+    /// The default preserves tuple order. Wrappers should account for their own lookup costs.
+    const PREFER_CAPTAIN_FIRST: bool = false;
+
+    /// Enables candidate ranges and candidate-weighted splitting. Defaults to full segments.
+    const HAS_CANDIDATE_PLAN: bool = false;
+
+    /// Whether a required input proves this entire query empty.
+    /// Unknown inputs keep the default `false`; optional and negated inputs cannot prove it.
+    #[inline]
+    fn has_no_candidates(&self) -> bool {
+        false
+    }
+
+    /// Whether the current captain's plan keeps the whole segment as candidates.
+    /// Exact tracking and join checks still apply. Exact windows keep the whole segment.
+    #[inline]
+    fn has_dense_candidates(&self) -> bool {
+        self.is_exact_sized()
+    }
+
+    /// Prepares modification bounds for captain candidates; `None` restores sailor marking.
+    ///
+    /// ### Implementations
+    ///
+    /// Bounds may be conservative. This must not access component data or change matching results.
+    /// The default keeps per-item marking. Wrappers should forward their children's active ranges.
+    ///
+    /// ### Safety
+    ///
+    /// A range belongs to the installed segment. Until preparation changes, this node only yields
+    /// captain candidates from that range. Prepare `None` before using it as a sailor.
+    #[inline]
+    unsafe fn prepare_tracking(&mut self, _range: Option<core::ops::Range<usize>>) {}
+
+    /// Returns a data accessor for a prepared captain range.
+    ///
+    /// The default uses ordinary access. Implementations may mark conservative bounds once
+    /// and return an accessor without per-item summary work.
+    ///
+    /// ### Safety
+    ///
+    /// The range belongs to the installed segment. The returned accessor is only used with
+    /// indices resolved for candidates from this range, while the storage borrow stays alive.
+    #[inline]
+    unsafe fn prepare_bulk(
+        &self,
+        _range: core::ops::Range<usize>,
+    ) -> unsafe fn(&Self, Self::Index) -> Self::Out {
+        Self::get_data
+    }
+
+    /// Releases planning data when this node becomes a sailor, preserving its lookup results.
+    #[inline]
+    fn unpick(&mut self) {}
+
+    /// Counts candidate slots, before exact matching, in the current segment's range.
+    /// Counts must be additive across subranges and identical for clones.
+    ///
+    /// ### Safety
+    /// The range belongs to the installed segment, whose plan must stay alive.
+    #[inline]
+    unsafe fn candidate_count(&self, start: usize, end: usize) -> usize {
+        end - start
+    }
+
+    /// Splits a range after `count` candidate slots. Must return an index in `start..=end`.
+    /// Both halves keep exactly the candidate counts reported by `candidate_count`.
+    ///
+    /// ### Safety
+    /// The range belongs to the installed segment, its plan stays alive, and `count`
+    /// does not exceed its candidate count.
+    #[inline]
+    unsafe fn candidate_split_at(&self, start: usize, _end: usize, count: usize) -> usize {
+        start + count
+    }
+
+    /// Returns the next candidate range within `index..end` of the current segment.
+    ///
+    /// ### Implementations
+    ///
+    /// Return a nonempty subrange, or `end..end` when no candidates remain.
+    /// Candidates before its start must fail to match. Candidates inside still need checking.
+    /// The default keeps the whole range. This method must not access component data.
+    ///
+    /// ### Safety
+    ///
+    /// The range must belong to the current segment and its plan must still be alive.
+    #[inline]
+    unsafe fn next_candidate_range(&self, index: usize, end: usize) -> core::ops::Range<usize> {
+        index..end
+    }
 
     /// Returns the number of nodes in this Shiperator's tree, itself included.
     ///
@@ -193,12 +291,13 @@ pub trait Shiperator {
 ///
 /// Calling `resolve` with a non-empty cursor and the local index of its current candidate
 /// must be safe, and the indices it returns must be valid indices for `shiperator.get_data`.
+/// The cursor must belong to the installed segment, whose plan must stay alive.
 #[inline(always)]
 pub(crate) unsafe fn fold_candidates<S, const WITH_ID: bool, B, F, R>(
     shiperator: &S,
     entities: &mut EntityCursor,
     init: B,
-    mut f: F,
+    f: F,
     resolve: R,
 ) -> B
 where
@@ -206,11 +305,114 @@ where
     F: FnMut(B, Option<EntityId>, S::Out) -> B,
     R: Fn(&EntityCursor, usize) -> Option<S::Index>,
 {
+    // SAFE: The caller guarantees resolved indices are valid for this window.
+    unsafe {
+        fold_candidates_with::<S, WITH_ID, B, F, R, _>(
+            shiperator,
+            entities,
+            init,
+            f,
+            resolve,
+            |index| shiperator.get_data(index),
+        )
+    }
+}
+
+// Keep progress local so component writes cannot alias the hot cursor.
+// Publish it on normal return and unwinding alike.
+struct CursorProgress<'a> {
+    target: &'a mut EntityCursor,
+    cursor: EntityCursor,
+}
+impl Drop for CursorProgress<'_> {
+    fn drop(&mut self) {
+        *self.target = self.cursor;
+    }
+}
+
+// Same contracts, with a data accessor valid for every resolved index.
+#[inline(always)]
+pub(crate) unsafe fn fold_candidates_with<S, const WITH_ID: bool, B, F, R, G>(
+    shiperator: &S,
+    entities: &mut EntityCursor,
+    init: B,
+    mut f: F,
+    resolve: R,
+    get_data: G,
+) -> B
+where
+    S: Shiperator + ?Sized,
+    F: FnMut(B, Option<EntityId>, S::Out) -> B,
+    R: Fn(&EntityCursor, usize) -> Option<S::Index>,
+    G: Fn(S::Index) -> S::Out,
+{
+    let mut progress = CursorProgress {
+        cursor: *entities,
+        target: entities,
+    };
+    let entities = &mut progress.cursor;
+    // Dense plans need exact checks, but no candidate range lookups.
+    if !S::HAS_CANDIDATE_PLAN || shiperator.is_exact_sized() || shiperator.has_dense_candidates() {
+        // SAFE: The same cursor, resolver and data access contracts apply.
+        return unsafe {
+            fold_all_candidates::<S, WITH_ID, B, F, R, G>(
+                shiperator, entities, init, f, resolve, get_data,
+            )
+        };
+    }
     let mut acc = init;
 
     while !entities.is_empty() {
+        let index = entities.local_index();
+        // SAFE: Our caller keeps this segment and its plan valid for the remaining cursor.
+        let range = unsafe { shiperator.next_candidate_range(index, index + entities.len()) };
+        entities.advance_by(range.start - index);
+        while entities.local_index() < range.end {
+            let Some(indices) = resolve(entities, entities.local_index()) else {
+                entities.advance();
+                continue;
+            };
+
+            let entity_id = if WITH_ID {
+                // SAFE: The cursor isn't empty, we haven't consumed its current candidate yet.
+                Some(unsafe { entities.current() })
+            } else {
+                None
+            };
+
+            // The candidate is consumed before its item exists. If `f` panics, nothing can
+            // resume from this candidate and create its item a second time.
+            entities.advance();
+
+            // SAFE: Our caller guarantees `resolve`'s indices are valid for `get_data`.
+            let item = get_data(indices);
+
+            acc = f(acc, entity_id, item);
+        }
+    }
+
+    acc
+}
+
+// Same contracts as `fold_candidates`, without candidate range lookups.
+#[inline(always)]
+unsafe fn fold_all_candidates<S, const WITH_ID: bool, B, F, R, G>(
+    _shiperator: &S,
+    entities: &mut EntityCursor,
+    init: B,
+    mut f: F,
+    resolve: R,
+    get_data: G,
+) -> B
+where
+    S: Shiperator + ?Sized,
+    F: FnMut(B, Option<EntityId>, S::Out) -> B,
+    R: Fn(&EntityCursor, usize) -> Option<S::Index>,
+    G: Fn(S::Index) -> S::Out,
+{
+    let mut acc = init;
+    while !entities.is_empty() {
         let Some(indices) = resolve(entities, entities.local_index()) else {
-            // Rejected candidates are consumed too.
             entities.advance();
             continue;
         };
@@ -227,11 +429,10 @@ where
         entities.advance();
 
         // SAFE: Our caller guarantees `resolve`'s indices are valid for `get_data`.
-        let item = unsafe { shiperator.get_data(indices) };
+        let item = get_data(indices);
 
         acc = f(acc, entity_id, item);
     }
-
     acc
 }
 
@@ -356,6 +557,71 @@ macro_rules! impl_shiperator_no_mut {
 
 impl_shiperator_no_mut![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
 
+impl<'tmp, T: Component, Track: ModificationTracking> FullRawWindowMut<'tmp, T, Track> {
+    // Same index contract as get_data; the candidate's summary already covers current.
+    #[inline(always)]
+    unsafe fn get_prepared_data(&self, index: usize) -> Mut<'tmp, T> {
+        unsafe {
+            Mut {
+                flag: Some(&mut *self.modification_data.add(index)),
+                chunk: None,
+                current: self.current,
+                data: &mut *self.data.add(index),
+            }
+        }
+    }
+
+    // Same contracts as fold_segment; summaries are conservative upper bounds.
+    #[inline]
+    unsafe fn fold_tracked_segment<const WITH_ID: bool, B, F>(
+        &self,
+        entities: &mut EntityCursor,
+        mut acc: B,
+        mut f: F,
+    ) -> B
+    where
+        F: FnMut(B, Option<EntityId>, Mut<'tmp, T>) -> B,
+    {
+        if entities.is_empty() {
+            return acc;
+        }
+        let start = self.resolve_index(entities.local_index());
+        let end = start + entities.len();
+        if !self.chunks_prepared {
+            // SAFE: The storage borrow keeps the summary alive.
+            unsafe { self.modification_summary.as_ref() }.prepare_range(
+                start..end,
+                self.dense_len,
+                self.current,
+            );
+        }
+
+        // Mark before yielding: items may be retained and mutated after this fold returns.
+        // Per-item flags remain lazy; read-only callbacks only broaden the chunk summary.
+        while !entities.is_empty() {
+            let index = self.resolve_index(entities.local_index());
+            let entity_id = if WITH_ID {
+                // SAFE: The candidate is unconsumed and belongs to the installed segment.
+                Some(unsafe { entities.current() })
+            } else {
+                None
+            };
+            entities.advance();
+            // SAFE: This unique candidate was consumed before yielding; its summary covers current.
+            let item = unsafe {
+                Mut {
+                    flag: Some(&mut *self.modification_data.add(index)),
+                    chunk: None,
+                    current: self.current,
+                    data: &mut *self.data.add(index),
+                }
+            };
+            acc = f(acc, entity_id, item);
+        }
+        acc
+    }
+}
+
 macro_rules! impl_shiperator_mut {
     ($($track: path)+) => {
         $(
@@ -373,10 +639,36 @@ macro_rules! impl_shiperator_mut {
                     self.describe_window(active, row);
                 }
 
-                #[inline]
+                #[inline(always)]
                 unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
                     // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
                     unsafe { self.enter_window(entry) };
+                }
+
+                #[inline(always)]
+                unsafe fn prepare_tracking(&mut self, range: Option<core::ops::Range<usize>>) {
+                    self.chunks_prepared = range.is_some();
+                    if let Some(range) = range {
+                        let start = self.resolve_index(range.start);
+                        let end = self.resolve_index(range.end);
+                        // SAFE: The caller supplies this window's installed candidate range.
+                        unsafe { self.modification_summary.as_ref() }
+                            .prepare_range(start..end, self.dense_len, self.current);
+                    }
+                }
+
+                #[inline(always)]
+                unsafe fn prepare_bulk(
+                    &self, range: core::ops::Range<usize>,
+                ) -> unsafe fn(&Self, Self::Index) -> Self::Out {
+                    if !self.chunks_prepared {
+                        let start = self.resolve_index(range.start);
+                        let end = self.resolve_index(range.end);
+                        // SAFE: The caller supplies this window's installed candidate range.
+                        unsafe { self.modification_summary.as_ref() }
+                            .prepare_range(start..end, self.dense_len, self.current);
+                    }
+                    Self::get_prepared_data
                 }
 
                 #[inline]
@@ -412,10 +704,30 @@ macro_rules! impl_shiperator_mut {
                     unsafe {
                         Mut {
                             flag: Some(&mut *self.modification_data.add(index)),
+                            chunk: if self.chunks_prepared { None } else {
+                                let chunks = self.modification_writers.as_ref();
+                                debug_assert!(index / TRACKING_CHUNK_SIZE < chunks.len());
+                                // Each tracked component has a summary for its chunk.
+                                Some(chunks.get_unchecked(index / TRACKING_CHUNK_SIZE))
+                            },
                             current: self.current,
                             data: &mut *self.data.add(index),
                         }
                     }
+                }
+
+                #[inline]
+                unsafe fn fold_segment<const WITH_ID: bool, B, F>(
+                    &self,
+                    entities: &mut EntityCursor,
+                    init: B,
+                    f: F,
+                ) -> B
+                where
+                    F: FnMut(B, Option<EntityId>, Self::Out) -> B,
+                {
+                    // SAFE: The caller supplies this window's installed segment and unique items.
+                    unsafe { self.fold_tracked_segment::<WITH_ID, _, _>(entities, init, f) }
                 }
             }
         )+

@@ -71,6 +71,30 @@ harness = false
 name = "storage_access"
 harness = false
 
+[[bench]]
+name = "tracking_captain"
+harness = false
+
+[[bench]]
+name = "tracking_metadata"
+harness = false
+required-features = ["parallel", "std"]
+
+[[bench]]
+name = "tracking_mixed"
+harness = false
+required-features = ["parallel", "std"]
+
+[[bench]]
+name = "tracking_chunks"
+harness = false
+required-features = ["parallel", "std"]
+
+[[bench]]
+name = "tracking_plan"
+harness = false
+required-features = ["parallel", "std"]
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

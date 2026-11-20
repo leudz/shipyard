@@ -500,3 +500,28 @@ fn trust_held_prefix() {
         assert_eq!((&c).get(id).unwrap().0, 1200 + i);
     }
 }
+
+#[cfg(feature = "std")]
+#[test]
+fn cursor_progress_survives_fold_panic() {
+    let mut world = crate::World::builder_for_test()
+        .with_group::<(A, B)>()
+        .build();
+    let ids: Vec<_> = (0..128).map(|i| world.add_entity((A(i), B(i)))).collect();
+    world.regroup();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let mut iter = (&a, &b).iter();
+    let mut calls = 0;
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        // SAFE: The cursor and window belong to this iterator's installed segment.
+        unsafe {
+            iter.shiperator
+                .fold_segment::<false, (), _>(&mut iter.cursor, (), |(), _, _| {
+                    calls += 1;
+                    assert_ne!(calls, 3, "consumer panic");
+                })
+        };
+    }));
+    assert!(result.is_err());
+    assert_eq!(iter.with_id().next().map(|(id, _)| id), Some(ids[3]));
+}

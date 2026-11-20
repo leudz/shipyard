@@ -126,6 +126,7 @@ where
 
     let (mixed, borrow, all_borrow, ..) = parts;
     IntoIterRef {
+        dense_candidates: mixed.has_dense_candidates(),
         shiperator: mixed,
         _borrow: borrow,
         _all_borrow: all_borrow,
@@ -376,6 +377,15 @@ fn not_and_optional() {
 
     assert_eq!(a.get(e[1]).unwrap().0, 101);
     assert_eq!(b.get(e[4]).unwrap().0, 18);
+}
+
+#[test]
+fn mutable_fold_prepares_tracking_summary() {
+    let mut world = World::new_for_test();
+    let id = world.add_entity(Tracked(7));
+    let mut tracked = world.borrow::<ViewMut<'_, Tracked, track::All>>().unwrap();
+    assert_eq!((&mut tracked).iter().fold(0, |sum, item| sum + item.0), 7);
+    assert!(!tracked.is_modified(id));
 }
 
 /// Asserts that a tracking filter reads each candidate's timestamp at the right index: only the
@@ -930,6 +940,7 @@ fn owned_drop_order() {
         _all_borrow: Some(all_borrow),
         entities: RawEntityIdAccess::empty(),
         is_exact_sized: true,
+        dense_candidates: true,
         phantom: core::marker::PhantomData,
     };
 
