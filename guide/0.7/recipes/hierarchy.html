@@ -1,0 +1,657 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Hierarchy - Shipyard User&#x27;s Guide</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../welcome.html">Welcome</a></li><li class="chapter-item expanded "><a href="../learn-by-example.html"><strong aria-hidden="true">1.</strong> Learn by example</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn-by-example/a-lone-square.html"><strong aria-hidden="true">1.1.</strong> A lone square</a></li><li class="chapter-item expanded "><a href="../learn-by-example/friends.html"><strong aria-hidden="true">1.2.</strong> Friends</a></li><li class="chapter-item expanded "><a href="../learn-by-example/spark.html"><strong aria-hidden="true">1.3.</strong> Spark</a></li><li class="chapter-item expanded "><a href="../learn-by-example/breather.html"><strong aria-hidden="true">1.4.</strong> Breather</a></li><li class="chapter-item expanded "><a href="../learn-by-example/reign.html"><strong aria-hidden="true">1.5.</strong> Reign</a></li><li class="chapter-item expanded "><a href="../learn-by-example/true-victory.html"><strong aria-hidden="true">1.6.</strong> True Victory</a></li></ol></li><li class="chapter-item expanded "><a href="../fundamentals.html"><strong aria-hidden="true">2.</strong> Fundamentals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../fundamentals/world.html"><strong aria-hidden="true">2.1.</strong> World</a></li><li class="chapter-item expanded "><a href="../fundamentals/add-entity.html"><strong aria-hidden="true">2.2.</strong> Add Entity</a></li><li class="chapter-item expanded "><a href="../fundamentals/delete-entity.html"><strong aria-hidden="true">2.3.</strong> Delete Entity</a></li><li class="chapter-item expanded "><a href="../fundamentals/add-components.html"><strong aria-hidden="true">2.4.</strong> Add Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/remove-components.html"><strong aria-hidden="true">2.5.</strong> Remove Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/delete-components.html"><strong aria-hidden="true">2.6.</strong> Delete Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/get-and-modify.html"><strong aria-hidden="true">2.7.</strong> Get and Modify Components</a></li><li class="chapter-item expanded "><a href="../fundamentals/iterators.html"><strong aria-hidden="true">2.8.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="../fundamentals/uniques.html"><strong aria-hidden="true">2.9.</strong> Uniques</a></li><li class="chapter-item expanded "><a href="../fundamentals/systems.html"><strong aria-hidden="true">2.10.</strong> Systems</a></li></ol></li><li class="chapter-item expanded "><a href="../going-further.html"><strong aria-hidden="true">3.</strong> Going Further</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../going-further/tracking.html"><strong aria-hidden="true">3.1.</strong> Tracking</a></li><li class="chapter-item expanded "><a href="../going-further/parallelism.html"><strong aria-hidden="true">3.2.</strong> Parallelism</a></li><li class="chapter-item expanded "><a href="../going-further/custom-views.html"><strong aria-hidden="true">3.3.</strong> Custom Views</a></li><li class="chapter-item expanded "><a href="../going-further/non-send-sync.html"><strong aria-hidden="true">3.4.</strong> !Send and !Sync Components</a></li><li class="chapter-item expanded "><a href="../going-further/performance-tips.html"><strong aria-hidden="true">3.5.</strong> Performance Tips</a></li><li class="chapter-item expanded "><a href="../going-further/tracing.html"><strong aria-hidden="true">3.6.</strong> Tracing</a></li><li class="chapter-item expanded "><a href="../going-further/more-resources.html"><strong aria-hidden="true">3.7.</strong> More Resources</a></li></ol></li><li class="chapter-item expanded "><a href="../going-deeper.html"><strong aria-hidden="true">4.</strong> Going Deeper</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../going-deeper/sparse-set.html"><strong aria-hidden="true">4.1.</strong> Sparse Set</a></li></ol></li><li class="chapter-item expanded "><a href="../recipes.html"><strong aria-hidden="true">5.</strong> Recipes</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../recipes/hierarchy.html" class="active"><strong aria-hidden="true">5.1.</strong> Hierarchy</a></li><li class="chapter-item expanded "><a href="../recipes/seed.html"><strong aria-hidden="true">5.2.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../recipes/0.4-migration.html"><strong aria-hidden="true">5.3.</strong> 0.4 migration</a></li></ol></li><li class="chapter-item expanded "><a href="../contributors.html"><strong aria-hidden="true">6.</strong> Contributors</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Shipyard User&#x27;s Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/leudz/shipyard" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/leudz/shipyard/edit/master/guide/master/src/recipes/hierarchy.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="building-an-entity-hierarchy-with-shipyard"><a class="header" href="#building-an-entity-hierarchy-with-shipyard">Building an Entity Hierarchy with Shipyard</a></h1>
+<p>Hierarchies are a very commonly used organizational structure in game development. An important example is a transform hierarchy: child entities move along with their parents.</p>
+<p>How can we build such a hierarchy of entities in shipyard?</p>
+<p>One method is to use a secondary data structure which represents the hierarchy.</p>
+<p>But an ECS already has all the means to store data: components. So let's use them!</p>
+<p>Below you won't find a ready-to-use solution, rather some hints on how to start with your own hierarchy implementation, tailored to your requirements.</p>
+<h2 id="parents-and-children"><a class="header" href="#parents-and-children">Parents and Children</a></h2>
+<p>Think about the different roles an entity can take in a hierarchy. It can be:</p>
+<ul>
+<li>a parent (root node),</li>
+<li>a parent and a child (intermediate node),</li>
+<li>a child (leaf node).</li>
+</ul>
+<p>From this we can derive two simple, composable component types:</p>
+<p>A <code>Parent</code> component stores the number of its children and the first child:</p>
+<pre><code class="language-rust  noplaypen">#[derive(Component)]
+struct Parent {
+    num_children: usize,
+    first_child: EntityId,
+}</code></pre>
+<p>A <code>Child</code> component links to its parent as well as neighbor siblings:</p>
+<pre><code class="language-rust  noplaypen">#[derive(Component)]
+struct Child {
+    parent: EntityId,
+    prev: EntityId,
+    next: EntityId,
+}</code></pre>
+<p>As you can see, we simply store <code>EntityId</code>s to refer to other entities inside a component.</p>
+<p>Note that <code>Option</code>s are completely avoided by making the sibling chain circular:</p>
+<ul>
+<li>Last child's <code>next</code> points to the first child.</li>
+<li>First child's <code>prev</code> points to the last child.</li>
+</ul>
+<p>Our entire hierarchy structure resides only in <code>Parent</code> and <code>Child</code> components – nice!</p>
+<p>But it'd be a hassle to create them manually each time you want to insert an entity into the tree.</p>
+<h2 id="lets-make-it-convenient"><a class="header" href="#lets-make-it-convenient">Let's make it convenient</a></h2>
+<p>We begin with two useful methods in a trait declaration:</p>
+<pre><code class="language-rust  noplaypen">trait Hierarchy {
+    // Removes the child status of an entity.
+    fn detach(&amp;mut self, id: EntityId);
+
+    // Attaches an entity as a child to a given parent entity.
+    fn attach(&amp;mut self, id: EntityId, parent: EntityId);
+}</code></pre>
+<p>With these, you'll be able to not only insert new entities into the tree but also move a whole subtree – a child with all its descendants – to another parent.</p>
+<p>Since we need access to <code>EntitiesViewMut</code> as well as our hierarchy component storages, we implement the <code>Hierarchy</code> trait for the type <code>(EntitiesViewMut&lt;'_&gt;, ViewMut&lt;'_, Parent&gt;, ViewMut&lt;'_, Child&gt;)</code>.</p>
+<pre><code class="language-rust  noplaypen">fn detach(&amp;mut self, id: EntityId) {
+    let (_, parents, children) = self;
+    // remove the Child component - if nonexistent, do nothing
+    if let Some(child) = children.remove(id) {
+        // retrieve and update Parent component from ancestor
+        let parent = &amp;mut parents[child.parent];
+        parent.num_children -= 1;
+
+        if parent.num_children == 0 {
+            // if the number of children is zero, the Parent component must be removed
+            parents.remove(child.parent);
+        } else {
+            // the ancestor still has children, and we have to change some linking
+            // check if we have to change first_child
+            if parent.first_child == id {
+                parent.first_child = child.next;
+            }
+            // remove the detached child from the sibling chain
+            children[child.prev].next = child.next;
+            children[child.next].prev = child.prev;
+        }
+    }
+}</code></pre>
+<p>Before we move on to <code>attach</code>, let's make some observations.</p>
+<p>We use indexing on <code>parents</code> and <code>children</code> but if the entity doesn't have the component it'll <code>unwrap</code>.</p>
+<p>We don't have to worry as long as we only use the methods in our <code>Hierarchy</code> trait.</p>
+<p>If you accidentally delete hierarchy components in other places without changing the linking, things will go fatally wrong. If you want to catch these errors you might want to use <code>get</code> and handle the error (for example with <code>expect</code>).</p>
+<p><code>attach</code> looks like this:</p>
+<pre><code class="language-rust  noplaypen">fn attach(&amp;mut self, id: EntityId, parent: EntityId) {
+    // the entity we want to attach might already be attached to another parent
+    self.detach(id);
+
+    let (entities, parents, children) = self;
+
+    // either the designated parent already has a Parent component – and thus one or more children
+    if let Ok(mut p) = parents.get(parent) {
+        // increase the parent's children counter
+        p.num_children += 1;
+
+        // get the ids of the new previous and next siblings of our new child
+        let prev = children[p.first_child].prev;
+        let next = p.first_child;
+
+        // change the linking
+        children[prev].next = id;
+        children[next].prev = id;
+
+        // add the Child component to the new entity
+        entities.add_component(id, children, Child { parent, prev, next });
+    } else {
+        // in this case our designated parent is missing a Parent component
+        // we don't need to change any links, just insert both components
+        entities.add_component(
+            id,
+            children,
+            Child {
+                parent,
+                prev: id,
+                next: id,
+            },
+        );
+        entities.add_component(
+            parent,
+            parents,
+            Parent {
+                num_children: 1,
+                first_child: id,
+            },
+        );
+    }
+}</code></pre>
+<p>We can now add another handy method to our trait:</p>
+<pre><code class="language-rust  noplaypen">fn attach_new(&amp;mut self, parent: EntityId) -&gt; EntityId {
+    let id = self.0.add_entity((), ());
+    self.attach(id, parent);
+    id
+}</code></pre>
+<p>And lastly a simple usage example:</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+let mut hierarchy = world
+    .borrow::&lt;(EntitiesViewMut, ViewMut&lt;Parent&gt;, ViewMut&lt;Child&gt;)&gt;()
+    .unwrap();
+
+let root1 = hierarchy.0.add_entity((), ());
+let root2 = hierarchy.0.add_entity((), ());
+
+let e1 = hierarchy.attach_new(root1);
+let _e2 = hierarchy.attach_new(e1);
+let e3 = hierarchy.attach_new(e1);
+let _e4 = hierarchy.attach_new(e3);
+
+hierarchy.attach(e3, root2);</code></pre>
+<h2 id="traversing-the-hierarchy"><a class="header" href="#traversing-the-hierarchy">Traversing the hierarchy</a></h2>
+<p>There are different ways the hierarchy can be queried.</p>
+<p>For example, we may want to know the parent of a given entity. Doing this is simply done by inspecting its child component - if there is one.</p>
+<p>However, sometimes you might need</p>
+<ul>
+<li>all children,</li>
+<li>all ancestors,</li>
+<li>or all descendants of a given entity.</li>
+</ul>
+<p>A perfect use case for iterators! An iterator has to implement the <code>next</code> method from the <code>Iterator</code> trait.</p>
+<p>We start with a <code>ChildrenIter</code>, which is pretty straightforward:</p>
+<pre><code class="language-rust  noplaypen">struct ChildrenIter&lt;C&gt; {
+    get_child: C,
+    cursor: (EntityId, usize),
+}
+
+impl&lt;'a, C&gt; Iterator for ChildrenIter&lt;C&gt;
+where
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    type Item = EntityId;
+
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        if self.cursor.1 &gt; 0 {
+            self.cursor.1 -= 1;
+            let ret = self.cursor.0;
+            self.cursor.0 = self.get_child.get(self.cursor.0).unwrap().next;
+            Some(ret)
+        } else {
+            None
+        }
+    }
+}</code></pre>
+<p>Note that we don't implement <code>Iterator</code> for <code>ViewMut&lt;Child&gt;</code> directly, but for a type that implements the <code>GetComponent</code> trait. This way, our iterator can be used with <code>View</code> as well as <code>ViewMut</code>.</p>
+<p>The next one is the <code>AncestorIter</code>:</p>
+<pre><code class="language-rust  noplaypen">struct AncestorIter&lt;C&gt; {
+    get_child: C,
+    cursor: EntityId,
+}
+
+impl&lt;'a, C&gt; Iterator for AncestorIter&lt;C&gt;
+where
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    type Item = EntityId;
+
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        self.get_child.get(self.cursor).ok().map(|child| {
+            self.cursor = child.parent;
+            child.parent
+        })
+    }
+}</code></pre>
+<p>Easy.</p>
+<p><code>DescendantIter</code> will be a bit more complicated. We choose to implement a depth-first variant using recursion.</p>
+<p>It is based on the code for the <code>ChildrenIter</code> but comes with an additional stack to keep track of the current level the cursor is in:</p>
+<ul>
+<li>Push a new level to the stack if we encounter a <code>Parent</code> component.</li>
+<li>Pop the last level from the stack whenever we run out of siblings, then carry on where we left off.</li>
+</ul>
+<pre><code class="language-rust  noplaypen">struct DescendantsIter&lt;P, C&gt; {
+    get_parent: P,
+    get_child: C,
+    cursors: Vec&lt;(EntityId, usize)&gt;,
+}
+
+impl&lt;'a, P, C&gt; Iterator for DescendantsIter&lt;P, C&gt;
+where
+    P: Get&lt;Out = &amp;'a Parent&gt; + Copy,
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    type Item = EntityId;
+
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        if let Some(cursor) = self.cursors.last_mut() {
+            if cursor.1 &gt; 0 {
+                cursor.1 -= 1;
+                let ret = cursor.0;
+                cursor.0 = self.get_child.get(cursor.0).unwrap().next;
+                if let Ok(parent) = self.get_parent.get(ret) {
+                    self.cursors.push((parent.first_child, parent.num_children));
+                }
+                Some(ret)
+            } else {
+                self.cursors.pop();
+                self.next()
+            }
+        } else {
+            None
+        }
+    }
+}</code></pre>
+<p>What we still need to do is to implement a simple trait with methods that return nicely initialized <code>*Iter</code> structs for us:</p>
+<pre><code class="language-rust  noplaypen">trait HierarchyIter&lt;'a, P, C&gt; {
+    fn ancestors(&amp;self, id: EntityId) -&gt; AncestorIter&lt;C&gt;;
+    fn children(&amp;self, id: EntityId) -&gt; ChildrenIter&lt;C&gt;;
+    fn descendants(&amp;self, id: EntityId) -&gt; DescendantsIter&lt;P, C&gt;;
+}
+
+impl&lt;'a, P, C&gt; HierarchyIter&lt;'a, P, C&gt; for (P, C)
+where
+    P: Get&lt;Out = &amp;'a Parent&gt; + Copy,
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    fn ancestors(&amp;self, id: EntityId) -&gt; AncestorIter&lt;C&gt; {
+        let (_, children) = self;
+
+        AncestorIter {
+            get_child: *children,
+            cursor: id,
+        }
+    }
+
+    fn children(&amp;self, id: EntityId) -&gt; ChildrenIter&lt;C&gt; {
+        let (parents, children) = self;
+
+        ChildrenIter {
+            get_child: *children,
+            cursor: parents
+                .get(id)
+                .map_or((id, 0), |parent| (parent.first_child, parent.num_children)),
+        }
+    }
+
+    fn descendants(&amp;self, id: EntityId) -&gt; DescendantsIter&lt;P, C&gt; {
+        let (parents, children) = self;
+
+        DescendantsIter {
+            get_parent: *parents,
+            get_child: *children,
+            cursors: parents.get(id).map_or_else(
+                |_| Vec::new(),
+                |parent| vec![(parent.first_child, parent.num_children)],
+            ),
+        }
+    }
+}</code></pre>
+<p>Cool. Let's extend the former usage example into a little test.</p>
+<pre><code class="language-rust  noplaypen">#[test]
+fn test_hierarchy() {
+    let world = World::new();
+
+    let mut hierarchy = world
+        .borrow::&lt;(EntitiesViewMut, ViewMut&lt;Parent&gt;, ViewMut&lt;Child&gt;)&gt;()
+        .unwrap();
+
+    let root1 = hierarchy.0.add_entity((), ());
+    let root2 = hierarchy.0.add_entity((), ());
+
+    let e1 = hierarchy.attach_new(root1);
+    let e2 = hierarchy.attach_new(e1);
+    let e3 = hierarchy.attach_new(e1);
+    let e4 = hierarchy.attach_new(e3);
+
+    hierarchy.attach(e3, root2);
+
+    let e5 = hierarchy.attach_new(e3);
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .children(e3)
+        .eq([e4, e5].iter().cloned()));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .ancestors(e4)
+        .eq([e3, root2].iter().cloned()));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .descendants(root1)
+        .eq([e1, e2].iter().cloned()));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .descendants(root2)
+        .eq([e3, e4, e5].iter().cloned()));
+}</code></pre>
+<h2 id="removing-entities-from-the-hierarchy"><a class="header" href="#removing-entities-from-the-hierarchy">Removing entities from the hierarchy</a></h2>
+<p>Removing an entity from the hierarchy means removing its <code>Parent</code> and <code>Child</code> components.</p>
+<p>To remove an entity's <code>Child</code> component, we can simply reuse <code>detach</code>. Removing its <code>Parent</code> component must be done with caution. This entity's children now become orphans – we have to detach them as well.</p>
+<p>Both methods can be added to our <code>Hierarchy</code> trait:</p>
+<pre><code class="language-rust  noplaypen">fn remove(&amp;mut self, id: EntityId) {
+    self.detach(id);
+
+    let children = (&amp;self.1, &amp;self.2).children(id).collect::&lt;Vec&lt;_&gt;&gt;();
+    for child_id in children {
+        self.detach(child_id);
+    }
+    self.1.remove(id);
+}</code></pre>
+<p>A method that removes a whole subtree is easy to write by making use of recursion again:</p>
+<pre><code class="language-rust  noplaypen">fn remove_all(&amp;mut self, id: EntityId) {
+    let (_, parents, children) = self;
+
+    for child_id in (&amp;*parents, &amp;*children).children(id).collect::&lt;Vec&lt;_&gt;&gt;() {
+        self.remove_all(child_id);
+    }
+    self.remove(id);
+}</code></pre>
+<p>That's it! We can now add the following code to the end of our test from the last chapter:</p>
+<pre><code class="language-rust  noplaypen">hierarchy.detach(e1);
+
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).descendants(root1).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).ancestors(e1).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+    .children(e1)
+    .eq([e2].iter().cloned()));
+
+hierarchy.remove(e1);
+
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).children(e1).eq(None));
+
+hierarchy.remove_all(root2);
+
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).descendants(root2).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).descendants(e3).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).ancestors(e5).eq(None));</code></pre>
+<h2 id="sorting"><a class="header" href="#sorting">Sorting</a></h2>
+<p>The order between siblings may or may not play a role in your project.</p>
+<p>However, a simple sorting for children can be done in two steps:</p>
+<ul>
+<li>Collect all children into a <code>Vec</code> and sort it.</li>
+<li>Adjust the linking in the <code>Child</code> components according to the sorted list.</li>
+</ul>
+<p>We can add this method to the <code>Hierarchy</code> trait:</p>
+<pre><code class="language-rust  noplaypen">fn sort_children_by&lt;F&gt;(&amp;mut self, id: EntityId, compare: F)
+where
+    F: FnMut(&amp;EntityId, &amp;EntityId) -&gt; std::cmp::Ordering,
+{
+    let (_, parents, children_storage) = self;
+
+    let mut children = (&amp;*parents, &amp;*children_storage)
+        .children(id)
+        .collect::&lt;Vec&lt;EntityId&gt;&gt;();
+    if children.len() &gt; 1 {
+        children.sort_by(compare);
+        // set first_child in Parent component
+        parents[id].first_child = children[0];
+        // loop through children and relink them
+        for i in 0..children.len() - 1 {
+            children_storage[children[i]].next = children[i + 1];
+            children_storage[children[i + 1]].prev = children[i];
+        }
+        children_storage[children[0]].prev = *children.last().unwrap();
+        children_storage[*children.last().unwrap()].next = children[0];
+    }
+}</code></pre>
+<p>Again a small test demonstrates the usage:</p>
+<pre><code class="language-rust  noplaypen">#[test]
+fn test_sorting() {
+    let world = World::new();
+
+    let (mut hierarchy, mut vm_pos) = world
+        .borrow::&lt;(
+            (EntitiesViewMut, ViewMut&lt;Parent&gt;, ViewMut&lt;Child&gt;),
+            ViewMut&lt;Pos&gt;,
+        )&gt;()
+        .unwrap();
+
+    let root = hierarchy.0.add_entity((), ());
+
+    let e0 = hierarchy.attach_new(root);
+    let e1 = hierarchy.attach_new(root);
+    let e2 = hierarchy.attach_new(root);
+    let e3 = hierarchy.attach_new(root);
+    let e4 = hierarchy.attach_new(root);
+
+    hierarchy.0.add_component(e0, &amp;mut vm_pos, Pos(7.0, 0.0));
+    hierarchy.0.add_component(e1, &amp;mut vm_pos, Pos(5.0, 0.0));
+    hierarchy.0.add_component(e2, &amp;mut vm_pos, Pos(6.0, 0.0));
+    hierarchy.0.add_component(e3, &amp;mut vm_pos, Pos(1.0, 0.0));
+    hierarchy.0.add_component(e4, &amp;mut vm_pos, Pos(3.0, 0.0));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .children(root)
+        .eq([e0, e1, e2, e3, e4].iter().cloned()));
+
+    hierarchy.sort_children_by(root, |a, b| {
+        vm_pos[*a].0.partial_cmp(&amp;vm_pos[*b].0).unwrap()
+    });
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .children(root)
+        .eq([e3, e4, e1, e2, e0].iter().cloned()));
+}</code></pre>
+<h2 id="do-it-yourself"><a class="header" href="#do-it-yourself">Do it yourself!</a></h2>
+<p>We recommend that you build your own hierarchy system fitted to your specific needs. In deviation of the above code examples you may want:</p>
+<ul>
+<li>a single hierarchy component instead of two,</li>
+<li>breadth-first instead of depth-first traversal,</li>
+<li>different sorting methods,</li>
+<li>etc.</li>
+</ul>
+<h2 id="further-reading"><a class="header" href="#further-reading">Further reading</a></h2>
+<p>These notes are based on ideas presented in a highly recommended article by skypjack: <a href="https://skypjack.github.io/2019-06-25-ecs-baf-part-4/">ECS back and forth</a>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../recipes.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../recipes/seed.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../recipes.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../recipes/seed.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
