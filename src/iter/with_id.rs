@@ -24,32 +24,48 @@ impl<S: Shiperator> Shiper<S> {
     /// Returns the next item of the current segment and its id, without entering any other segment.
     #[inline(always)]
     fn next_with_id_in_segment(&mut self) -> Option<(EntityId, S::Out)> {
-        while !self.cursor.is_empty() {
-            let local_index = self.cursor.local_index();
-            // SAFE: The cursor isn't empty and `local_index` is the local index of its current candidate.
-            // We own the schedule holding the plan of the last segment we entered, if any.
-            let indices = unsafe {
-                self.shiperator
-                    .captain_indices_of(&self.cursor, local_index)
-            };
-
-            let Some(indices) = indices else {
+        if !S::HAS_CANDIDATE_PLAN || self.dense_candidates {
+            while !self.cursor.is_empty() {
+                let local_index = self.cursor.local_index();
+                // SAFE: The cursor belongs to our installed segment and is nonempty.
+                let indices = unsafe {
+                    self.shiperator
+                        .captain_indices_of(&self.cursor, local_index)
+                };
+                let Some(indices) = indices else {
+                    self.cursor.advance();
+                    continue;
+                };
+                // SAFE: The candidate has not been consumed yet.
+                let entity_id = unsafe { self.cursor.current() };
                 self.cursor.advance();
-                continue;
-            };
-
-            // We have to read the id before consuming the candidate.
-            // SAFE: The cursor isn't empty, we haven't advanced yet.
-            let entity_id = unsafe { self.cursor.current() };
-            self.cursor.advance();
-
-            // SAFE: `indices` was just returned by `captain_indices_of`.
-            let data = unsafe { self.shiperator.get_data(indices) };
-
-            return Some((entity_id, data));
+                // SAFE: These indices were just resolved for this candidate.
+                return Some((entity_id, unsafe { self.shiperator.get_data(indices) }));
+            }
+            return None;
         }
-
-        None
+        loop {
+            if self.cursor.local_index() >= self.candidate_end && !self.refresh_candidate_range() {
+                return None;
+            }
+            while self.cursor.local_index() < self.candidate_end {
+                let local_index = self.cursor.local_index();
+                // SAFE: The cached range belongs to our installed segment and is nonempty.
+                let indices = unsafe {
+                    self.shiperator
+                        .captain_indices_of(&self.cursor, local_index)
+                };
+                let Some(indices) = indices else {
+                    self.cursor.advance();
+                    continue;
+                };
+                // SAFE: The candidate has not been consumed yet.
+                let entity_id = unsafe { self.cursor.current() };
+                self.cursor.advance();
+                // SAFE: These indices were just resolved for this candidate.
+                return Some((entity_id, unsafe { self.shiperator.get_data(indices) }));
+            }
+        }
     }
 
     /// Returns the next item and its id, entering follow-up segments once the current one is exhausted.

@@ -73,7 +73,7 @@ impl<T: IntoShiperator> IntoIter for T
 where
     <T as IntoShiperator>::Shiperator: Shiperator,
 {
-    #[inline]
+    #[inline(always)]
     fn iter(self) -> Shiper<Self::Shiperator> {
         let (mut shiperator, entities, metadata) = self.into_shiperator();
 
@@ -264,7 +264,7 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
         let window = FullRawWindowMut::new(self);
         let entities = window.entity_iter();
         // The metadata points to the storage, we take it once `new` is done reborrowing the
-        // storage exclusively. The window only points into the storage's allocations.
+        // storage exclusively.
         let metadata = ConstructionMetadata::window(self.sparse_set);
 
         (window, entities, metadata)

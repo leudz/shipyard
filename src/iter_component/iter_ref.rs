@@ -14,6 +14,7 @@ pub struct IntoIterRef<'a, T: IterComponent> {
     /// Only execution state, the construction metadata was dropped once the query was built.
     pub(crate) entities: RawEntityIdAccess,
     pub(crate) is_exact_sized: bool,
+    pub(crate) dense_candidates: bool,
     pub(crate) phantom: PhantomData<T>,
 }
 
@@ -54,6 +55,8 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
         let RawEntityIdAccess { cursor, schedule } = self.entities.clone();
 
         Shiper {
+            candidate_end: 0,
+            dense_candidates: self.dense_candidates,
             shiperator,
             cursor,
             schedule,

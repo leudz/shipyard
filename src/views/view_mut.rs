@@ -5,6 +5,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::get::Get;
 use crate::r#mut::Mut;
+use crate::sparse_set::TRACKING_CHUNK_SIZE;
 use crate::sparse_set::{SparseSet, SparseSetDrain};
 use crate::storage::StorageId;
 use crate::track;
@@ -660,6 +661,7 @@ impl<'a, T: Component, Track> core::ops::IndexMut<EntityId> for ViewMut<'a, T, T
         let SparseSet {
             data,
             modification_data,
+            modification_summary,
             is_tracking_modification,
             ..
         } = self.sparse_set;
@@ -667,6 +669,7 @@ impl<'a, T: Component, Track> core::ops::IndexMut<EntityId> for ViewMut<'a, T, T
         if *is_tracking_modification {
             unsafe {
                 *modification_data.get_unchecked_mut(index) = self.current;
+                modification_summary[index / TRACKING_CHUNK_SIZE].mark_mut(self.current);
             };
         }
 

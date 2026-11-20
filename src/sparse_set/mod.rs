@@ -11,7 +11,10 @@ mod sparse_array;
 mod tests;
 #[cfg(feature = "thread_local")]
 mod thread_local;
+mod tracking_chunks;
 mod window;
+use tracking_chunks::refresh_chunks;
+pub(crate) use tracking_chunks::{ChunkTimestamp, TRACKING_CHUNK_SIZE};
 
 pub use add_component::TupleAddComponent;
 pub use bulk_add_entity::BulkAddEntity;
@@ -65,7 +68,9 @@ pub struct SparseSet<T: Component> {
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
     pub(crate) insertion_data: Vec<TrackingTimestamp>,
+    pub(crate) insertion_chunks: Vec<ChunkTimestamp>,
     pub(crate) modification_data: Vec<TrackingTimestamp>,
+    pub(crate) modification_summary: tracking_chunks::ModificationSummary,
     pub(crate) last_insert: TrackingTimestamp,
     pub(crate) last_modified: TrackingTimestamp,
     pub(crate) deletion_data: Vec<(EntityId, TrackingTimestamp, T)>,
@@ -98,7 +103,9 @@ impl<T: Component> SparseSet<T> {
             dense: Vec::new(),
             data: Vec::new(),
             insertion_data: Vec::new(),
+            insertion_chunks: Vec::new(),
             modification_data: Vec::new(),
+            modification_summary: Default::default(),
             last_insert: TrackingTimestamp::new(0),
             last_modified: TrackingTimestamp::new(0),
             deletion_data: Vec::new(),
@@ -112,6 +119,15 @@ impl<T: Component> SparseSet<T> {
             clone: None,
             groups: Groups::default(),
         }
+    }
+    pub(crate) fn refresh_tracking_chunks(&mut self, range: Range<usize>) {
+        refresh_chunks(
+            &mut self.insertion_chunks,
+            &self.insertion_data,
+            range.clone(),
+        );
+        self.modification_summary
+            .refresh(&self.modification_data, range);
     }
     /// Returns a new [`SparseSet`] to be used in custom storage.
     #[inline]
@@ -277,9 +293,16 @@ impl<T: Component> SparseSet<T> {
 
             if self.is_tracking_insertion {
                 self.insertion_data.push(current);
+                if self.dense.len().is_multiple_of(TRACKING_CHUNK_SIZE) {
+                    self.insertion_chunks.push(ChunkTimestamp::default());
+                }
+                self.insertion_chunks.last_mut().unwrap().mark_mut(current);
             }
             if self.is_tracking_modification {
                 self.modification_data.push(TrackingTimestamp::origin());
+                if self.dense.len().is_multiple_of(TRACKING_CHUNK_SIZE) {
+                    self.modification_summary.push(ChunkTimestamp::default());
+                }
             }
 
             self.dense.push(entity);
@@ -306,6 +329,8 @@ impl<T: Component> SparseSet<T> {
                     *self
                         .modification_data
                         .get_unchecked_mut(sparse_entity.uindex()) = current;
+                    self.modification_summary[sparse_entity.uindex() / TRACKING_CHUNK_SIZE]
+                        .mark_mut(current);
                 }
             }
 
@@ -349,6 +374,7 @@ impl<T: Component> SparseSet<T> {
 
             if self.is_tracking_insertion {
                 *self.insertion_data.get_unchecked_mut(index) = current;
+                self.insertion_chunks[index / TRACKING_CHUNK_SIZE].mark_mut(current);
             }
             // The new entity's component was never modified, it doesn't inherit the old one's timestamp.
             if self.is_tracking_modification {
@@ -494,9 +520,16 @@ impl<T: Component> SparseSet<T> {
         self.dense.swap_remove(index);
         if self.is_tracking_insertion() {
             self.insertion_data.swap_remove(index);
+            refresh_chunks(
+                &mut self.insertion_chunks,
+                &self.insertion_data,
+                index..index + 1,
+            );
         }
         if self.is_tracking_modification() {
             self.modification_data.swap_remove(index);
+            self.modification_summary
+                .refresh(&self.modification_data, index..index + 1);
         }
         let component = self.data.swap_remove(index);
 
@@ -554,9 +587,19 @@ impl<T: Component> SparseSet<T> {
         self.data.swap(i, j);
         if self.is_tracking_insertion {
             self.insertion_data.swap(i, j);
+            if i / TRACKING_CHUNK_SIZE != j / TRACKING_CHUNK_SIZE {
+                self.insertion_chunks[i / TRACKING_CHUNK_SIZE].mark_mut(self.insertion_data[i]);
+                self.insertion_chunks[j / TRACKING_CHUNK_SIZE].mark_mut(self.insertion_data[j]);
+            }
         }
         if self.is_tracking_modification {
             self.modification_data.swap(i, j);
+            if i / TRACKING_CHUNK_SIZE != j / TRACKING_CHUNK_SIZE {
+                self.modification_summary[i / TRACKING_CHUNK_SIZE]
+                    .mark_mut(self.modification_data[i]);
+                self.modification_summary[j / TRACKING_CHUNK_SIZE]
+                    .mark_mut(self.modification_data[j]);
+            }
         }
 
         let entity_i = self.dense[i];
@@ -719,6 +762,11 @@ impl<T: Component> SparseSet<T> {
 
         self.insertion_data
             .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
+        refresh_chunks(
+            &mut self.insertion_chunks,
+            &self.insertion_data,
+            0..self.dense.len(),
+        );
 
         self
     }
@@ -733,6 +781,8 @@ impl<T: Component> SparseSet<T> {
 
         self.modification_data
             .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
+        self.modification_summary
+            .refresh(&self.modification_data, 0..self.dense.len());
 
         self
     }
@@ -836,6 +886,8 @@ impl<T: Component> SparseSet<T> {
         // That happens on return or while unwinding from `compare`.
         let repair = SortRepair {
             sortable: sortable.clone(),
+            insertion_chunks: &mut self.insertion_chunks,
+            modification_summary: &mut self.modification_summary,
             dense: &mut self.dense,
             sparse: &mut self.sparse,
             data: &mut self.data,
@@ -901,7 +953,7 @@ impl<T: Component> SparseSet<T> {
         // sparse page, and our caller guarantees their entries hold exactly `domain`'s rows.
         unsafe {
             repair_rows(
-                domain,
+                domain.clone(),
                 &self.dense,
                 &mut self.sparse,
                 &mut self.data,
@@ -911,6 +963,7 @@ impl<T: Component> SparseSet<T> {
                     .then_some(&mut self.modification_data[..]),
             );
         }
+        self.refresh_tracking_chunks(domain);
     }
 
     /// Applies the given function `f` to the entities `a` and `b`.\
@@ -944,6 +997,7 @@ impl<T: Component> SparseSet<T> {
         if a_index != b_index {
             if self.is_tracking_modification {
                 self.modification_data[a_index] = current;
+                self.modification_summary[a_index / TRACKING_CHUNK_SIZE].mark_mut(current);
             }
 
             let a = unsafe { &mut *self.data.as_mut_ptr().add(a_index) };
@@ -986,7 +1040,9 @@ impl<T: Component> SparseSet<T> {
         if a_index != b_index {
             if self.is_tracking_modification {
                 self.modification_data[a_index] = current;
+                self.modification_summary[a_index / TRACKING_CHUNK_SIZE].mark_mut(current);
                 self.modification_data[b_index] = current;
+                self.modification_summary[b_index / TRACKING_CHUNK_SIZE].mark_mut(current);
             }
 
             let a = unsafe { &mut *self.data.as_mut_ptr().add(a_index) };
@@ -1015,7 +1071,9 @@ impl<T: Component> SparseSet<T> {
         }
 
         self.insertion_data.clear();
+        self.insertion_chunks.clear();
         self.modification_data.clear();
+        self.modification_summary.clear();
 
         let is_tracking_deletion = self.is_tracking_deletion();
 
@@ -1053,7 +1111,9 @@ impl<T: Component> SparseSet<T> {
         }
 
         self.insertion_data.clear();
+        self.insertion_chunks.clear();
         self.modification_data.clear();
+        self.modification_summary.clear();
 
         let dense_ptr = self.dense.as_ptr();
         let dense_len = self.dense.len();
@@ -1103,6 +1163,7 @@ impl<T: Component> SparseSet<T> {
             let eid = unsafe { *self.dense.get_unchecked(i) };
             let component = Mut {
                 flag: self.modification_data.get_mut(i),
+                chunk: self.modification_summary.get(i / TRACKING_CHUNK_SIZE),
                 current,
                 data: unsafe { self.data.get_unchecked_mut(i) },
             };
@@ -1130,6 +1191,8 @@ impl<T: Ord + Component> SparseSet<T> {
 /// Sorting only reorders `dense[sortable]`. Until we're dropped, every sorted entity's
 /// sparse entry still holds the original row of its component and timestamps.
 struct SortRepair<'a, T> {
+    insertion_chunks: &'a mut Vec<ChunkTimestamp>,
+    modification_summary: &'a mut tracking_chunks::ModificationSummary,
     /// Physical indices of the sorted rows.
     sortable: Range<usize>,
     dense: &'a mut [EntityId],
@@ -1158,6 +1221,13 @@ impl<T> Drop for SortRepair<'_, T> {
                 self.insertion_data.as_deref_mut(),
                 self.modification_data.as_deref_mut(),
             );
+        }
+        if let Some(data) = &self.insertion_data {
+            refresh_chunks(self.insertion_chunks, data, self.sortable.clone());
+        }
+        if let Some(data) = &self.modification_data {
+            self.modification_summary
+                .refresh(data, self.sortable.clone());
         }
     }
 }
@@ -1334,6 +1404,7 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
                     .resize(self.dense.len(), TrackingTimestamp::origin());
             }
 
+            sparse_set.refresh_tracking_chunks(0..sparse_set.len());
             SBoxBuilder::new(sparse_set)
         })
     }

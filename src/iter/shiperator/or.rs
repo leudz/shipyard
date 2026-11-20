@@ -7,6 +7,52 @@ use crate::or::{OneOfTwo, OrWindow};
 impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
     type Out = OneOfTwo<T::Out, U::Out>;
     type Index = OneOfTwo<T::Index, U::Index>;
+    const HAS_CANDIDATE_PLAN: bool = T::HAS_CANDIDATE_PLAN || U::HAS_CANDIDATE_PLAN;
+    fn has_no_candidates(&self) -> bool {
+        self.storages.0.has_no_candidates() && self.storages.1.has_no_candidates()
+    }
+    fn unpick(&mut self) {
+        self.storages.0.unpick();
+        self.storages.1.unpick();
+    }
+    #[inline]
+    fn has_dense_candidates(&self) -> bool {
+        match self.branch {
+            OrBranch::A => self.storages.0.has_dense_candidates(),
+            OrBranch::B => self.storages.1.has_dense_candidates(),
+        }
+    }
+    #[inline]
+    unsafe fn candidate_count(&self, start: usize, end: usize) -> usize {
+        // SAFE: The active branch drives this segment.
+        unsafe {
+            match self.branch {
+                OrBranch::A => self.storages.0.candidate_count(start, end),
+                OrBranch::B => self.storages.1.candidate_count(start, end),
+            }
+        }
+    }
+    #[inline]
+    unsafe fn candidate_split_at(&self, start: usize, end: usize, count: usize) -> usize {
+        // SAFE: Counts and splits use the same active branch.
+        unsafe {
+            match self.branch {
+                OrBranch::A => self.storages.0.candidate_split_at(start, end, count),
+                OrBranch::B => self.storages.1.candidate_split_at(start, end, count),
+            }
+        }
+    }
+
+    #[inline]
+    unsafe fn next_candidate_range(&self, index: usize, end: usize) -> core::ops::Range<usize> {
+        // SAFE: Only the active branch drives this segment's local range.
+        unsafe {
+            match self.branch {
+                OrBranch::A => self.storages.0.next_candidate_range(index, end),
+                OrBranch::B => self.storages.1.next_candidate_range(index, end),
+            }
+        }
+    }
 
     #[inline]
     fn node_count() -> usize {
@@ -49,6 +95,27 @@ impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
                 entry.skip(T::node_count());
                 unsafe { (self.storages).1.enter_segment(entry) };
             }
+        }
+    }
+
+    #[inline]
+    unsafe fn prepare_tracking(&mut self, range: Option<core::ops::Range<usize>>) {
+        // SAFE: Only the active branch drives this range; the other becomes a sailor.
+        unsafe {
+            self.storages
+                .0
+                .prepare_tracking(if self.branch == OrBranch::A {
+                    range.clone()
+                } else {
+                    None
+                });
+            self.storages
+                .1
+                .prepare_tracking(if self.branch == OrBranch::B {
+                    range
+                } else {
+                    None
+                });
         }
     }
 

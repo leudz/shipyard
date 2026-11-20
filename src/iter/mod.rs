@@ -48,6 +48,10 @@ pub struct Shiper<S> {
     pub(crate) shiperator: S,
     /// Candidates left in the current segment.
     pub(crate) cursor: EntityCursor,
+    /// End of the cached candidate range, local to the current segment.
+    pub(crate) candidate_end: usize,
+    /// Whether the current segment can use the direct candidate loop.
+    pub(crate) dense_candidates: bool,
     /// Shared plan and position in its follow-up segments. Can remain present without
     /// follow-ups to keep the current segment's coverage alive, including after splitting.
     pub(crate) schedule: Option<SegmentSchedule>,
@@ -70,11 +74,19 @@ impl<S: Shiperator> Shiper<S> {
     ///
     /// We then rely on that contract for the whole traversal: entering follow-ups, resolving
     /// candidates and splitting.
-    #[inline]
-    pub(crate) unsafe fn new(shiperator: S, entities: RawEntityIdAccess) -> Shiper<S> {
+    #[inline(always)]
+    pub(crate) unsafe fn new(mut shiperator: S, mut entities: RawEntityIdAccess) -> Shiper<S> {
+        if shiperator.has_no_candidates() {
+            entities = RawEntityIdAccess::empty();
+        }
+        let start = entities.cursor.local_index();
+        // SAFE: The caller pairs this captain's state with its initial cursor.
+        unsafe { shiperator.prepare_tracking(Some(start..start + entities.cursor.len())) };
         let is_exact_sized = is_exact_traversal(&shiperator, &entities);
 
         Shiper {
+            candidate_end: 0,
+            dense_candidates: !S::HAS_CANDIDATE_PLAN || shiperator.has_dense_candidates(),
             shiperator,
             cursor: entities.cursor,
             schedule: entities.schedule,
@@ -107,6 +119,15 @@ impl<S: Shiperator> Shiper<S> {
         debug_assert!(entry.is_done());
 
         self.cursor = segment.cursor();
+        let start = self.cursor.local_index();
+        // SAFE: The segment was just installed, and its plan stays borrowed.
+        unsafe {
+            self.shiperator
+                .prepare_tracking(Some(start..start + self.cursor.len()))
+        };
+
+        self.candidate_end = 0;
+        self.dense_candidates = !S::HAS_CANDIDATE_PLAN || self.shiperator.has_dense_candidates();
         debug_assert!(!self.cursor.is_empty());
 
         true
@@ -125,28 +146,60 @@ impl<S: Shiperator> Shiper<S> {
         self.cursor.len().checked_add(follow_ups_len)
     }
 
+    /// Installs the next range after the cached one is exhausted.
+    #[inline]
+    fn refresh_candidate_range(&mut self) -> bool {
+        if self.cursor.is_empty() {
+            return false;
+        }
+        let index = self.cursor.local_index();
+        // SAFE: The remaining cursor belongs to our installed segment; we keep its plan alive.
+        let range = unsafe {
+            self.shiperator
+                .next_candidate_range(index, index + self.cursor.len())
+        };
+        self.cursor.advance_by(range.start - index);
+        self.candidate_end = range.end;
+        !self.cursor.is_empty()
+    }
+
     /// Returns the next item of the current segment, without entering any other segment.
     #[inline(always)]
     fn next_in_segment(&mut self) -> Option<S::Out> {
-        while !self.cursor.is_empty() {
-            let local_index = self.cursor.local_index();
-            // SAFE: The cursor isn't empty and `local_index` is the local index of its current candidate.
-            // We own the schedule holding the plan of the last segment we entered, if any.
-            let indices = unsafe {
-                self.shiperator
-                    .captain_indices_of(&self.cursor, local_index)
-            };
-
-            // The candidate is consumed whether it matched or not.
-            self.cursor.advance();
-
-            if let Some(indices) = indices {
-                // SAFE: `indices` was just returned by `captain_indices_of`.
-                return Some(unsafe { self.shiperator.get_data(indices) });
+        if !S::HAS_CANDIDATE_PLAN || self.dense_candidates {
+            while !self.cursor.is_empty() {
+                let local_index = self.cursor.local_index();
+                // SAFE: The cursor belongs to our installed segment and is nonempty.
+                let indices = unsafe {
+                    self.shiperator
+                        .captain_indices_of(&self.cursor, local_index)
+                };
+                self.cursor.advance();
+                if let Some(indices) = indices {
+                    // SAFE: These indices were just resolved for this candidate.
+                    return Some(unsafe { self.shiperator.get_data(indices) });
+                }
+            }
+            return None;
+        }
+        loop {
+            if self.cursor.local_index() >= self.candidate_end && !self.refresh_candidate_range() {
+                return None;
+            }
+            while self.cursor.local_index() < self.candidate_end {
+                let local_index = self.cursor.local_index();
+                // SAFE: The cached range belongs to our installed segment and is nonempty.
+                let indices = unsafe {
+                    self.shiperator
+                        .captain_indices_of(&self.cursor, local_index)
+                };
+                self.cursor.advance();
+                if let Some(indices) = indices {
+                    // SAFE: These indices were just resolved for this candidate.
+                    return Some(unsafe { self.shiperator.get_data(indices) });
+                }
             }
         }
-
-        None
     }
 
     /// Returns the next item, entering follow-up segments once the current one is exhausted.
@@ -212,8 +265,11 @@ impl<S: Clone> Shiper<S> {
             .as_mut()
             .map(SegmentSchedule::split_follow_ups);
         self.cursor = left_cursor;
+        self.candidate_end = 0;
 
         let right = Shiper {
+            candidate_end: 0,
+            dense_candidates: self.dense_candidates,
             shiperator: self.shiperator.clone(),
             cursor: right_cursor,
             schedule: right_schedule,
@@ -232,7 +288,7 @@ impl<S: Shiperator + Clone> Shiper<S> {
     /// half keeps the part of that segment before the cut.\
     /// Returns `self` unchanged with `None` when fewer than 2 candidates are left.
     ///
-    /// Splitting only reads segment descriptors and installs state. It doesn't read any entity,
+    /// Splitting installs state and may mark tracking bounds. It doesn't read any entity,
     /// create any item or call any consumer.
     #[inline]
     #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
@@ -295,8 +351,13 @@ impl<S: Shiperator + Clone> Shiper<S> {
         // Starting at the cut keeps the segment's local indices, the state we just installed
         // resolves them from the segment's own start. They must never restart at 0.
         let (_, cursor) = segment.cursor().split_at(local_index);
+        let start = cursor.local_index();
+        // SAFE: This half only yields the installed segment's remaining candidates.
+        unsafe { shiperator.prepare_tracking(Some(start..start + cursor.len())) };
 
         Shiper {
+            candidate_end: 0,
+            dense_candidates: !S::HAS_CANDIDATE_PLAN || shiperator.has_dense_candidates(),
             shiperator,
             cursor,
             schedule: Some(rest),
