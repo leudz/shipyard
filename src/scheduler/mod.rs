@@ -24,8 +24,10 @@ use crate::scheduler::info::WorkloadInfo;
 use crate::world::World;
 use crate::{ShipHashMap, error};
 use alloc::boxed::Box;
+use alloc::format;
 use alloc::vec::Vec;
 use core::any::TypeId;
+use hashbrown::hash_map::EntryRef;
 
 /// Stores systems from all workloads and their scheduling.
 //
@@ -91,13 +93,35 @@ impl Scheduler {
         self.workloads.is_empty()
     }
     pub(crate) fn rename(&mut self, old: &dyn Label, new: Box<dyn Label>) {
-        if let Some(batches) = self.workloads.remove(old) {
-            if &*self.default == old {
-                self.default = new.clone();
-            }
+        let EntryRef::Occupied(workload) = self.workloads.entry_ref(old) else {
+            return;
+        };
 
-            self.workloads.insert(new, batches);
+        let name = format!("{new:?}");
+        let workload_label = new.clone();
+        let new_default = (&*self.default == old).then(|| new.clone());
+        let (old_info_label, mut info) = self
+            .workloads_info
+            .remove_entry(old)
+            .expect("registered workloads have exported information");
+        let (old_workload_label, batches) = workload.remove_entry();
+        info.name = name;
+
+        // An equal key can have a different debug name. Use the new label in both maps.
+        let replaced_workload = self.workloads.remove_entry(new.as_ref());
+        let replaced_info = self.workloads_info.remove_entry(new.as_ref());
+        self.workloads.insert(workload_label, batches);
+        self.workloads_info.insert(new, info);
+        if let Some(default) = new_default {
+            self.default = default;
         }
+
+        drop((
+            old_workload_label,
+            old_info_label,
+            replaced_workload,
+            replaced_info,
+        ));
     }
 }
 

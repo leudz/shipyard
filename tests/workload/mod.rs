@@ -33,6 +33,7 @@ fn duplicate_name() {
     world.run_workload("").unwrap();
 }
 
+/// Asserts that renaming the default workload moves its batches and exported information.
 #[test]
 fn rename() {
     fn increment(mut i: UniqueViewMut<U32>) {
@@ -47,21 +48,72 @@ fn rename() {
         .with_system(increment)
         .add_to_world(&world)
         .unwrap();
+    let before = world.workloads_info();
 
     world.rename_workload("Empty", "New Empty");
 
-    assert_eq!(
-        world
-            .run_workload("Empty")
-            .err()
-            .as_ref()
-            .map(std::mem::discriminant),
-        Some(std::mem::discriminant(&error::RunWorkload::MissingWorkload))
-    );
+    assert!(matches!(
+        world.run_workload("Empty"),
+        Err(error::RunWorkload::MissingWorkload)
+    ));
 
     world.run_workload("New Empty").unwrap();
-
     assert_eq!(world.borrow::<UniqueView<U32>>().unwrap().0, 1);
+    world.run_default_workload().unwrap();
+    assert_eq!(world.borrow::<UniqueView<U32>>().unwrap().0, 2);
+
+    let after = world.workloads_info();
+    assert_eq!(after.0.len(), 1);
+    assert_eq!(after.0["New Empty"].name, "New Empty");
+    assert_eq!(
+        after.0["New Empty"].batches_info,
+        before.0["Empty"].batches_info
+    );
+}
+
+/// Asserts that renaming over the default label replaces its runnable and exported batches.
+#[test]
+fn rename_over_default() {
+    let world = World::new();
+    world.add_unique(U32(0));
+    Workload::new("Destination")
+        .with_system(|mut i: UniqueViewMut<U32>| i.0 += 10)
+        .add_to_world(&world)
+        .unwrap();
+    Workload::new("Source")
+        .with_system(|mut i: UniqueViewMut<U32>| i.0 += 1)
+        .with_system(|mut i: UniqueViewMut<U32>| i.0 *= 2)
+        .add_to_world(&world)
+        .unwrap();
+    let before = world.workloads_info();
+
+    world.rename_workload("Source", "Destination");
+
+    assert!(!world.contains_workload("Source"));
+    world.run_default_workload().unwrap();
+    assert_eq!(world.borrow::<UniqueView<U32>>().unwrap().0, 2);
+
+    let after = world.workloads_info();
+    assert_eq!(after.0.len(), 1);
+    assert_eq!(after.0["Destination"].name, "Destination");
+    assert_eq!(
+        after.0["Destination"].batches_info,
+        before.0["Source"].batches_info
+    );
+}
+
+/// Asserts that a missing source leaves the destination workload and its information intact.
+#[test]
+fn rename_missing() {
+    let world = World::new();
+    Workload::new("Existing").add_to_world(&world).unwrap();
+    let before = world.workloads_info();
+
+    world.rename_workload("Missing", "Existing");
+
+    assert!(!world.contains_workload("Missing"));
+    world.run_workload("Existing").unwrap();
+    assert_eq!(world.workloads_info(), before);
 }
 
 #[test]
