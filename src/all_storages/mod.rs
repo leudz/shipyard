@@ -1724,7 +1724,8 @@ for (i, j) in &mut iter {
     ///
     /// ### Panics
     ///
-    /// - `entity` is not alive
+    /// - `entity` is not alive in the source world.
+    /// - The destination world cannot spawn `entity`.
     ///
     /// ```
     /// use shipyard::{AllStoragesViewMut, Component, World};
@@ -1747,21 +1748,21 @@ for (i, j) in &mut iter {
     /// ```
     #[track_caller]
     pub fn move_entity(&mut self, other: &mut AllStorages, entity: EntityId) {
-        let current = self.get_current();
-        let other_current = other.get_current();
-
-        if !self.entities.get_mut().delete_unchecked(entity) {
-            panic!(
-                "Entity {:?} has to be alive to move it to another World.",
-                entity
-            );
-        };
-
         assert!(
-            other.entities.get_mut().spawn(entity),
-            "Other World already has an entity at {:?}'s index.",
+            self.entities.get_mut().is_alive(entity),
+            "Entity {:?} has to be alive to move it to another World.",
             entity
         );
+        let Some(slot) = other.entities.get_mut().spawn_slot(entity) else {
+            panic!("Other World already has an entity at {:?}'s index.", entity);
+        };
+
+        let current = self.get_current();
+        let other_current = other.get_current();
+        self.entities.get_mut().delete_unchecked(entity);
+        // SAFE: The slot was found for `entity` in `other`, which still has the same entity table
+        // and recycle list. The source deletion only touches `self`.
+        unsafe { other.entities.get_mut().spawn_in_slot(entity, slot) };
 
         // Uniques don't hold per entity data, we only visit components and custom storages.
         for storage in self.storages.get_mut().components_and_custom.values_mut() {

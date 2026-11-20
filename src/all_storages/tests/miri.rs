@@ -537,9 +537,8 @@ fn iter_borrows() {
     assert_eq!((&heaps).get(entity1).unwrap().0, [1, 10]);
 }
 
-/// Asserts that moving an entity to another world hands its component over: the source no
-/// longer has it and still reaches the component swapped into its slot, the destination reads it,
-/// and each component is dropped exactly once, by the world holding it.
+/// Asserts that a move into a recyclable slot calls the source deletion callback once and
+/// transfers the component. Each component is dropped once by the world holding it.
 #[test]
 fn move_entity() {
     let counter = Arc::new(AtomicUsize::new(0));
@@ -547,9 +546,21 @@ fn move_entity() {
     let mut destination = World::new_for_test();
     let moved = source.add_entity(counted(0, &counter));
     let stays = source.add_entity(counted(1, &counter));
+    let vacant = destination.add_entity(());
+    assert_eq!(vacant, moved);
+    assert!(destination.delete_entity(vacant));
+    let deletions = Arc::new(AtomicUsize::new(0));
+    let calls = deletions.clone();
+    source.on_deletion(move |entity| {
+        assert_eq!(entity, moved);
+        calls.fetch_add(1, Ordering::Relaxed);
+    });
 
     source.move_entity(&mut destination, moved);
 
+    assert_eq!(deletions.load(Ordering::Relaxed), 1);
+    assert!(!source.is_entity_alive(moved));
+    assert!(destination.is_entity_alive(moved));
     assert!(source.get::<&Counted>(moved).is_err());
     assert_eq!(source.get::<&Counted>(stays).unwrap().values, [1]);
     assert_eq!(destination.get::<&Counted>(moved).unwrap().values, [0]);
@@ -558,6 +569,96 @@ fn move_entity() {
     assert_eq!(drops(&counter), 1);
     drop(destination);
     assert_eq!(drops(&counter), 2);
+}
+
+#[cfg(feature = "std")]
+fn count_entity_deletions(world: &World) -> Arc<AtomicUsize> {
+    let deletions = Arc::new(AtomicUsize::new(0));
+    let calls = deletions.clone();
+    world.on_deletion(move |_| {
+        calls.fetch_add(1, Ordering::Relaxed);
+    });
+    deletions
+}
+
+/// Asserts that a newer live destination ID rejects a move before either world changes.
+#[cfg(feature = "std")]
+#[test]
+fn move_entity_rejects_newer_destination() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut source = World::new_for_test();
+    let mut destination = World::new_for_test();
+    let entity = source.add_entity(counted(0, &counter));
+    let vacant = destination.add_entity(());
+    assert!(destination.delete_entity(vacant));
+    let newer = destination.add_entity(counted(1, &counter));
+    assert_eq!(newer, EntityId::new_from_parts(entity.index(), 1));
+    let deletions = count_entity_deletions(&source);
+
+    let source_time = source.get_tracking_timestamp().get();
+    let destination_time = destination.get_tracking_timestamp().get();
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        source.move_entity(&mut destination, entity);
+    }));
+
+    assert!(result.is_err());
+    assert_eq!(deletions.load(Ordering::Relaxed), 0);
+    assert_eq!(source.get_tracking_timestamp().get(), source_time);
+    assert_eq!(destination.get_tracking_timestamp().get(), destination_time);
+    assert!(source.is_entity_alive(entity));
+    assert_eq!(values_of(&source, entity), [0]);
+    assert!(destination.is_entity_alive(newer));
+    assert_eq!(values_of(&destination, newer), [1]);
+    assert!(!destination.is_entity_alive(entity));
+}
+
+/// Asserts that a retired destination slot rejects a move without deleting the source or recycling
+/// the retired slot.
+#[cfg(feature = "std")]
+#[test]
+fn move_entity_rejects_retired_destination() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut source = World::new_for_test();
+    let mut destination = World::new_for_test();
+    let entity = source.add_entity(counted(0, &counter));
+    let retired = EntityId::new_from_parts(entity.index(), EntityId::max_gen() - 1);
+    assert!(destination.spawn(retired));
+    assert!(destination.delete_entity(retired));
+    let deletions = count_entity_deletions(&source);
+
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        source.move_entity(&mut destination, entity);
+    }));
+
+    assert!(result.is_err());
+    assert_eq!(deletions.load(Ordering::Relaxed), 0);
+    assert!(source.is_entity_alive(entity));
+    assert_eq!(values_of(&source, entity), [0]);
+    assert!(!destination.is_entity_alive(entity));
+    assert!(!destination.is_entity_alive(retired));
+    assert_eq!(destination.add_entity(()), EntityId::new(1));
+}
+
+/// Asserts that a dead source ID rejects a move before spawning the destination ID or calling
+/// the source deletion callback.
+#[cfg(feature = "std")]
+#[test]
+fn move_entity_rejects_dead_source() {
+    let mut source = World::new_for_test();
+    let mut destination = World::new_for_test();
+    let entity = source.add_entity(());
+    assert!(source.delete_entity(entity));
+    let deletions = count_entity_deletions(&source);
+
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        source.move_entity(&mut destination, entity);
+    }));
+
+    assert!(result.is_err());
+    assert_eq!(deletions.load(Ordering::Relaxed), 0);
+    assert!(!source.is_entity_alive(entity));
+    assert!(!destination.is_entity_alive(entity));
+    assert_eq!(destination.add_entity(()), entity);
 }
 
 /// Asserts that cloning a registered storage into a new world, and a single entity into another

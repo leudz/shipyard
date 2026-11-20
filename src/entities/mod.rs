@@ -42,6 +42,12 @@ pub struct Entities {
     on_deletion: Option<Box<dyn FnMut(EntityId) + Send + Sync>>,
 }
 
+pub(crate) enum SpawnSlot {
+    New,
+    Live,
+    Recyclable { newest: usize, oldest: usize },
+}
+
 impl Entities {
     #[inline]
     pub(crate) fn new() -> Self {
@@ -296,91 +302,132 @@ impl Entities {
     pub fn iter(&self) -> EntitiesIter<'_> {
         self.into_iter()
     }
-    /// Make the given entity alive.  
-    /// Does nothing if an entity with a greater generation is already at this index.  
-    /// Returns `false` for a retired slot and `true` if the entity is successfully spawned.
-    pub fn spawn(&mut self, entity: EntityId) -> bool {
+
+    #[inline]
+    pub(crate) fn spawn_slot(&self, entity: EntityId) -> Option<SpawnSlot> {
         if entity == EntityId::dead() {
-            return false;
+            return None;
         }
 
-        if let Some(&old_entity) = self.data.get(entity.index() as usize) {
-            if old_entity == EntityId::dead() {
-                return false;
-            }
+        let Some(&old_entity) = self.data.get(entity.uindex()) else {
+            return Some(SpawnSlot::New);
+        };
+        if old_entity == EntityId::dead() {
+            return None;
+        }
 
-            if old_entity.uindex() == entity.uindex() {
-                if old_entity.generation() <= entity.generation() {
-                    self.data[entity.uindex()] = entity;
+        if old_entity.uindex() == entity.uindex() {
+            return (old_entity.generation() <= entity.generation()).then_some(SpawnSlot::Live);
+        }
 
-                    true
-                } else {
-                    false
-                }
-            } else if let Some((new, old)) = self.list {
-                if old_entity.generation() <= entity.generation() + 1 {
-                    // pop from removed list
-                    if entity.uindex() == old {
-                        if new == old {
-                            self.list = None;
-                        } else {
-                            self.list = Some((new, self.data[entity.uindex()].uindex()));
-                        }
+        let Some((newest, oldest)) = self.list else {
+            return None;
+        };
+
+        (old_entity.generation() <= entity.generation() + 1)
+            .then_some(SpawnSlot::Recyclable { newest, oldest })
+    }
+
+    /// Spawns `entity` in a slot returned by [`Self::spawn_slot`].
+    ///
+    /// ### Safety
+    ///
+    /// `slot` must come from `self.spawn_slot(entity)`. The entity table and its recycle list
+    /// must remain unchanged between finding the slot and spawning the entity.
+    #[inline]
+    pub(crate) unsafe fn spawn_in_slot(&mut self, entity: EntityId, slot: SpawnSlot) {
+        let index = entity.uindex();
+
+        match slot {
+            SpawnSlot::Live => {}
+            SpawnSlot::Recyclable { newest, oldest } => {
+                // Pop from the removed list.
+                if index == oldest {
+                    if newest == oldest {
+                        self.list = None;
                     } else {
-                        let mut current_index = old;
+                        // SAFE: The oldest slot has a successor when it is not the newest.
+                        let next = unsafe { self.data.get_unchecked(oldest).uindex() };
+                        self.list = Some((newest, next));
+                    }
+                } else {
+                    let mut previous = oldest;
 
-                        while self.data[current_index].index() != entity.index()
-                            && self.data[current_index].uindex() != new
-                        {
-                            current_index = self.data[current_index].uindex();
+                    loop {
+                        // SAFE: `previous` starts at the oldest slot and follows valid links.
+                        // The requested slot is still ahead, so `previous` cannot be the newest.
+                        let next = unsafe { self.data.get_unchecked(previous).uindex() };
+                        if next == index {
+                            break;
                         }
-
-                        if self.data[current_index].uindex() == new {
-                            self.data[current_index].set_index(EntityId::max_index());
-                            self.list = Some((current_index, old));
-                        } else {
-                            let next_index = self.data[self.data[current_index].uindex()].index();
-                            self.data[current_index].set_index(next_index);
-                        }
+                        previous = next;
                     }
 
-                    self.data[entity.uindex()] = entity;
+                    let next = if index == newest {
+                        self.list = Some((previous, oldest));
+                        EntityId::max_index()
+                    } else {
+                        // SAFE: `spawn_slot` found the requested slot in `data`.
+                        unsafe { self.data.get_unchecked(index).index() }
+                    };
 
-                    true
-                } else {
-                    false
+                    // SAFE: The search reached `previous` from the oldest slot via valid links.
+                    unsafe { self.data.get_unchecked_mut(previous).set_index(next) };
                 }
-            } else {
-                false
             }
-        } else {
-            let old_len = self.data.len();
-            self.data.resize(entity.uindex() + 1, EntityId::new(0));
+            SpawnSlot::New => {
+                let old_len = self.data.len();
+                let new_len = index.checked_add(1).expect("Entity index is too large");
+                self.data.resize(new_len, EntityId::new(0));
 
-            if self.data.len() - old_len > 1 {
-                // add to removed list
-                if let Some((new, _)) = &mut self.list {
-                    self.data[*new].set_index(old_len as u64);
+                if index > old_len {
+                    // Add the skipped indices to the removed list.
+                    if let Some((newest, _)) = &mut self.list {
+                        // SAFE: The newest slot was in `data` before it grew.
+                        unsafe {
+                            self.data
+                                .get_unchecked_mut(*newest)
+                                .set_index(old_len as u64)
+                        };
+                        *newest = index - 1;
+                    } else {
+                        self.list = Some((index - 1, old_len));
+                    }
 
-                    *new = entity.uindex() - 1;
-                } else {
-                    self.list = Some((entity.uindex() - 1, old_len));
+                    // SAFE: There is at least one skipped slot, so `old_len <= index - 1`.
+                    // The resize put both the skipped slots and `index` in bounds.
+                    let skipped = unsafe { self.data.get_unchecked_mut(old_len..index - 1) };
+                    for (entry, next_index) in skipped.iter_mut().zip(old_len as u64 + 1..) {
+                        entry.set_index(next_index);
+                    }
+
+                    // SAFE: `index - 1` is the last skipped slot.
+                    unsafe {
+                        self.data
+                            .get_unchecked_mut(index - 1)
+                            .set_index(EntityId::max_index())
+                    };
                 }
-
-                for (e, index) in self.data[old_len..entity.uindex() - 1]
-                    .iter_mut()
-                    .zip(old_len as u64 + 1..)
-                {
-                    e.set_index(index);
-                }
-
-                self.data[entity.uindex() - 1].set_index(EntityId::max_index());
             }
-
-            self.data[entity.uindex()] = entity;
-
-            true
         }
+
+        // SAFE: `spawn_slot` found the slot in `data`, or the resize made room for it.
+        unsafe { *self.data.get_unchecked_mut(index) = entity };
+    }
+
+    /// Makes the given entity alive and returns `true` on success.
+    ///
+    /// Returns `false` if the slot is retired or already holds a live entity with a greater generation.
+    #[inline]
+    pub fn spawn(&mut self, entity: EntityId) -> bool {
+        let Some(slot) = self.spawn_slot(entity) else {
+            return false;
+        };
+
+        // SAFE: The slot came from this entity table for `entity` and the table has not changed.
+        unsafe { self.spawn_in_slot(entity, slot) };
+
+        true
     }
 
     /// Sets the on entity deletion callback.

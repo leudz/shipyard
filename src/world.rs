@@ -1693,7 +1693,8 @@ for (i, j) in &mut iter {
     ///
     /// ### Panics
     ///
-    /// - `entity` is not alive
+    /// - `entity` is not alive in the source world.
+    /// - The destination world cannot spawn `entity`.
     ///
     /// ### Example
     ///
