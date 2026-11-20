@@ -4,10 +4,10 @@ pub(crate) mod mixed;
 mod parallel;
 pub(crate) mod plan;
 mod planned_tracking;
-#[doc(hidden)]
-pub use planned_tracking::PlannedTracking;
 pub(crate) mod planner;
 mod raw_entity_id_access;
+#[doc(hidden)]
+pub use planned_tracking::PlannedTracking;
 mod shiperator;
 mod with_id;
 
@@ -284,6 +284,73 @@ impl<S: Clone> Shiper<S> {
 }
 
 impl<S: Shiperator + Clone> Shiper<S> {
+    /// Counts planned candidate slots without touching component data.
+    #[inline]
+    pub(crate) fn candidate_work(&self) -> Option<usize> {
+        if !S::HAS_CANDIDATE_PLAN {
+            return self.remaining_candidates();
+        }
+        let start = self.cursor.local_index();
+        // SAFE: The cursor and all follow-ups belong to the plans we keep alive.
+        let mut count = unsafe {
+            self.shiperator
+                .candidate_count(start, start + self.cursor.len())
+        };
+        if let Some(schedule) = &self.schedule
+            && schedule.has_follow_ups()
+        {
+            let mut shiperator = self.shiperator.clone();
+            for segment in schedule.follow_ups() {
+                let mut entry = SegmentEntry::new(schedule.plan(), &segment);
+                // SAFE: Each row was built for this tree and the schedule keeps it alive.
+                unsafe { shiperator.enter_segment(&mut entry) };
+                count = count.checked_add(unsafe {
+                    shiperator.candidate_count(0, segment.cursor().len())
+                })?;
+            }
+        }
+        Some(count)
+    }
+
+    /// Maps a candidate-work rank back to the ordinary cursor/schedule cut.
+    fn split_planned(mut self, count: usize) -> (Self, Option<Self>) {
+        let start = self.cursor.local_index();
+        let end = start + self.cursor.len();
+        // SAFE: This is our installed segment and its remaining range.
+        let current = unsafe { self.shiperator.candidate_count(start, end) };
+        if count <= current {
+            // SAFE: `count` is within the current segment's candidate count.
+            let cut = unsafe { self.shiperator.candidate_split_at(start, end, count) };
+            let (left, right) = self.split_current_segment_at(cut - start);
+            return (left, Some(right));
+        }
+        let mut wanted = count - current;
+        let mut raw_prefix = 0;
+        let schedule = self
+            .schedule
+            .as_ref()
+            .expect("remaining work has follow-ups");
+        let mut shiperator = self.shiperator.clone();
+        let mut cut = None;
+        for segment in schedule.follow_ups() {
+            let mut entry = SegmentEntry::new(schedule.plan(), &segment);
+            // SAFE: The schedule keeps this matching row alive.
+            unsafe { shiperator.enter_segment(&mut entry) };
+            let len = segment.cursor().len();
+            // SAFE: The segment was just installed.
+            let work = unsafe { shiperator.candidate_count(0, len) };
+            if wanted <= work {
+                // SAFE: The requested rank is within this segment.
+                cut = Some(raw_prefix + unsafe { shiperator.candidate_split_at(0, len, wanted) });
+                break;
+            }
+            wanted -= work;
+            raw_prefix += len;
+        }
+        let right = self.split_follow_ups_at(cut.expect("a midpoint lies within remaining work"));
+        (self, Some(right))
+    }
+
     /// Splits the candidates left, follow-ups included, near their middle.
     ///
     /// With `n` candidates left, the left half keeps the first `floor(n / 2)` and the right half
@@ -296,6 +363,14 @@ impl<S: Shiperator + Clone> Shiper<S> {
     #[inline]
     #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
     pub(crate) fn split_remaining(mut self) -> (Self, Option<Self>) {
+        if S::HAS_CANDIDATE_PLAN
+            && let Some(total) = self.candidate_work()
+        {
+            if total < 2 {
+                return (self, None);
+            }
+            return self.split_planned(total / 2);
+        }
         let current_len = self.cursor.len();
         let Some(total) = self.remaining_candidates() else {
             // We can't count every candidate, but the current segment alone still splits correctly.
