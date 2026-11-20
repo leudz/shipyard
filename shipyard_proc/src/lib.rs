@@ -14,6 +14,21 @@ use into_iter_expand::expand_into_iter;
 use label_expand::expand_label;
 use world_borrow_expand::expand_world_borrow;
 
+fn field_is_default(field: &syn::Field) -> bool {
+    field.attrs.iter().any(|attr| {
+        if !attr.path().is_ident("shipyard") {
+            return false;
+        }
+
+        let mut is_default = false;
+        let _ = attr.parse_nested_meta(|meta| {
+            is_default |= meta.path.is_ident("default");
+            Ok(())
+        });
+        is_default
+    })
+}
+
 /// Multiple instances can be stored in the `World`.
 #[proc_macro_derive(Component, attributes(track))]
 pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {

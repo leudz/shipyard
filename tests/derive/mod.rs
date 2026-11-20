@@ -1,3 +1,4 @@
+use shipyard::borrow::BorrowInfo as _;
 use shipyard::*;
 
 #[test]
@@ -52,6 +53,69 @@ fn default() {
     let world = World::new();
 
     world.borrow::<CustomView>().unwrap();
+}
+
+struct DefaultOnly(u32);
+
+impl Default for DefaultOnly {
+    fn default() -> Self {
+        Self(42)
+    }
+}
+
+#[derive(Component)]
+struct Score(u32);
+
+/// Asserts that `Borrow` initializes the marked tuple field and borrows the adjacent view.
+#[test]
+fn tuple_borrow_default() {
+    #[derive(Borrow)]
+    struct Scores<'a>(#[shipyard(default)] DefaultOnly, View<'a, Score>);
+
+    let mut world = World::new();
+    let entity = world.add_entity(Score(7));
+    let all_storages = world.all_storages().unwrap();
+    let Scores(DefaultOnly(default), scores) = all_storages.borrow::<Scores>().unwrap();
+
+    assert_eq!(default, 42);
+    assert_eq!(scores[entity].0, 7);
+}
+
+/// Asserts that `WorldBorrow` initializes the marked tuple field and `BorrowInfo` schedules
+/// and enables insertion tracking for the real view.
+#[test]
+fn tuple_world_borrow_default() {
+    #[derive(WorldBorrow, BorrowInfo)]
+    struct Scores<'a>(
+        View<'a, Score, track::Insertion>,
+        #[shipyard(default)] DefaultOnly,
+    );
+
+    fn read_scores(Scores(scores, DefaultOnly(default)): Scores<'_>) {
+        assert_eq!(default, 42);
+        assert_eq!(
+            scores
+                .inserted()
+                .iter()
+                .map(|score| score.0)
+                .collect::<Vec<_>>(),
+            [7]
+        );
+    }
+
+    let mut world = World::new();
+    Workload::new("scores")
+        .with_system(read_scores)
+        .add_to_world(&world)
+        .unwrap();
+    world.add_entity(Score(7));
+    world.run_workload("scores").unwrap();
+
+    let mut expected = Vec::new();
+    View::<Score, track::Insertion>::borrow_info(&mut expected);
+    let info = world.workloads_info();
+    let system = info.0["scores"].batches_info[0].systems().next().unwrap();
+    assert_eq!(system.borrow, expected);
 }
 
 #[allow(unused)]
