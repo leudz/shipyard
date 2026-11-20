@@ -20,6 +20,11 @@ macro_rules! impl_tracking_filter {
         impl_tracking_filter!(@window $filter, $capability, $is_tracked, FullRawWindowMut);
     )+};
     (@window $filter: ident, $capability: ident, $is_tracked: ident, $window: ident) => {
+        impl<'tmp, T: Component, Track: $capability> crate::iter::planned_tracking::TrackingFilter for $filter<$window<'tmp, T, Track>>
+        where $window<'tmp, T, Track>: Shiperator<Index = usize> {
+            fn segment_start(&self) -> usize { self.0.segment_start }
+        }
+
         impl<'tmp, T: Component, Track: $capability> Shiperator for $filter<$window<'tmp, T, Track>>
         where
             $window<'tmp, T, Track>: Shiperator<Index = usize>,

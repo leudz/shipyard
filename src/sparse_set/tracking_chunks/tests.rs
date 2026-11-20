@@ -92,6 +92,19 @@ fn clear_and_drain_reuse_modification_chunks() {
 }
 
 #[test]
+fn missing_modification_chunk_keeps_exact_matches() {
+    let mut world = World::new_for_test();
+    let ids: Vec<_> = world
+        .bulk_add_entity((0..TRACKING_CHUNK_SIZE + 2).map(|i| (Tracked(i),)))
+        .collect();
+    let mut view = world.borrow::<ViewMut<'_, Tracked>>().unwrap();
+    let id = ids[TRACKING_CHUNK_SIZE];
+    view[id].0 += 1;
+    view.modification_summary.chunks.pop().unwrap();
+    assert_eq!(view.modified().iter().ids().collect::<Vec<_>>(), [id]);
+}
+
+#[test]
 fn updates_keep_the_latest_timestamp() {
     let mut chunk = ChunkTimestamp::default();
     chunk.mark_mut(TrackingTimestamp::new(10));

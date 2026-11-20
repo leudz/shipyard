@@ -3,6 +3,9 @@ pub(crate) mod mixed;
 #[cfg(feature = "parallel")]
 mod parallel;
 pub(crate) mod plan;
+mod planned_tracking;
+#[doc(hidden)]
+pub use planned_tracking::PlannedTracking;
 pub(crate) mod planner;
 mod raw_entity_id_access;
 mod shiperator;

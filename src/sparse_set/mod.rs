@@ -12,6 +12,7 @@ mod tests;
 #[cfg(feature = "thread_local")]
 mod thread_local;
 mod tracking_chunks;
+pub(crate) mod tracking_plan;
 mod window;
 use tracking_chunks::refresh_chunks;
 pub(crate) use tracking_chunks::{ChunkTimestamp, TRACKING_CHUNK_SIZE};

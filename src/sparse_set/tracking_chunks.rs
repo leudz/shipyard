@@ -1,4 +1,6 @@
-use crate::tracking::TrackingTimestamp;
+use super::tracking_plan::TrackingPlan;
+use crate::component::Component;
+use crate::tracking::{Tracking, TrackingTimestamp};
 use alloc::vec::Vec;
 use core::ops::Range;
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -28,7 +30,7 @@ impl ChunkTimestamp {
         }
     }
 
-    #[cfg(test)]
+    #[inline]
     pub(crate) fn changed_since(&self, last: TrackingTimestamp) -> bool {
         last.get() < self.0.load(Ordering::Relaxed)
     }
@@ -141,7 +143,7 @@ impl ModificationSummary {
         }
     }
 
-    #[cfg(test)]
+    #[inline]
     pub(crate) fn all_changed(&self, last: TrackingTimestamp) -> bool {
         self.whole.0.load(Ordering::Relaxed) > last.get()
     }
@@ -157,6 +159,38 @@ impl ModificationSummary {
             .0
             .load(Ordering::Relaxed)
             .max(chunk.0.load(Ordering::Relaxed))
+    }
+}
+
+impl<T: Component> super::SparseSet<T> {
+    #[inline]
+    pub(crate) fn tracking_plan<Track: Tracking, const INSERTED: bool, const MODIFIED: bool>(
+        &self,
+        last_insertion: TrackingTimestamp,
+        last_modification: TrackingTimestamp,
+        max_chunks: usize,
+    ) -> TrackingPlan {
+        let summary = &self.modification_summary;
+        let modified = MODIFIED && Track::track_modification();
+        let len = self.len();
+        if modified && summary.all_changed(last_modification) {
+            return TrackingPlan::Dense { len };
+        }
+
+        TrackingPlan::build_with_budget(len, max_chunks, |chunk| {
+            let inserted = INSERTED
+                && Track::track_insertion()
+                && self
+                    .insertion_chunks
+                    .get(chunk)
+                    .is_none_or(|t| t.changed_since(last_insertion));
+            inserted
+                || (modified
+                    && summary
+                        .chunks
+                        .get(chunk)
+                        .is_none_or(|t| t.changed_since(last_modification)))
+        })
     }
 }
 
